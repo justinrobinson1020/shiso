@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -40,17 +40,36 @@ describe('openDatabase', () => {
 		sqlite.close();
 	});
 
-	it('cleans up and throws if the snapshot fails', () => {
+	it('cleans up a partial snapshot and does not migrate if VACUUM INTO fails', () => {
 		const path = join(dir, 'shiso.db');
 		const backupDir = join(dir, 'backups');
 		// Existing database with no migrations applied: simulates an upgrade.
 		const pre = new Database(path);
 		pre.exec('create table legacy (x integer)');
 		pre.close();
-		// Occupy backupDir's path with a regular file so the snapshot step fails.
+		mkdirSync(backupDir, { recursive: true });
+		const now = () => new Date('2026-09-05T12:00:00.000Z');
+		const snapshotPath = join(backupDir, 'pre-migration-2026-09-05T12-00-00-000Z-0000_init.db');
+		// VACUUM INTO refuses to write over an existing file; stand in for a partial write.
+		writeFileSync(snapshotPath, 'partial');
+		expect(() => openDatabase({ path, backupDir, now })).toThrow(/snapshot failed/);
+		expect(readdirSync(backupDir).filter((f) => f.startsWith('pre-migration-'))).toEqual([]);
+		const raw = new Database(path, { readonly: true });
+		const tables = raw.prepare("select name from sqlite_master where type='table'").all() as { name: string }[];
+		expect(tables.map((t) => t.name)).not.toContain('accounts');
+		raw.close();
+	});
+
+	it('throws if the backup directory cannot be created', () => {
+		const path = join(dir, 'shiso.db');
+		const backupDir = join(dir, 'backups');
+		// Existing database with no migrations applied: simulates an upgrade.
+		const pre = new Database(path);
+		pre.exec('create table legacy (x integer)');
+		pre.close();
+		// Occupy backupDir's path with a regular file so mkdirSync fails.
 		writeFileSync(backupDir, '');
 		expect(() => openDatabase({ path, backupDir })).toThrow(/snapshot failed/);
-		expect(readdirSync(dir).some((f) => f.startsWith('pre-migration-'))).toBe(false);
 	});
 
 	it('reports pending migrations by journal tag', () => {

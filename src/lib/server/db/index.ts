@@ -22,7 +22,12 @@ function configure(sqlite: Database.Database) {
 	sqlite.pragma('busy_timeout = 5000');
 }
 
-export function openDatabase(opts: { path: string; backupDir: string; migrationsFolder?: string }) {
+export function openDatabase(opts: {
+	path: string;
+	backupDir: string;
+	migrationsFolder?: string;
+	now?: () => Date;
+}) {
 	const migrationsFolder = opts.migrationsFolder ?? DEFAULT_MIGRATIONS;
 	mkdirSync(dirname(opts.path), { recursive: true });
 	const sqlite = new Database(opts.path);
@@ -32,7 +37,7 @@ export function openDatabase(opts: { path: string; backupDir: string; migrations
 	const pending = pendingMigrations(sqlite, migrationsFolder);
 	const isFresh = sqlite.prepare("select count(*) as n from sqlite_master where type='table'").get() as { n: number };
 	if (pending.length > 0 && isFresh.n > 0) {
-		const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+		const stamp = (opts.now?.() ?? new Date()).toISOString().replace(/[:.]/g, '-');
 		snapshot = join(opts.backupDir, `pre-migration-${stamp}-${pending[0]}.db`);
 		try {
 			mkdirSync(opts.backupDir, { recursive: true });
