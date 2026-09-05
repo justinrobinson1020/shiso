@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
@@ -32,10 +32,24 @@ export function openDatabase(opts: { path: string; backupDir: string; migrations
 	const pending = pendingMigrations(sqlite, migrationsFolder);
 	const isFresh = sqlite.prepare("select count(*) as n from sqlite_master where type='table'").get() as { n: number };
 	if (pending.length > 0 && isFresh.n > 0) {
-		mkdirSync(opts.backupDir, { recursive: true });
 		const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 		snapshot = join(opts.backupDir, `pre-migration-${stamp}-${pending[0]}.db`);
-		sqlite.exec(`VACUUM INTO '${snapshot.replace(/'/g, "''")}'`);
+		try {
+			mkdirSync(opts.backupDir, { recursive: true });
+			sqlite.exec(`VACUUM INTO '${snapshot.replace(/'/g, "''")}'`);
+		} catch (err) {
+			// Best-effort cleanup of any partial snapshot; the underlying failure
+			// (e.g. backupDir isn't a directory) may make this a no-op, which is fine.
+			try {
+				rmSync(snapshot, { force: true });
+			} catch {
+				// ignored: the wrapped error below is what matters
+			}
+			throw new Error(
+				`pre-migration snapshot failed; migrations not applied: ${(err as Error).message}`,
+				{ cause: err }
+			);
+		}
 	}
 
 	const db = drizzle({ client: sqlite, schema });

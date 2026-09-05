@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, readdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -38,6 +38,19 @@ describe('openDatabase', () => {
 		expect(tables.map((t) => t.name)).not.toContain('accounts');
 		copy.close();
 		sqlite.close();
+	});
+
+	it('cleans up and throws if the snapshot fails', () => {
+		const path = join(dir, 'shiso.db');
+		const backupDir = join(dir, 'backups');
+		// Existing database with no migrations applied: simulates an upgrade.
+		const pre = new Database(path);
+		pre.exec('create table legacy (x integer)');
+		pre.close();
+		// Occupy backupDir's path with a regular file so the snapshot step fails.
+		writeFileSync(backupDir, '');
+		expect(() => openDatabase({ path, backupDir })).toThrow(/snapshot failed/);
+		expect(readdirSync(dir).some((f) => f.startsWith('pre-migration-'))).toBe(false);
 	});
 
 	it('reports pending migrations by journal tag', () => {
