@@ -1,6 +1,11 @@
 /** Parse a decimal string or number into integer cents. Throws on invalid input. */
 export function decimalToCents(input: string | number): number {
-	let s = typeof input === 'number' ? input.toFixed(2) : input.trim();
+	if (typeof input === 'number') {
+		if (!Number.isFinite(input)) throw new Error(`invalid money value: ${input}`);
+		const cents = Math.round(Math.round(Math.abs(input) * 1000) / 10);
+		return input < 0 ? -cents : cents;
+	}
+	let s = input.trim();
 	let negative = false;
 	if (s.startsWith('(') && s.endsWith(')')) {
 		negative = true;

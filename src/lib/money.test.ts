@@ -11,6 +11,10 @@ describe('decimalToCents', () => {
 	it('parses numbers without float drift', () => {
 		expect(decimalToCents(0.1 + 0.2)).toBe(30);
 		expect(decimalToCents(1234.56)).toBe(123456);
+		expect(decimalToCents(1.005)).toBe(101);
+		expect(decimalToCents(-1.005)).toBe(-101);
+		expect(decimalToCents(2.675)).toBe(268);
+		expect(() => decimalToCents(NaN)).toThrow();
 	});
 	it('strips thousands separators and currency symbols', () => {
 		expect(decimalToCents('$1,234.50')).toBe(123450);
