@@ -214,7 +214,10 @@ Generated from the cadence setting. Semi-monthly means the 1st–15th and the
 Generation back-fills from the earliest transaction or balance date present
 (a first Plaid sync can return two years; the sheet import reaches late 2024)
 and runs forward through the next period, before any row is assigned a
-`period_id`.
+`period_id`. The cadence is fixed at install. Changing it once periods exist
+is unsupported in Phase 1: rows are deduplicated on start date only, so a
+switch would leave overlapping periods, and a real change needs a period
+rebuild plus reassignment of every transaction and assignment.
 
 **budget_assignments**
 - `period_id`, `category_id`, `assigned` (unique on period + category)
