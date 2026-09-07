@@ -190,4 +190,27 @@ describe('§7 hand-built scenarios', () => {
 		expect(r.readyToAssign).toBe(97000);
 		expect(r.readyToAssign).toBe(r.readyToAssignFromFlows);
 	});
+
+	it('credit overspend across two cards is apportioned by purchases with largest-remainder rounding', () => {
+		const CARD2 = 5, CARD2_ENV = 33;
+		const input = base();
+		input.accounts.push({ id: CARD2, type: 'credit', onBudget: true });
+		input.categories.push({ id: CARD2_ENV, kind: 'debt_payment', accountId: CARD2 });
+		input.splits.push(opening(CHECKING, P1, 100000));
+		input.assignments.push({ periodId: P1, categoryId: GROCERIES, assigned: 4999 });
+		input.splits.push(split({ accountId: CARD, periodId: P1, categoryId: GROCERIES, amount: -3333 }));
+		input.splits.push(split({ accountId: CARD2, periodId: P1, categoryId: GROCERIES, amount: -6667 }));
+		const r = computeBudget(reconcile(input), P1);
+		const g = r.byPeriod.get(P1)!.get(GROCERIES)!;
+		expect(g.available).toBe(-5001);
+		expect(g.creditOverspend).toBe(5001);
+		expect(g.cashOverspend).toBe(0);
+		// exact shares 1666.83 and 3334.17: floors 1666 + 3334 = 5000, the remaining cent goes to the larger fraction (card 1)
+		expect(avail(r, P1, CARD_ENV)).toBe(3333 - 1667);   // 1666
+		expect(avail(r, P1, CARD2_ENV)).toBe(6667 - 3334);  // 3333
+		expect(r.underfunded.get(CARD)).toBe(1667);
+		expect(r.underfunded.get(CARD2)).toBe(3334);
+		expect(r.readyToAssign).toBe(95001);
+		expect(r.readyToAssignFromFlows).toBe(95001);
+	});
 });
