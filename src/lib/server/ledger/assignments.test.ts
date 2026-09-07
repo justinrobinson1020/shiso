@@ -24,6 +24,7 @@ describe('assign', () => {
 	it('refuses kinds without an envelope', () => {
 		expect(() => assign(db, p, systemCategoryId(db, 'income'), 100)).toThrowError(/ASSIGN_NO_ENVELOPE/);
 		expect(() => assign(db, p, systemCategoryId(db, 'transfer'), 100)).toThrowError(/ASSIGN_NO_ENVELOPE/);
+		expect(() => assign(db, p, systemCategoryId(db, 'reconciliation'), 100)).toThrowError(/ASSIGN_NO_ENVELOPE/);
 	});
 });
 
@@ -36,6 +37,11 @@ describe('moveMoney', () => {
 		expect(rows[b]).toBe(2000);
 	});
 	it('rejects non-positive amounts', () => {
-		expect(() => moveMoney(db, p, a, b, 0)).toThrow();
+		expect(() => moveMoney(db, p, a, b, 0)).toThrowError(/MOVE_AMOUNT_NOT_POSITIVE/);
+		expect(() => moveMoney(db, p, a, b, -5)).toThrowError(/MOVE_AMOUNT_NOT_POSITIVE/);
+	});
+	it('rejects moving money from a category to itself and leaves no row behind', () => {
+		expect(() => moveMoney(db, p, a, a, 100)).toThrowError(/MOVE_SAME_CATEGORY/);
+		expect(assignmentsForPeriod(db, p)).toEqual([]);
 	});
 });

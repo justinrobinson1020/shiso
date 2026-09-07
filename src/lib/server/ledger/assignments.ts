@@ -32,6 +32,7 @@ export function assign(db: DbOrTx, periodId: number, categoryId: number, assigne
 }
 
 export function moveMoney(db: DbOrTx, periodId: number, fromCategoryId: number, toCategoryId: number, amount: number): void {
+	if (fromCategoryId === toCategoryId) throw new InvariantError('MOVE_SAME_CATEGORY');
 	if (!(amount > 0)) throw new InvariantError('MOVE_AMOUNT_NOT_POSITIVE');
 	assertHasEnvelope(db, fromCategoryId);
 	assertHasEnvelope(db, toCategoryId);
