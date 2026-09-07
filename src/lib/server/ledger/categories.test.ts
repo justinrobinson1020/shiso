@@ -3,7 +3,7 @@ import { openMemoryDatabase, type Db } from '../db';
 import { accounts, connections, categories } from '../db/schema';
 import {
 	createGroup, createCategory, seedDefaultCategories, paymentCategoryForAccount,
-	systemCategoryId, uncategorizedId
+	systemCategoryId, uncategorizedId, renameCategory
 } from './categories';
 import { InvariantError } from './errors';
 import { eq } from 'drizzle-orm';
@@ -52,5 +52,19 @@ describe('seedDefaultCategories', () => {
 		expect(systemCategoryId(db, 'transfer')).toBeGreaterThan(0);
 		expect(uncategorizedId(db)).toBeGreaterThan(0);
 		expect(db.select().from(categories).all().filter((c) => c.kind === 'income').length).toBe(1);
+	});
+	it('finds the seeded row even when a user category shares the kind', () => {
+		const g = createGroup(db, 'Extra');
+		createCategory(db, { groupId: g, name: 'Side Gig', kind: 'income' });
+		seedDefaultCategories(db);
+		createCategory(db, { groupId: g, name: 'Rebates', kind: 'income' });
+		const seeded = db.select().from(categories).where(eq(categories.name, 'Income')).get()!;
+		expect(systemCategoryId(db, 'income')).toBe(seeded.id);
+	});
+	it('finds Uncategorized after the user renames it', () => {
+		seedDefaultCategories(db);
+		const id = uncategorizedId(db);
+		renameCategory(db, id, 'Needs a category');
+		expect(uncategorizedId(db)).toBe(id);
 	});
 });

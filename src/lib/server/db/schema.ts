@@ -107,6 +107,8 @@ export const categories = sqliteTable('categories', {
 	hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
 	kind: text('kind', { enum: CATEGORY_KINDS }).notNull(),
 	accountId: integer('account_id').references(() => accounts.id),
+	/** Seeded by the app, not the user; the lookups in categories.ts select on this. */
+	isSystem: integer('is_system', { mode: 'boolean' }).notNull().default(false),
 	...timestamps
 }, (t) => [uniqueIndex('categories_debt_account').on(t.accountId).where(sql`kind = 'debt_payment'`)]);
 

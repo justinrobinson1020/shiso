@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { accounts, categories, categoryGroups, type CategoryKind } from '../db/schema';
 import { InvariantError } from './errors';
@@ -10,7 +10,7 @@ export function createGroup(db: DbOrTx, name: string, sort = 0): number {
 
 export function createCategory(
 	db: DbOrTx,
-	input: { groupId: number; name: string; kind: CategoryKind; accountId?: number | null; sort?: number }
+	input: { groupId: number; name: string; kind: CategoryKind; accountId?: number | null; sort?: number; isSystem?: boolean }
 ): number {
 	let accountId: number | null = null;
 	if (input.kind === 'debt_payment') {
@@ -23,7 +23,7 @@ export function createCategory(
 	}
 	return db
 		.insert(categories)
-		.values({ groupId: input.groupId, name: input.name, kind: input.kind, accountId, sort: input.sort ?? 0 })
+		.values({ groupId: input.groupId, name: input.name, kind: input.kind, accountId, sort: input.sort ?? 0, isSystem: input.isSystem ?? false })
 		.returning({ id: categories.id })
 		.get().id;
 }
@@ -65,26 +65,34 @@ export function seedDefaultCategories(db: DbOrTx): void {
 	if (exists) return;
 	db.transaction((tx) => {
 		const system = createGroup(tx, 'System', 0);
-		SYSTEM.forEach((s, i) => createCategory(tx, { groupId: system, name: s.name, kind: s.kind, sort: i }));
+		SYSTEM.forEach((s, i) => createCategory(tx, { groupId: system, name: s.name, kind: s.kind, sort: i, isSystem: true }));
 		createGroup(tx, 'Bills', 1);
 		const spending = createGroup(tx, 'Spending', 2);
-		createCategory(tx, { groupId: spending, name: 'Uncategorized', kind: 'spending', sort: 999 });
+		createCategory(tx, { groupId: spending, name: 'Uncategorized', kind: 'spending', sort: 999, isSystem: true });
 		createGroup(tx, 'Debt Payments', 3);
 		createGroup(tx, 'Savings', 4);
 	});
 }
 
+/** The seeded row for `kind`. User categories may share the kind; they are never `is_system`. */
 export function systemCategoryId(db: DbOrTx, kind: SystemKind): number {
-	const row = db.select({ id: categories.id }).from(categories).where(eq(categories.kind, kind)).get();
+	const row = db
+		.select({ id: categories.id })
+		.from(categories)
+		.where(and(eq(categories.kind, kind), eq(categories.isSystem, true)))
+		.orderBy(asc(categories.id))
+		.get();
 	if (!row) throw new Error(`system category ${kind} missing; run seedDefaultCategories`);
 	return row.id;
 }
 
+/** The seeded catch-all. Found by flag, so renaming it is safe. */
 export function uncategorizedId(db: DbOrTx): number {
 	const row = db
 		.select({ id: categories.id })
 		.from(categories)
-		.where(and(eq(categories.kind, 'spending'), eq(categories.name, 'Uncategorized')))
+		.where(and(eq(categories.kind, 'spending'), eq(categories.isSystem, true)))
+		.orderBy(asc(categories.id))
 		.get();
 	if (!row) throw new Error('Uncategorized category missing; run seedDefaultCategories');
 	return row.id;
