@@ -58,4 +58,20 @@ describe('loadBudgetInput', () => {
 		expect(input.splits.find((s) => s.accountId === checking)?.transferPeerAccountId).toBe(card);
 		expect(input.balances.find((bb) => bb.accountId === checking)?.current).toBe(-500); // fallback: sum of live transactions
 	});
+
+	it('prefers the latest balance row over the transaction sum, ordering by as_of then id', () => {
+		const { db } = openMemoryDatabase();
+		seedDefaultCategories(db);
+		ensurePeriods(db, 'semi_monthly', '2026-01-01', '2026-01-31');
+		const conn = db.insert(connections).values({ provider: 'manual', institutionName: 'T' }).returning({ id: connections.id }).get();
+		const checking = db.insert(accounts).values({ connectionId: conn.id, externalId: 'k', name: 'Chk', type: 'checking', onBudget: true, isDebt: false }).returning({ id: accounts.id }).get().id;
+		// Live transactions sum to -700; the balance rows disagree with that on purpose.
+		createTransaction(db, { accountId: checking, externalId: 'a', postedDate: '2026-01-06', amount: -700, payeeRaw: 'P', source: 'sync' });
+		db.insert(accountBalances).values({ accountId: checking, asOf: '2026-01-05', current: 50000, source: 'sync' }).run();
+		db.insert(accountBalances).values({ accountId: checking, asOf: '2026-01-10', current: 70000, source: 'sync' }).run();
+		// Same as_of as the newest row but inserted later: higher id wins the tie.
+		db.insert(accountBalances).values({ accountId: checking, asOf: '2026-01-10', current: 71000, source: 'manual' }).run();
+		const input = loadBudgetInput(db);
+		expect(input.balances.find((b) => b.accountId === checking)?.current).toBe(71000);
+	});
 });
