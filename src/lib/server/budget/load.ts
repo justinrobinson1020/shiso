@@ -5,7 +5,10 @@ import { accounts, accountBalances, budgetAssignments, categories, periods, tran
 import { computeBudget, type BudgetInput, type BudgetResult } from './envelope';
 
 export function loadBudgetInput(db: DbOrTx): BudgetInput {
-	const accountRows = db.select({ id: accounts.id, type: accounts.type, onBudget: accounts.onBudget }).from(accounts).all();
+	const accountRows = db
+		.select({ id: accounts.id, type: accounts.type, onBudget: accounts.onBudget, closedAt: accounts.closedAt })
+		.from(accounts)
+		.all();
 	const categoryRows = db.select({ id: categories.id, kind: categories.kind, accountId: categories.accountId }).from(categories).all();
 	const periodRows = db.select({ id: periods.id, startDate: periods.startDate }).from(periods).all();
 
@@ -41,7 +44,11 @@ export function loadBudgetInput(db: DbOrTx): BudgetInput {
 		.groupBy(transactions.accountId)
 		.all();
 	const sumBy = new Map(sums.map((s) => [s.accountId, s.total]));
-	const balances = accountRows.map((a) => ({ accountId: a.id, current: latest.get(a.id) ?? sumBy.get(a.id) ?? 0 }));
+	// §4.1: a closed account holds no cash, however stale its last balance row is.
+	const balances = accountRows.map((a) => ({
+		accountId: a.id,
+		current: a.closedAt != null ? 0 : (latest.get(a.id) ?? sumBy.get(a.id) ?? 0)
+	}));
 
 	const assignmentRows = db
 		.select({ periodId: budgetAssignments.periodId, categoryId: budgetAssignments.categoryId, assigned: budgetAssignments.assigned })
@@ -49,7 +56,7 @@ export function loadBudgetInput(db: DbOrTx): BudgetInput {
 		.all();
 
 	return {
-		accounts: accountRows,
+		accounts: accountRows.map(({ id, type, onBudget }) => ({ id, type, onBudget })),
 		categories: categoryRows,
 		periods: periodRows,
 		splits: splitRows.map((s) => ({ ...s, transferPeerAccountId: s.transferPeerAccountId ?? null })),

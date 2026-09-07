@@ -59,6 +59,25 @@ describe('loadBudgetInput', () => {
 		expect(input.balances.find((bb) => bb.accountId === checking)?.current).toBe(-500); // fallback: sum of live transactions
 	});
 
+	it('gives a closed account no cash while keeping its history', () => {
+		const { db } = openMemoryDatabase();
+		seedDefaultCategories(db);
+		ensurePeriods(db, 'semi_monthly', '2026-01-01', '2026-01-31');
+		const p1 = periodIdForDate(db, '2026-01-05');
+		const conn = db.insert(connections).values({ provider: 'manual', institutionName: 'T' }).returning({ id: connections.id }).get();
+		const open = db.insert(accounts).values({ connectionId: conn.id, externalId: 'k', name: 'Chk', type: 'checking', onBudget: true, isDebt: false }).returning({ id: accounts.id }).get().id;
+		const closed = db.insert(accounts).values({ connectionId: conn.id, externalId: 'old', name: 'Old Chk', type: 'checking', onBudget: true, isDebt: false, closedAt: '2026-01-04' }).returning({ id: accounts.id }).get().id;
+		createTransaction(db, { accountId: open, externalId: 'open', postedDate: '2026-01-01', amount: 20000, payeeRaw: 'Opening', source: 'opening',
+			splits: [{ categoryId: systemCategoryId(db, 'reconciliation'), amount: 20000 }] });
+		db.insert(accountBalances).values({ accountId: open, asOf: '2026-01-10', current: 20000, source: 'manual' }).run();
+		db.insert(accountBalances).values({ accountId: closed, asOf: '2026-01-03', current: 50000, source: 'manual' }).run();
+
+		const input = loadBudgetInput(db);
+		expect(input.balances.find((b) => b.accountId === closed)?.current).toBe(0);
+		expect(input.accounts.some((a) => a.id === closed)).toBe(true);
+		expect(budgetForPeriod(db, p1).readyToAssign).toBe(20000);
+	});
+
 	it('reports no transfer peer once the other half is deleted', () => {
 		const { db } = openMemoryDatabase();
 		seedDefaultCategories(db);

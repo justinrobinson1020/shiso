@@ -137,6 +137,8 @@ except those marked *Phase 2*, whose foreign keys are designed now.
 Ready-to-assign reads only `on_budget = true AND type IN ('checking',
 'savings', 'cash')`. Credit accounts are on-budget for categorization and are
 never in that sum. The query names the three types explicitly.
+A closed account contributes zero cash; its historical transactions still count
+toward envelopes.
 
 **account_balances** (append-only)
 - `account_id`, `as_of` (date), `current`, `available`, `credit_limit`

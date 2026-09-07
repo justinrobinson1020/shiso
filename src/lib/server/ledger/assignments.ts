@@ -3,13 +3,12 @@ import type { DbOrTx } from '../db';
 import { budgetAssignments, categories } from '../db/schema';
 import { InvariantError } from './errors';
 import { nowIso } from '$lib/dates';
-
-const NO_ENVELOPE = new Set(['income', 'transfer', 'reconciliation']);
+import { NO_ENVELOPE_KINDS } from '../budget/envelope';
 
 function assertHasEnvelope(db: DbOrTx, categoryId: number): void {
 	const c = db.select({ kind: categories.kind }).from(categories).where(eq(categories.id, categoryId)).get();
 	if (!c) throw new Error(`category ${categoryId} not found`);
-	if (NO_ENVELOPE.has(c.kind)) throw new InvariantError('ASSIGN_NO_ENVELOPE');
+	if (NO_ENVELOPE_KINDS.has(c.kind)) throw new InvariantError('ASSIGN_NO_ENVELOPE');
 }
 
 function upsert(db: DbOrTx, periodId: number, categoryId: number, delta: number, absolute: boolean): void {

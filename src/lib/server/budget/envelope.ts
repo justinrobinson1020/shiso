@@ -25,7 +25,8 @@ export type BudgetResult = {
 	cardBalanceOwed: Map<number, number>;
 };
 
-const NO_ENVELOPE: ReadonlySet<CategoryKind> = new Set(['income', 'transfer', 'reconciliation']);
+/** §7.2: the kinds that never get an envelope. The single definition; assign() imports it. */
+export const NO_ENVELOPE_KINDS: ReadonlySet<CategoryKind> = new Set(['income', 'transfer', 'reconciliation']);
 
 /** §4.1: the only accounts whose cash counts toward ready-to-assign. */
 export function isCashAccount(a: EnvAccount): boolean {
@@ -69,7 +70,7 @@ export function computeBudget(input: BudgetInput, currentPeriodId: number): Budg
 
 	const kindById = new Map(input.categories.map((c) => [c.id, c.kind]));
 	const isCardEnvelope = (c: EnvCategory) => c.kind === 'debt_payment' && c.accountId != null && cardIds.has(c.accountId);
-	const isSpendingLike = (c: EnvCategory) => !NO_ENVELOPE.has(c.kind) && !isCardEnvelope(c);
+	const isSpendingLike = (c: EnvCategory) => !NO_ENVELOPE_KINDS.has(c.kind) && !isCardEnvelope(c);
 	const spendingLike = input.categories.filter(isSpendingLike);
 	const cardEnvelopes = input.categories.filter(isCardEnvelope);
 
