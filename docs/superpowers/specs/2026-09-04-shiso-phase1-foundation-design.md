@@ -216,7 +216,10 @@ Generated from the cadence setting. Semi-monthly means the 1st–15th and the
 Generation back-fills from the earliest transaction or balance date present
 (a first Plaid sync can return two years; the sheet import reaches late 2024)
 and runs forward through the next period, before any row is assigned a
-`period_id`. The cadence is fixed at install. Changing it once periods exist
+`period_id`. Resolving the current period (`currentPeriodId`) also ensures
+periods through the period after today, so a long-running process never
+runs off the end of the table; sync batches ensure their own date range
+before inserting. The cadence is fixed at install. Changing it once periods exist
 is unsupported in Phase 1: rows are deduplicated on start date only, so a
 switch would leave overlapping periods, and a real change needs a period
 rebuild plus reassignment of every transaction and assignment.
@@ -511,7 +514,7 @@ Ready-to-assign computed from balances (§7.3) must equal ready-to-assign
 computed from flows on a reconciled ledger:
 
 ```
-RTA_flows(P) = Σ opening-balance amounts on cash-type on-budget accounts
+RTA_flows(P) = Σ opening-balance amounts on cash-type on-budget accounts through P
              + Σ income-kind splits on cash-type on-budget accounts through P
              + Σ adjustment amounts on cash-type on-budget accounts through P
              − Σ_{p ≤ P} Σ_c assigned(c, p)
@@ -537,7 +540,10 @@ against the current period's negative spending-like availables; what remains
 is the formula above.
 
 Note the naive form "Σ available + RTA = cash" is false whenever any envelope
-is negative. The two-way computation is the non-tautological invariant.
+is negative. The two-way computation is the non-tautological invariant. It is
+stated for a ledger with no splits dated after P; §7.3's cash is the latest
+balance, so a future-dated cash transaction makes the two differ by exactly
+that amount until P catches up.
 
 ## 8. Screens
 

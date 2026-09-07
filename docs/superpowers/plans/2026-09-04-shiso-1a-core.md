@@ -2819,3 +2819,11 @@ Plan 1B (sync, post-processing, reconciliation, bills and income) builds on thes
 - `systemCategoryId(db, 'reconciliation')` for opening-balance and adjustment transactions.
 - `budgetForPeriod` for the Month and Budget pages in Plan 1C.
 - `connections.credentialEnc` is written by 1B using an `encrypt(appKey, plaintext)` helper that 1B defines.
+
+### Amendments from the Plan 1A final review
+
+- **`updateTransaction` is Plan 1B's first task.** The ledger service has no updater for amount, dates, pending flag, raw payee, or provider category. 1B adds it to `src/lib/server/ledger/transactions.ts` (not a workaround: the service is the only writer) implementing spec §5.6's modified rule: amount change on a single-split row moves the split; on a multi-split row flags `needs_review` with reason `amount_changed`.
+- **Delivered beyond the original interfaces:** `createTransaction` throws `InvariantError('DUPLICATE_EXTERNAL_ID')` on the account/external-id unique index; `setReplacedBy(db, pendingId, replacementId)` records pending-to-posted replacement; `softDelete` clears a transfer link on both sides and flags the survivor with reason `transfer_peer_deleted`, so 1B need not unlink first; `currentPeriodId(db, cadence, todayIso)` self-heals periods through the period after today; `categories.is_system` marks seeded rows and `systemCategoryId`/`uncategorizedId` look up by it; `NO_ENVELOPE_KINDS` is exported from `envelope.ts`; closed accounts report zero cash in `loadBudgetInput`; the health route returns 503 `{ ok: false }` instead of throwing.
+- **Sync apply must call `ensurePeriods` over the batch's `min(transactedAt date, postedDate)` and today** before inserting, and `markProcessed` should chunk ids at a few thousand per statement for a large initial pull.
+- **Decide where cash-back rewards land before the first real sync.** An income-kind split posted to a card reduces the card's balance owed but does not fund its payment envelope.
+- **1C:** batch the Budget page onto one `loadBudgetInput` call rather than one per period; `computeBudget` needs the full period set to compute carries; category management must not change a system category's kind.
