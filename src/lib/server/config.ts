@@ -20,6 +20,14 @@ function required(env: Record<string, string | undefined>, key: string): string 
 	return v;
 }
 
+function hour(env: Record<string, string | undefined>, key: string, fallback: number): number {
+	const raw = env[key];
+	if (raw === undefined || raw === '') return fallback;
+	const n = Number(raw);
+	if (!Number.isInteger(n) || n < 0 || n > 23) throw new Error(`${key} must be an integer hour 0-23, got ${JSON.stringify(raw)}`);
+	return n;
+}
+
 export function loadConfig(env: Record<string, string | undefined>): Config {
 	const dbPath = required(env, 'SHISO_DB_PATH');
 	const backupDir = required(env, 'SHISO_BACKUP_DIR');
@@ -38,8 +46,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
 	const migrationsDir = env.SHISO_MIGRATIONS_DIR || resolve(dirname(fileURLToPath(import.meta.url)), '../../../drizzle');
 	return {
 		dbPath, backupDir, appKey, cadence, timeZone, migrationsDir,
-		syncHour: Number(env.SHISO_SYNC_HOUR ?? 3),
-		balanceHour: Number(env.SHISO_BALANCE_HOUR ?? 7),
+		syncHour: hour(env, 'SHISO_SYNC_HOUR', 3),
+		balanceHour: hour(env, 'SHISO_BALANCE_HOUR', 7),
 		plaid: { clientId: env.PLAID_CLIENT_ID ?? null, secret: env.PLAID_SECRET ?? null, env: plaidEnv }
 	};
 }

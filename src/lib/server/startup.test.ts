@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startup, resetForTests } from './startup';
-import { getDb } from './db/instance';
+import { getDb, getSqlite } from './db/instance';
 import { periods, categories } from './db/schema';
 import { asc } from 'drizzle-orm';
 
@@ -42,5 +42,12 @@ describe('startup', () => {
 		const db = getDb();
 		const starts = db.select().from(periods).orderBy(asc(periods.startDate)).all().map((r) => r.startDate);
 		expect(starts).toEqual(['2026-09-01', '2026-09-16', '2026-10-01', '2026-10-16', '2026-11-01', '2026-11-16', '2026-12-01']);
+	});
+	it('closes the previous database handle when startup runs twice in one process', () => {
+		startup(cfg(dir), '2026-09-04');
+		const first = getSqlite();
+		startup(cfg(dir), '2026-09-04');
+		expect(first.open).toBe(false);
+		expect(getSqlite().open).toBe(true);
 	});
 });

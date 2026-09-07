@@ -25,4 +25,8 @@ describe('loadConfig', () => {
 	it('rejects an unknown time zone', () => {
 		expect(() => loadConfig({ ...good, SHISO_TZ: 'Mars/Olympus' })).toThrowError(/SHISO_TZ/);
 	});
+	it('rejects a malformed sync hour by name', () => {
+		expect(() => loadConfig({ ...good, SHISO_SYNC_HOUR: 'noon' })).toThrowError(/SHISO_SYNC_HOUR/);
+		expect(() => loadConfig({ ...good, SHISO_BALANCE_HOUR: '24' })).toThrowError(/SHISO_BALANCE_HOUR/);
+	});
 });
