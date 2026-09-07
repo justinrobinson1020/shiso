@@ -452,9 +452,12 @@ For category `c` and period `p`:
   overspent category was split across several cards, the shortfall is
   attributed in proportion to net purchases on each card; a card that netted
   a refund in that category gets no share.
-- "Spending-like" means every kind except debt_payment for a credit account,
-  transfer, income, and reconciliation. A loan's debt_payment category is
-  spending-like for these definitions.
+- "Spending-like" means every kind except debt_payment for an on-budget
+  credit account, transfer, income, and reconciliation. A loan's
+  debt_payment category is spending-like for these definitions, and so is
+  the debt_payment category of an off-budget credit account: its purchases
+  never moved money out of an envelope, so its payments are budgeted like a
+  loan payment.
 
 ### 7.2 Available
 
