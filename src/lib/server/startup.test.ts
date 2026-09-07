@@ -3,9 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startup, resetForTests } from './startup';
+import { currentPeriodId } from './budget/periods';
 import { getDb, getSqlite } from './db/instance';
 import { periods, categories } from './db/schema';
-import { asc } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'shiso-start-')); resetForTests(); });
@@ -42,6 +43,15 @@ describe('startup', () => {
 		const db = getDb();
 		const starts = db.select().from(periods).orderBy(asc(periods.startDate)).all().map((r) => r.startDate);
 		expect(starts).toEqual(['2026-09-01', '2026-09-16', '2026-10-01', '2026-10-16', '2026-11-01', '2026-11-16', '2026-12-01']);
+	});
+	it('extends periods on demand when the process outlives the back-fill', () => {
+		startup(cfg(dir), '2026-09-04');
+		const db = getDb();
+		const id = currentPeriodId(db, 'semi_monthly', '2026-11-20');
+		const row = db.select().from(periods).where(eq(periods.id, id)).get();
+		expect(row?.startDate).toBe('2026-11-16');
+		const starts = db.select().from(periods).orderBy(asc(periods.startDate)).all().map((r) => r.startDate);
+		expect(starts).toContain('2026-12-01');
 	});
 	it('closes the previous database handle when startup runs twice in one process', () => {
 		startup(cfg(dir), '2026-09-04');

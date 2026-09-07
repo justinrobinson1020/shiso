@@ -51,7 +51,14 @@ export function periodIdForDate(db: DbOrTx, iso: string): number {
 	return row.id;
 }
 
-export function currentPeriodId(db: DbOrTx, todayIso: string): number {
+/**
+ * The period containing today, extending the table when the process has outlived
+ * the startup back-fill. Keeps one period beyond today covered, as startup does.
+ */
+export function currentPeriodId(db: DbOrTx, cadence: Cadence, todayIso: string): number {
+	const current = periodBoundsFor(cadence, todayIso);
+	const next = periodBoundsFor(cadence, nextPeriodStart(cadence, current.endDate));
+	ensurePeriods(db, cadence, todayIso, next.endDate);
 	return periodIdForDate(db, todayIso);
 }
 
