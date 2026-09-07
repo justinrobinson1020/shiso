@@ -1,7 +1,8 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { accounts, categories, categoryGroups, type CategoryKind } from '../db/schema';
 import { InvariantError } from './errors';
+import { nowIso } from '$lib/dates';
 
 export function createGroup(db: DbOrTx, name: string, sort = 0): number {
 	return db.insert(categoryGroups).values({ name, sort }).returning({ id: categoryGroups.id }).get().id;
@@ -27,16 +28,18 @@ export function createCategory(
 		.get().id;
 }
 
+const touch = () => ({ updatedAt: nowIso() });
+
 export function renameCategory(db: DbOrTx, id: number, name: string): void {
-	db.update(categories).set({ name, updatedAt: sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))` }).where(eq(categories.id, id)).run();
+	db.update(categories).set({ name, ...touch() }).where(eq(categories.id, id)).run();
 }
 
 export function hideCategory(db: DbOrTx, id: number, hidden: boolean): void {
-	db.update(categories).set({ hidden }).where(eq(categories.id, id)).run();
+	db.update(categories).set({ hidden, ...touch() }).where(eq(categories.id, id)).run();
 }
 
 export function moveCategory(db: DbOrTx, id: number, groupId: number, sort: number): void {
-	db.update(categories).set({ groupId, sort }).where(eq(categories.id, id)).run();
+	db.update(categories).set({ groupId, sort, ...touch() }).where(eq(categories.id, id)).run();
 }
 
 export function paymentCategoryForAccount(db: DbOrTx, accountId: number): number | null {
