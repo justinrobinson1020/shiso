@@ -3,7 +3,7 @@ import { openMemoryDatabase, type Db } from '../db';
 import { accounts, connections, transactions, transactionSplits } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, uncategorizedId, systemCategoryId } from './categories';
 import { ensurePeriods, periodIdForDate } from '../budget/periods';
-import { createTransaction, setSplits, linkTransfer, unlinkTransfer, softDelete, getTransaction } from './transactions';
+import { createTransaction, setSplits, linkTransfer, unlinkTransfer, softDelete, setReplacedBy, getTransaction } from './transactions';
 import { InvariantError } from './errors';
 import { eq } from 'drizzle-orm';
 
@@ -39,6 +39,18 @@ describe('createTransaction', () => {
 			amount: -500, payeeRaw: 'X', pending: true, source: 'sync'
 		});
 		expect(getTransaction(db, id).periodId).toBe(periodIdForDate(db, '2026-03-15'));
+	});
+	it('surfaces a duplicate external id as an invariant', () => {
+		const make = () => createTransaction(db, {
+			accountId: checking, externalId: 'dupe', postedDate: '2026-03-20', amount: -100, payeeRaw: 'X', source: 'sync'
+		});
+		make();
+		expect(make).toThrowError(/DUPLICATE_EXTERNAL_ID/);
+		expect(() => make()).toThrow(InvariantError);
+		// A different account may reuse the provider's id.
+		expect(() => createTransaction(db, {
+			accountId: card, externalId: 'dupe', postedDate: '2026-03-20', amount: -100, payeeRaw: 'X', source: 'sync'
+		})).not.toThrow();
 	});
 	it('rejects splits that do not sum to the amount', () => {
 		expect(() => createTransaction(db, {
@@ -91,11 +103,39 @@ describe('transfers', () => {
 	});
 });
 
+describe('setReplacedBy', () => {
+	it('points a pending row at its posted replacement', () => {
+		const pending = createTransaction(db, {
+			accountId: checking, externalId: 'p', postedDate: '2026-03-20', amount: -100, payeeRaw: 'X', pending: true, source: 'sync'
+		});
+		const posted = createTransaction(db, { accountId: checking, externalId: 'q', postedDate: '2026-03-21', amount: -100, payeeRaw: 'X', source: 'sync' });
+		const before = getTransaction(db, pending).updatedAt;
+		setReplacedBy(db, pending, posted);
+		const row = getTransaction(db, pending);
+		expect(row.replacedById).toBe(posted);
+		expect(row.updatedAt >= before).toBe(true);
+	});
+});
+
 describe('softDelete', () => {
 	it('sets deleted_at and keeps the row and splits', () => {
 		const id = createTransaction(db, { accountId: checking, externalId: 'a', postedDate: '2026-03-20', amount: -100, payeeRaw: 'P', source: 'sync' });
 		softDelete(db, id);
 		expect(getTransaction(db, id).deletedAt).not.toBeNull();
 		expect(db.select().from(transactionSplits).where(eq(transactionSplits.transactionId, id)).all().length).toBe(1);
+	});
+	it('unlinks the surviving half of a transfer so it can be relinked', () => {
+		const a = createTransaction(db, { accountId: checking, externalId: 'a', postedDate: '2026-03-20', amount: -100, payeeRaw: 'P', source: 'sync' });
+		const b = createTransaction(db, { accountId: card, externalId: 'b', postedDate: '2026-03-20', amount: 100, payeeRaw: 'P', source: 'sync' });
+		linkTransfer(db, a, b);
+		softDelete(db, a, 'removed_by_provider');
+		const survivor = getTransaction(db, b);
+		expect(survivor.transferPeerId).toBeNull();
+		expect(survivor.needsReview).toBe(true);
+		expect(survivor.reviewReason).toBe('transfer_peer_deleted');
+		expect(getTransaction(db, a).transferPeerId).toBeNull();
+		const reposted = createTransaction(db, { accountId: checking, externalId: 'a2', postedDate: '2026-03-21', amount: -100, payeeRaw: 'P', source: 'sync' });
+		expect(() => linkTransfer(db, b, reposted)).not.toThrow();
+		expect(getTransaction(db, b).transferPeerId).toBe(reposted);
 	});
 });

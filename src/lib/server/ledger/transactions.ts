@@ -33,31 +33,47 @@ function assertSplitsSum(amount: number, splits: SplitInput[]): void {
 	if (sum !== amount) throw new InvariantError('SPLITS_DO_NOT_SUM');
 }
 
+/**
+ * The (account_id, external_id) unique index. better-sqlite3 names the conflicting columns
+ * rather than the index, so match on those; sync needs an InvariantError, not a driver error.
+ */
+function isDuplicateExternalId(err: unknown): boolean {
+	const msg = err instanceof Error ? err.message : '';
+	return msg.startsWith('UNIQUE constraint failed') &&
+		msg.includes('transactions.account_id') && msg.includes('transactions.external_id');
+}
+
 export function createTransaction(db: DbOrTx, input: NewTransaction): number {
 	const splits = input.splits ?? [{ categoryId: uncategorizedId(db), amount: input.amount }];
 	assertSplitsSum(input.amount, splits);
 	const dateForPeriod = input.pending && input.transactedAt ? input.transactedAt.slice(0, 10) : input.postedDate;
 	const periodId = input.periodId ?? periodIdForDate(db, dateForPeriod);
 	return db.transaction((tx) => {
-		const id = tx
-			.insert(transactions)
-			.values({
-				accountId: input.accountId,
-				externalId: input.externalId,
-				pendingExternalId: input.pendingExternalId ?? null,
-				postedDate: input.postedDate,
-				transactedAt: input.transactedAt ?? null,
-				amount: input.amount,
-				payeeRaw: input.payeeRaw,
-				payee: input.payee ?? input.payeeRaw,
-				memo: input.memo ?? null,
-				pending: input.pending ?? false,
-				providerCategory: input.providerCategory ?? null,
-				periodId,
-				source: input.source
-			})
-			.returning({ id: transactions.id })
-			.get().id;
+		let id: number;
+		try {
+			id = tx
+				.insert(transactions)
+				.values({
+					accountId: input.accountId,
+					externalId: input.externalId,
+					pendingExternalId: input.pendingExternalId ?? null,
+					postedDate: input.postedDate,
+					transactedAt: input.transactedAt ?? null,
+					amount: input.amount,
+					payeeRaw: input.payeeRaw,
+					payee: input.payee ?? input.payeeRaw,
+					memo: input.memo ?? null,
+					pending: input.pending ?? false,
+					providerCategory: input.providerCategory ?? null,
+					periodId,
+					source: input.source
+				})
+				.returning({ id: transactions.id })
+				.get().id;
+		} catch (err) {
+			if (isDuplicateExternalId(err)) throw new InvariantError('DUPLICATE_EXTERNAL_ID');
+			throw err;
+		}
 		tx.insert(transactionSplits).values(splits.map((s) => ({ transactionId: id, categoryId: s.categoryId, amount: s.amount, memo: s.memo ?? null }))).run();
 		return id;
 	});
@@ -125,11 +141,26 @@ export function unlinkTransfer(db: DbOrTx, id: number): void {
 }
 
 export function softDelete(db: DbOrTx, id: number, reason?: string): void {
-	// Leave an existing review reason alone unless the caller supplies a new one.
-	db.update(transactions)
-		.set({ deletedAt: nowIso(), ...(reason ? { reviewReason: reason } : {}), ...touch() })
-		.where(eq(transactions.id, id))
-		.run();
+	const row = db.select({ peer: transactions.transferPeerId }).from(transactions).where(eq(transactions.id, id)).get();
+	db.transaction((tx) => {
+		// A dangling peer link would block relinking the survivor when the row is reposted.
+		if (row?.peer != null) {
+			tx.update(transactions)
+				.set({ transferPeerId: null, needsReview: true, reviewReason: 'transfer_peer_deleted', ...touch() })
+				.where(eq(transactions.id, row.peer))
+				.run();
+		}
+		// Leave an existing review reason alone unless the caller supplies a new one.
+		tx.update(transactions)
+			.set({ deletedAt: nowIso(), transferPeerId: null, ...(reason ? { reviewReason: reason } : {}), ...touch() })
+			.where(eq(transactions.id, id))
+			.run();
+	});
+}
+
+/** Point a pending row at the posted row that superseded it (§4.2 pending → posted). */
+export function setReplacedBy(db: DbOrTx, pendingId: number, replacementId: number): void {
+	db.update(transactions).set({ replacedById: replacementId, ...touch() }).where(eq(transactions.id, pendingId)).run();
 }
 
 export function flagForReview(db: DbOrTx, id: number, reason: string): void {

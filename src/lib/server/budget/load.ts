@@ -1,5 +1,5 @@
 import { alias } from 'drizzle-orm/sqlite-core';
-import { desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { accounts, accountBalances, budgetAssignments, categories, periods, transactions, transactionSplits } from '../db/schema';
 import { computeBudget, type BudgetInput, type BudgetResult } from './envelope';
@@ -22,7 +22,7 @@ export function loadBudgetInput(db: DbOrTx): BudgetInput {
 		})
 		.from(transactionSplits)
 		.innerJoin(transactions, eq(transactionSplits.transactionId, transactions.id))
-		.leftJoin(peer, eq(transactions.transferPeerId, peer.id))
+		.leftJoin(peer, and(eq(transactions.transferPeerId, peer.id), isNull(peer.deletedAt)))
 		.where(isNull(transactions.deletedAt))
 		.all();
 

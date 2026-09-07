@@ -59,6 +59,23 @@ describe('loadBudgetInput', () => {
 		expect(input.balances.find((bb) => bb.accountId === checking)?.current).toBe(-500); // fallback: sum of live transactions
 	});
 
+	it('reports no transfer peer once the other half is deleted', () => {
+		const { db } = openMemoryDatabase();
+		seedDefaultCategories(db);
+		ensurePeriods(db, 'semi_monthly', '2026-01-01', '2026-01-31');
+		const conn = db.insert(connections).values({ provider: 'manual', institutionName: 'T' }).returning({ id: connections.id }).get();
+		const checking = db.insert(accounts).values({ connectionId: conn.id, externalId: 'k', name: 'Chk', type: 'checking', onBudget: true, isDebt: false }).returning({ id: accounts.id }).get().id;
+		const card = db.insert(accounts).values({ connectionId: conn.id, externalId: 'c', name: 'Card', type: 'credit', onBudget: true, isDebt: true }).returning({ id: accounts.id }).get().id;
+		const a = createTransaction(db, { accountId: checking, externalId: 'a', postedDate: '2026-01-06', amount: -500, payeeRaw: 'P', source: 'sync' });
+		const b = createTransaction(db, { accountId: card, externalId: 'b', postedDate: '2026-01-06', amount: 500, payeeRaw: 'P', source: 'sync' });
+		linkTransfer(db, a, b);
+		softDelete(db, a);
+		const input = loadBudgetInput(db);
+		expect(input.splits.length).toBe(1);
+		expect(input.splits[0].accountId).toBe(card);
+		expect(input.splits[0].transferPeerAccountId).toBeNull();
+	});
+
 	it('prefers the latest balance row over the transaction sum, ordering by as_of then id', () => {
 		const { db } = openMemoryDatabase();
 		seedDefaultCategories(db);
