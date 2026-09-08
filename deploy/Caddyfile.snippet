@@ -1,0 +1,8 @@
+# Add to CT 130's Caddyfile, then `caddy reload`.
+#
+# The shiso unit sets HOST=0.0.0.0 (not 127.0.0.1) because Caddy runs on a
+# separate container from the app (CT 130, 10.10.50.130) — the services
+# VLAN (10.10.50.x) is the trust boundary, not the loopback interface.
+shiso.home.local {
+	reverse_proxy 10.10.50.<CT-IP>:3000
+}

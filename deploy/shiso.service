@@ -1,0 +1,32 @@
+[Unit]
+Description=shiso personal finance dashboard
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=shiso
+Group=shiso
+WorkingDirectory=/opt/shiso/current
+EnvironmentFile=/etc/shiso/shiso.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# Caddy runs on another container (CT 130, 10.10.50.130); the services VLAN
+# (10.10.50.x) is the trust boundary, so this listens on all interfaces
+# rather than loopback. See docs/deploy.md.
+Environment=HOST=0.0.0.0
+ExecStart=/usr/bin/node /opt/shiso/current/build
+Restart=on-failure
+RestartSec=30
+KillSignal=SIGTERM
+TimeoutStopSec=15
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/shiso/data /opt/shiso/backups
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
