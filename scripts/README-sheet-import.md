@@ -30,8 +30,9 @@ npx tsx scripts/import-sheet.ts --xlsx ~/Downloads/budget-2025.xlsx --year 2025 
 ```
 
 This prints what each tab would import (checking balance and per-debt
-balance/APR) without touching the database. No `--db` flag is required for a
-dry run. Review the output before running for real.
+balance/APR) without touching the database. `--db` is still required by the
+script's argument parser even though dry-run never opens it — pass any path,
+such as `./data/shiso.db`. Review the output before running for real.
 
 ## 4. Real run
 
