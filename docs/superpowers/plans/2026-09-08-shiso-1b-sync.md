@@ -1406,7 +1406,7 @@ git commit -m "feat: payee rules and transfer detection"
   - `type Schedule = { cadence: BillCadence; dueDay?: number | null; dueDay2?: number | null; interval?: number | null; anchorDate?: string | null }`
   - `dueDatesBetween(s: Schedule, fromIso: string, throughIso: string): string[]` — pure, ascending, inclusive; monthly clamps to month end; `every_n_weeks` steps `interval × 7` days from `anchorDate`; yearly repeats `anchorDate`'s month and day.
   - `createBill(db, input: NewBill): number`, `updateBill(db, id, patch: Partial<NewBill>)`, `setBillActive(db, id, active)`, `listBills(db)`; `createIncomeSource(db, input: NewIncome): number`, `updateIncomeSource`, `setIncomeActive`, `listIncomeSources(db)`.
-  - `generateOccurrences(db, opts: { todayIso: string; cadence: Cadence; graceDays: number }): { billsCreated: number; incomeCreated: number }` — idempotent; horizon is the end of the period after today; floor is the later of (today − 31 days) and the definition's creation date; a debt bill whose latest `account_terms` has `next_due_date` takes that date, `min_payment` as expected, `last_statement_balance` on the occurrence, and window `[last_statement_date ?? due − 25, due + grace]`; other bills use `[due − 10, due + grace]`; income uses `[due − 5, due + grace]`.
+  - `generateOccurrences(db, opts: { todayIso: string; cadence: Cadence; graceDays: number }): { billsCreated: number; incomeCreated: number }` — idempotent; horizon is the end of the period after today; floor is today − 31 days (a definition added mid-period still gets that period's earlier occurrence; the lookback bounds back-fill); a debt bill whose latest `account_terms` has `next_due_date` takes that date, `min_payment` as expected, `last_statement_balance` on the occurrence, and window `[last_statement_date ?? due − 25, due + grace]`; other bills use `[due − 10, due + grace]`; income uses `[due − 5, due + grace]`.
   - `DEBT_WINDOW_BEFORE = 25`, `BILL_WINDOW_BEFORE = 10`, `INCOME_WINDOW_BEFORE = 5`
 
 - [ ] **Step 1: Failing tests**
@@ -1489,12 +1489,11 @@ describe('generateOccurrences', () => {
 		expect(o.windowStart).toBe('2026-09-01');
 		expect(o.windowEnd).toBe('2026-09-29');
 	});
-	it('does not create occurrences before the definition existed', () => {
-		const id = createBill(db, { name: 'New', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 100, cadence: 'semi_monthly', dueDay: 5, dueDay2: 20 });
-		db.update(bills).set({ createdAt: '2026-09-07T00:00:00.000Z' }).where(eq(bills.id, id)).run();
+	it('back-fills at most 31 days for a new definition', () => {
+		createBill(db, { name: 'New', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 100, cadence: 'semi_monthly', dueDay: 5, dueDay2: 20 });
 		gen();
-		// Aug 20 and Sep 5 precede the definition; Sep 20 is the first eligible date inside the horizon.
-		expect(db.select().from(billOccurrences).all().map((r) => r.dueDate)).toEqual(['2026-09-20']);
+		// floor Aug 8, horizon Sep 30: Aug 5 is out, Aug 20 / Sep 5 / Sep 20 are in
+		expect(db.select().from(billOccurrences).all().map((r) => r.dueDate).sort()).toEqual(['2026-08-20', '2026-09-05', '2026-09-20']);
 	});
 	it('generates income occurrences with the income window', () => {
 		createIncomeSource(db, { name: 'Salary', categoryId: systemCategoryId(db, 'income'), depositAccountId: chk, expectedAmount: 319200, cadence: 'semi_monthly', dueDay: 15, dueDay2: 30, matchPattern: 'employer' });
@@ -1625,7 +1624,7 @@ export function generateOccurrences(db: DbOrTx, opts: { todayIso: string; cadenc
 	let billsCreated = 0, incomeCreated = 0;
 
 	for (const b of db.select().from(bills).where(eq(bills.active, true)).all()) {
-		const floor = compareIso(b.createdAt.slice(0, 10), lookback) > 0 ? b.createdAt.slice(0, 10) : lookback;
+		const floor = lookback;
 		const existing = new Set(db.select({ d: billOccurrences.dueDate }).from(billOccurrences).where(eq(billOccurrences.billId, b.id)).all().map((r) => r.d));
 		const terms = b.linkedDebtAccountId != null ? latestTerms(db, b.linkedDebtAccountId) : null;
 		const isDebt = b.linkedDebtAccountId != null;
@@ -1652,7 +1651,7 @@ export function generateOccurrences(db: DbOrTx, opts: { todayIso: string; cadenc
 	}
 
 	for (const s of db.select().from(incomeSources).where(eq(incomeSources.active, true)).all()) {
-		const floor = compareIso(s.createdAt.slice(0, 10), lookback) > 0 ? s.createdAt.slice(0, 10) : lookback;
+		const floor = lookback;
 		const existing = new Set(db.select({ d: incomeOccurrences.dueDate }).from(incomeOccurrences).where(eq(incomeOccurrences.incomeSourceId, s.id)).all().map((r) => r.d));
 		for (const due of dueDatesBetween(s, floor, horizonEnd)) {
 			if (existing.has(due)) continue;
