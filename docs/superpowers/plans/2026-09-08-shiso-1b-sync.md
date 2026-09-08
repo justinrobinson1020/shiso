@@ -578,9 +578,14 @@ describe('contentHash', () => {
 ```ts
 import { createHash } from 'node:crypto';
 
+/** The normalisation the hash applies; callers computing ordinals must key on the same form. */
+export function normalizeDescription(s: string): string {
+	return s.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 /** Deterministic id for rows whose provider gives none. Description is normalised (trim, collapse spaces, lower-case). */
 export function contentHash(p: { accountKey: string; date: string; amount: number; description: string; ordinal: number }): string {
-	const desc = p.description.trim().replace(/\s+/g, ' ').toLowerCase();
+	const desc = normalizeDescription(p.description);
 	const h = createHash('sha256').update(`${p.accountKey}|${p.date}|${p.amount}|${desc}|${p.ordinal}`).digest('hex');
 	return `h1:${h.slice(0, 16)}`;
 }
@@ -2960,7 +2965,7 @@ describe('SimpleFinProvider', () => {
 - [ ] **Step 3: Implement `simplefin.ts`**
 
 ```ts
-import { contentHash } from '../hash';
+import { contentHash, normalizeDescription } from '../hash';
 import { ProviderError, type BatchAccount, type BatchBalance, type BatchTransaction, type FetchInput, type SyncBatch, type SyncProvider } from '../types';
 import { decimalToCents } from '$lib/money';
 import { addDays, parseIso } from '$lib/dates';
@@ -3021,10 +3026,11 @@ export class SimpleFinProvider implements SyncProvider {
 			for (const t of a.transactions ?? []) {
 				const amount = decimalToCents(t.amount);
 				const pending = t.pending ?? t.posted === 0;
-				const postedDate = t.posted ? unixDate(t.posted) : unixDate(t.transacted_at ?? Math.floor(Date.now() / 1000));
+				if (!t.posted && !t.transacted_at) continue; // no date at all: unidentifiable until it posts (Task 12 review ruling)
+				const postedDate = t.posted ? unixDate(t.posted) : unixDate(t.transacted_at!);
 				let externalId = t.id?.trim() || '';
 				if (!externalId) {
-					const key = `${postedDate}|${amount}|${t.description}`;
+					const key = `${postedDate}|${amount}|${normalizeDescription(t.description)}`;
 					const ordinal = seen.get(key) ?? 0;
 					seen.set(key, ordinal + 1);
 					externalId = contentHash({ accountKey: a.id, date: postedDate, amount, description: t.description, ordinal });
