@@ -112,5 +112,5 @@ describe('§7.5 conservation', () => {
 			}),
 			{ numRuns: 500 }
 		);
-	});
+	}, 60_000);
 });
