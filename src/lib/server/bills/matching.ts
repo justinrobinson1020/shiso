@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, lte, lt, gt, ne, or } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, lt, gt, ne, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import type { DbOrTx } from '../db';
 import { bills, billOccurrences, billOccurrenceTransactions, incomeSources, incomeOccurrences, transactions } from '../db/schema';
@@ -36,7 +36,16 @@ export function matchBillOccurrences(db: DbOrTx, todayIso: string): { matched: n
 	let matched = 0, tied = 0;
 	const open = db.select({ o: billOccurrences, b: bills }).from(billOccurrences)
 		.innerJoin(bills, eq(billOccurrences.billId, bills.id))
-		.where(and(inArray(billOccurrences.status, ['pending', 'overdue']), notManual(billOccurrences.markedBy)))
+		.where(and(
+			or(
+				inArray(billOccurrences.status, ['pending', 'overdue']),
+				// §6.2: a debt occurrence settled by the minimum payment stays open to later transfers to the
+				// card in the same window, so paid_amount and extra_amount keep accumulating. Re-scanning is
+				// idempotent — `used` excludes already-linked rows and `settle` recomputes from the running total.
+				and(eq(billOccurrences.status, 'paid'), isNotNull(bills.linkedDebtAccountId))
+			),
+			notManual(billOccurrences.markedBy)
+		))
 		.orderBy(asc(billOccurrences.dueDate), asc(billOccurrences.id))
 		.all();
 	for (const { o, b } of open) {

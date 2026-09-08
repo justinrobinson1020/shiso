@@ -51,6 +51,43 @@ describe('bill matching', () => {
 		expect(o.paidAmount).toBe(70200);
 		expect(o.extraAmount).toBe(66700);
 	});
+	it('a debt occurrence settled by the minimum still accumulates later transfers to the card', () => {
+		createBill(db, { name: 'Card', categoryId: cardEnv, payFromAccountId: chk, expectedAmount: 3500, cadence: 'monthly', dueDay: 15, linkedDebtAccountId: card });
+		generateOccurrences(db, { todayIso: TODAY, cadence: 'semi_monthly', graceDays: 3 });
+		const min = mk(chk, 'm', -3500, '2026-09-02', 'CHASE PAYMENT'); const minPeer = mk(card, 'mp', 3500, '2026-09-02', 'PAYMENT');
+		linkTransfer(db, min, minPeer);
+		matchBillOccurrences(db, TODAY);
+		const first = occ().find((x) => x.dueDate === '2026-09-15')!;
+		expect(first).toMatchObject({ status: 'paid', paidAmount: 3500, extraAmount: 0 });
+
+		// the user pays the statement balance a few days later, on the same card, inside the same window
+		const extra = mk(chk, 'e', -120500, '2026-09-05', 'CHASE PAYMENT'); const extraPeer = mk(card, 'ep', 120500, '2026-09-05', 'PAYMENT');
+		linkTransfer(db, extra, extraPeer);
+		matchBillOccurrences(db, TODAY);
+		const o = occ().find((x) => x.dueDate === '2026-09-15')!;
+		expect(o).toMatchObject({ status: 'paid', paidAmount: 124000, extraAmount: 120500 });
+		expect(db.select().from(billOccurrenceTransactions).where(eq(billOccurrenceTransactions.billOccurrenceId, o.id)).all().map((r) => r.transactionId).sort((a, b) => a - b))
+			.toEqual([min, extra].sort((a, b) => a - b));
+
+		// re-running with nothing new is a no-op, not a double count
+		matchBillOccurrences(db, TODAY);
+		expect(occ().find((x) => x.dueDate === '2026-09-15')!).toMatchObject({ paidAmount: 124000, extraAmount: 120500 });
+	});
+	it('a paid non-debt occurrence does not claim a second matching transaction', () => {
+		createBill(db, { name: 'Rent', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 225000, toleranceAbs: 100, cadence: 'monthly', dueDay: 1, matchPattern: 'landlord' });
+		generateOccurrences(db, { todayIso: TODAY, cadence: 'semi_monthly', graceDays: 3 });
+		const t1 = mk(chk, 'r1', -225000, '2026-08-30', 'LANDLORD LLC');
+		matchBillOccurrences(db, TODAY);
+		const sep = occ().find((x) => x.dueDate === '2026-09-01')!;
+		expect(sep).toMatchObject({ status: 'paid', paidAmount: 225000 });
+
+		mk(chk, 'r2', -225000, '2026-08-31', 'LANDLORD LLC');
+		expect(matchBillOccurrences(db, TODAY).matched).toBe(0);
+		const after = occ().find((x) => x.dueDate === '2026-09-01')!;
+		expect(after.paidAmount).toBe(225000);
+		expect(db.select().from(billOccurrenceTransactions).where(eq(billOccurrenceTransactions.billOccurrenceId, after.id)).all())
+			.toEqual([{ billOccurrenceId: after.id, transactionId: t1 }]);
+	});
 	it('the earlier occurrence claims a payment inside two overlapping windows', () => {
 		createBill(db, { name: 'Card', categoryId: cardEnv, payFromAccountId: chk, expectedAmount: 3500, cadence: 'monthly', dueDay: 15, linkedDebtAccountId: card });
 		generateOccurrences(db, { todayIso: '2026-09-20', cadence: 'semi_monthly', graceDays: 3 }); // Sep 15 and Oct 15; windows Aug 21-Sep 18 and Sep 20-Oct 18
