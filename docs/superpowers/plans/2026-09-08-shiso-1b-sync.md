@@ -2893,13 +2893,13 @@ const unix = (iso: string) => Math.floor(Date.UTC(+iso.slice(0, 4), +iso.slice(5
 const body = {
 	errors: [],
 	accounts: [
-		{ id: 'A1', name: 'Everyday', currency: 'USD', balance: '1234.56', 'available-balance': '1200.00', 'balance-date': 1757289600, org: { name: 'Bank' },
+		{ id: 'A1', name: 'Everyday', currency: 'USD', balance: '1234.56', 'available-balance': '1200.00', 'balance-date': unix('2026-09-08'), org: { name: 'Bank' },
 		  transactions: [
-			{ id: 'T1', posted: 1757203200, amount: '-45.10', description: 'GROCER' },
-			{ id: '', posted: 0, amount: '-9.99', description: 'Coffee', transacted_at: 1757289600, pending: true },
-			{ id: '', posted: 0, amount: '-9.99', description: 'Coffee', transacted_at: 1757289600, pending: true }
+			{ id: 'T1', posted: unix('2026-09-07'), amount: '-45.10', description: 'GROCER' },
+			{ id: '', posted: 0, amount: '-9.99', description: 'Coffee', transacted_at: unix('2026-09-08'), pending: true },
+			{ id: '', posted: 0, amount: '-9.99', description: 'Coffee', transacted_at: unix('2026-09-08'), pending: true }
 		  ] },
-		{ id: 'C1', name: 'Store Card', currency: 'USD', balance: '-857.25', 'balance-date': 1757289600, org: { name: 'Synchrony' }, transactions: [] }
+		{ id: 'C1', name: 'Store Card', currency: 'USD', balance: '-857.25', 'balance-date': unix('2026-09-08'), org: { name: 'Synchrony' }, transactions: [] }
 	]
 };
 function fakeFetch(json: unknown, status = 200) {
@@ -3016,6 +3016,7 @@ export class SimpleFinProvider implements SyncProvider {
 			const current = decimalToCents(a.balance);
 			accounts.push({ externalId: a.id, name: a.name, officialName: a.org?.name ?? null, mask: null, type: current < 0 ? 'credit' : 'checking' });
 			balances.push({ accountExternalId: a.id, asOf: input.todayIso, current, available: a['available-balance'] != null ? decimalToCents(a['available-balance']) : null, creditLimit: null });
+			if (input.mode === 'balances') continue; // balances-only: never surface transactions, even if the server includes them
 			const seen = new Map<string, number>();
 			for (const t of a.transactions ?? []) {
 				const amount = decimalToCents(t.amount);
