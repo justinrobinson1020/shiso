@@ -2889,6 +2889,7 @@ Protocol facts used (simplefin.org/protocol): `GET {access}/accounts?start-date=
 import { describe, it, expect } from 'vitest';
 import { SimpleFinProvider, claimSetupToken, splitAccessUrl } from './simplefin';
 
+const unix = (iso: string) => Math.floor(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 1000);
 const body = {
 	errors: [],
 	accounts: [
@@ -2914,7 +2915,7 @@ describe('SimpleFinProvider', () => {
 	it('sends basic auth, a start date, maps accounts and transactions, hashes id-less rows', async () => {
 		const { f, calls } = fakeFetch(body);
 		const b = await new SimpleFinProvider(f).fetch({ credential: 'https://user:pw@bridge.simplefin.org/simplefin', cursor: '2026-09-07', mode: 'full', todayIso: '2026-09-08' });
-		expect(calls[0].url).toBe('https://bridge.simplefin.org/simplefin/accounts?start-date=1756598400&pending=1'); // 2026-08-31T00:00:00Z
+		expect(calls[0].url).toBe(`https://bridge.simplefin.org/simplefin/accounts?start-date=${unix('2026-08-31')}&pending=1`); // cursor − 7 days
 		expect((calls[0].init!.headers as Record<string, string>).Authorization).toBe('Basic ' + Buffer.from('user:pw').toString('base64'));
 		expect(b.accounts).toEqual([
 			{ externalId: 'A1', name: 'Everyday', officialName: 'Bank', mask: null, type: 'checking' },
@@ -2931,7 +2932,7 @@ describe('SimpleFinProvider', () => {
 		const { f, calls } = fakeFetch(body);
 		const p = new SimpleFinProvider(f, { initialDays: 90 });
 		await p.fetch({ credential: 'https://u:p@h/simplefin', cursor: null, mode: 'full', todayIso: '2026-09-08' });
-		expect(calls[0].url).toContain('start-date=1749600000'); // 2026-06-10
+		expect(calls[0].url).toContain(`start-date=${unix('2026-06-10')}`); // today − 90 days
 		const b = await p.fetch({ credential: 'https://u:p@h/simplefin', cursor: '2026-09-07', mode: 'balances', todayIso: '2026-09-08' });
 		expect(calls[1].url).toContain('balances-only=1');
 		expect(b.added).toEqual([]);
