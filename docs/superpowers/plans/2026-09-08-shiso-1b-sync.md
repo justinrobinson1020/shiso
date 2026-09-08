@@ -3588,3 +3588,20 @@ Plan 1C (screens, deployment, sheet import) builds on:
 - **Connecting:** the Accounts page runs Plaid Link in the browser with `POST /api/plaid/link-token` and posts the public token to `POST /api/plaid/exchange`; relink passes `connectionId` to get an update-mode token; SimpleFIN pastes a setup token into `POST /api/simplefin/claim`.
 - **Deployment (spec §3.1):** ship `drizzle/` beside `build/` and set `SHISO_MIGRATIONS_DIR`; the systemd unit sets `SHISO_TZ`, `SHISO_SCHEDULER=on`, and the Plaid credentials; the nightly `VACUUM INTO` backup job is not yet implemented and belongs to 1C's deployment task alongside the SIGTERM handler that closes the database.
 - **Deferred from the 1A final review, still open:** README rewrite; `@types/better-sqlite3` version drift; closing the SQLite handle when `openDatabase` throws mid-way.
+- **Deferred from the 1B final review, still open:** a `modified` event whose account differs from the stored row's account inserts a second live row instead of moving or flagging (`apply.ts`, unreachable for Plaid and SimpleFIN today; needs a cross-account lookup and a policy); a Plaid liabilities response without an `aprs` array fails the whole sync rather than just terms mapping (`plaid.ts`); matching does not filter on `source`, so `opening`/`adjustment` rows can be bill or income candidates when they fall inside a window; the scheduler test proves `stop()` calls node-cron's `destroy()` but not that a tick is suppressed; `hooks.server.ts` has no guard against a second `init` under Vite HMR (dev only); the link-token route returns 500, not 404, for an unknown connection id.
+
+## Execution amendments (1B, 2026-09-08)
+
+Rulings made while executing, each already reflected in the task text above:
+- `memo` is not in `TransactionPatch` (spec §5.6); sync never writes memo, payee, period, or categories.
+- Drizzle's relational `db.query.*` API is forbidden project-wide (lazy on better-sqlite3).
+- Heuristic pending reconciliation excludes ids present in the batch's `added` and `modified`.
+- A soft-deleted row re-sent by a provider is restored and flagged `provider_readded`; superseded rows (`replaced_by_id` set) are never restored. A re-priced pending transfer is not relinked; both sides are flagged `transfer_unlinked`.
+- Transfer tie-break filters on the counterpart's payee only.
+- Occurrence back-fill floor is today − 31 days with no creation-date floor; debt bills fall back to cadence generation when the latest terms' due date is outside the range; `every_n_weeks` interval is floored at 1.
+- The runner runs `matchAll` when post-processing touched nothing; post-apply failures close the run as `error` with apply counts and leave the connection untouched; `error` connections stay runnable (only `needs_relink` and `disabled` are skipped).
+- SimpleFIN and CSV content-hash ordinal keys use `normalizeDescription`, the same normalisation as `contentHash`; SimpleFIN rows with no id, no posted date, and no transacted date are skipped until they post.
+- Auto-marked paid debt occurrences remain matching candidates so later transfers to the card accumulate into `paid_amount` and `extra_amount` (final review I1).
+- When a pending transfer posts, the peer's splits are captured and restored around the relink (final review I2).
+- Plaid liabilities are read under the SDK's field names (`credit`, `student`, `mortgage`); liabilities with a null `account_id` are skipped. The original names (`credit_cards`, `student_loans`, `mortgages`) were invented and hidden by a cast, so no real sync wrote terms (final review fix wave).
+- `PlaidApi` satisfies `PlaidClientLike` once the local `merchant_name` is optional and the liabilities shape matches the SDK; no cast. `createLinkToken` builds a typed `LinkTokenCreateRequest` with the SDK's `CountryCode` and `Products` enums (same wire payload).

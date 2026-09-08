@@ -647,6 +647,10 @@ Bills, subscriptions, and income sources are created by hand during setup.
   Phase 2's promo sub-ledger is exactly this case and will add the rule
   (move the amount from the paying card's envelope to the receiving card's)
   and a `balance_transfer` event to the property generator.
+- **A provider moving a transaction between accounts.** A `modified` event
+  whose account differs from the stored row's account is treated as new and
+  inserts a second live row. Neither Plaid nor SimpleFIN produces this today;
+  handling it needs a cross-account lookup and a policy (move, flag, or drop).
 
 ## 13. Open items to confirm during setup
 
