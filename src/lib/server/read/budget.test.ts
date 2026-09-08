@@ -19,7 +19,8 @@ describe('budgetView', () => {
 		const spending = v.groups.find((g) => g.name === 'Spending')!;
 		const g = spending.categories.find((c) => c.id === f.groceries)!;
 		expect(g).toMatchObject({ assigned: 5000, activity: -8000, available: -3000, creditOverspend: 3000 });
-		expect(v.groups.some((g) => g.name === 'System')).toBe(false);
+		const system = v.groups.find((g) => g.name === 'System')!;
+		expect(system.categories.map((c) => c.kind)).toEqual(['interest', 'fee']);
 		const card = v.underfunded.find((u) => u.accountId === f.card)!;
 		expect(card.owed).toBe(8000); expect(card.available).toBe(5000); expect(card.underfunded).toBe(3000);
 		expect(v.readyToAssign).toBe(100000 - 5000);

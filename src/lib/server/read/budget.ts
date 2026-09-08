@@ -41,7 +41,6 @@ export function budgetView(db: DbOrTx, opts: { periodId: number | null; todayIso
 	const groupRows = db.select().from(categoryGroups).orderBy(asc(categoryGroups.sort), asc(categoryGroups.id)).all();
 	const catRows = db.select().from(categories).orderBy(asc(categories.sort), asc(categories.id)).all();
 	const groups = groupRows
-		.filter((g) => g.name !== 'System')
 		.map((g) => ({
 			id: g.id,
 			name: g.name,
