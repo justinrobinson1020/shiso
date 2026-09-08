@@ -2403,7 +2403,7 @@ describe('runAllSyncs and maintenance', () => {
 	it('runMaintenance post-processes rows left unprocessed by a crash', async () => {
 		const conn = createConnection(db, { provider: 'plaid', institutionName: 'T', credential: 'x', appKey: KEY });
 		await runSync(db, conn, 'manual', 'full', deps(new FakeProvider(async () => fixedBatch())));
-		db.update(transactions).set({ processedAt: null }).run();
+		db.update(transactions).set({ processedAt: null }).where(eq(transactions.source, 'sync')).run(); // leave the opening-balance row alone
 		expect(runMaintenance(db, deps(new FakeProvider(async () => fixedBatch()))).processed).toBe(1);
 	});
 });
