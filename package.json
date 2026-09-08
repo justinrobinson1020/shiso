@@ -31,6 +31,7 @@
 		"@sveltejs/adapter-node": "^5.5.7",
 		"better-sqlite3": "^13.0.3",
 		"drizzle-orm": "^0.45.2",
-		"node-cron": "^4.6.0"
+		"node-cron": "^4.6.0",
+		"plaid": "^47.0.0"
 	}
 }
