@@ -6,13 +6,16 @@ const unix = (iso: string) => Math.floor(Date.UTC(+iso.slice(0, 4), +iso.slice(5
 const body = {
 	errors: [],
 	accounts: [
-		{ id: 'A1', name: 'Everyday', currency: 'USD', balance: '1234.56', 'available-balance': '1200.00', 'balance-date': 1757289600, org: { name: 'Bank' },
+		{ id: 'A1', name: 'Everyday', currency: 'USD', balance: '1234.56', 'available-balance': '1200.00', 'balance-date': unix('2026-09-08'), org: { name: 'Bank' },
 		  transactions: [
 			{ id: 'T1', posted: unix('2026-09-07'), amount: '-45.10', description: 'GROCER' },
 			{ id: '', posted: 0, amount: '-9.99', description: 'Coffee', transacted_at: unix('2026-09-08'), pending: true },
-			{ id: '', posted: 0, amount: '-9.99', description: 'Coffee', transacted_at: unix('2026-09-08'), pending: true }
+			{ id: '', posted: 0, amount: '-9.99', description: 'Coffee', transacted_at: unix('2026-09-08'), pending: true },
+			{ id: '', posted: unix('2026-09-07'), amount: '-9.99', description: '  coffee', pending: false },
+			{ id: '', posted: unix('2026-09-07'), amount: '-9.99', description: 'Coffee', pending: false },
+			{ id: '', posted: 0, amount: '-1.00', description: 'Ghost' }
 		  ] },
-		{ id: 'C1', name: 'Store Card', currency: 'USD', balance: '-857.25', 'balance-date': 1757289600, org: { name: 'Synchrony' }, transactions: [] }
+		{ id: 'C1', name: 'Store Card', currency: 'USD', balance: '-857.25', 'balance-date': unix('2026-09-08'), org: { name: 'Synchrony' }, transactions: [] }
 	]
 };
 function fakeFetch(json: unknown, status = 200) {
@@ -39,6 +42,8 @@ describe('SimpleFinProvider', () => {
 		expect(b.added[1].externalId).toMatch(/^h1:/);
 		expect(b.added[1]).toMatchObject({ amount: -999, postedDate: '2026-09-08', pending: true });
 		expect(b.added[2].externalId).not.toBe(b.added[1].externalId);
+		expect(b.added[3].externalId).not.toBe(b.added[4].externalId); // '  coffee' vs 'Coffee' normalise the same but must not collide
+		expect(b.added.some((t) => t.payeeRaw === 'Ghost')).toBe(false); // unidentifiable pending row (no id, no transacted_at) is skipped
 		expect(b).toMatchObject({ nextCursor: '2026-09-08', sendsRemovals: false, coversFrom: '2026-08-31' });
 	});
 	it('uses the initial window without a cursor and balances-only in balances mode', async () => {

@@ -1,4 +1,4 @@
-import { contentHash } from '../hash';
+import { contentHash, normalizeDescription } from '../hash';
 import { ProviderError, type BatchAccount, type BatchBalance, type BatchTransaction, type FetchInput, type SyncBatch, type SyncProvider } from '../types';
 import { decimalToCents } from '$lib/money';
 import { addDays, parseIso } from '$lib/dates';
@@ -57,12 +57,14 @@ export class SimpleFinProvider implements SyncProvider {
 			if (input.mode !== 'balances') {
 				const seen = new Map<string, number>();
 				for (const t of a.transactions ?? []) {
+					const externalIdRaw = t.id?.trim() || '';
+					if (!externalIdRaw && t.posted === 0 && t.transacted_at == null) continue; // unidentifiable: no id, no stable date
 					const amount = decimalToCents(t.amount);
 					const pending = t.pending ?? t.posted === 0;
 					const postedDate = t.posted ? unixDate(t.posted) : unixDate(t.transacted_at ?? Math.floor(Date.now() / 1000));
-					let externalId = t.id?.trim() || '';
+					let externalId = externalIdRaw;
 					if (!externalId) {
-						const key = `${postedDate}|${amount}|${t.description}`;
+						const key = `${postedDate}|${amount}|${normalizeDescription(t.description)}`;
 						const ordinal = seen.get(key) ?? 0;
 						seen.set(key, ordinal + 1);
 						externalId = contentHash({ accountKey: a.id, date: postedDate, amount, description: t.description, ordinal });
