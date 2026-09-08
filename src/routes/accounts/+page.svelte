@@ -10,7 +10,7 @@
 	let error = $state(''); let busy = $state<string | null>(null);
 	let termsFor = $state<{ id: number; name: string; terms: Terms } | null>(null);
 	let balanceFor = $state<{ id: number; current: string; asOf: string } | null>(null);
-	let editFor = $state<{ id: number; name: string; type: string; onBudget: boolean; closed: boolean } | null>(null);
+	let editFor = $state<{ id: number; name: string; type: string; onBudget: boolean; closed: boolean; closedAt: string | null } | null>(null);
 	let addManual = $state<{ institutionName: string; accounts: { name: string; type: string }[] } | null>(null);
 	let simplefin = $state<{ setupToken: string; institutionName: string } | null>(null);
 	let plaidName = $state('');
@@ -56,8 +56,8 @@
 			<span class="small muted">last success {fmtTime(c.lastSuccessAt)}</span>
 			{#if c.lastRun}<span class="small muted">last run {c.lastRun.status} · +{c.lastRun.added} ~{c.lastRun.modified} −{c.lastRun.removed}{#if c.lastRun.error} · {c.lastRun.error}{/if}</span>{/if}
 			{#if c.provider !== 'manual'}<button disabled={busy != null} onclick={() => run(`sync-${c.id}`, () => post(`/api/sync/${c.id}`, {}))}>Sync</button>{/if}
-			{#if c.status === 'needs_relink' && c.provider === 'plaid'}<button class="primary" onclick={() => plaidLink(c.id)}>Relink</button>{/if}
-			{#if c.status === 'disabled'}<button onclick={() => run('en', () => post(`/api/connections/${c.id}/status`, { status: 'active' }))}>Enable</button>{:else if c.provider !== 'manual'}<button onclick={() => run('dis', () => post(`/api/connections/${c.id}/status`, { status: 'disabled' }))}>Disable</button>{/if}
+			{#if c.status === 'needs_relink' && c.provider === 'plaid'}<button class="primary" disabled={busy != null} onclick={() => plaidLink(c.id)}>Relink</button>{/if}
+			{#if c.status === 'disabled'}<button disabled={busy != null} onclick={() => run('en', () => post(`/api/connections/${c.id}/status`, { status: 'active' }))}>Enable</button>{:else if c.provider !== 'manual'}<button disabled={busy != null} onclick={() => run('dis', () => post(`/api/connections/${c.id}/status`, { status: 'disabled' }))}>Disable</button>{/if}
 		</div>
 		{#if c.lastError}<p class="error small">{c.lastError}</p>{/if}
 		<table>
@@ -71,13 +71,13 @@
 					<td class="num"><Money cents={a.drift.ledgerBalance} /></td>
 					<td class="num">{#if a.drift.drift != null && a.drift.drift !== 0}<Money cents={a.drift.drift} signed />
 							<button class="small" disabled={busy != null} onclick={() => run(`adj-${a.id}`, () => post(`/api/accounts/${a.id}/adjust`, { amount: a.drift.drift, date: data.today }))}>adjust</button>
-							<div class="small muted">{a.drift.convention === 'exclude_pending' ? 'excluding pending' : 'including pending'} · <button class="small" onclick={() => run('conv', () => post(`/api/accounts/${a.id}/convention`, { convention: a.drift.convention === 'exclude_pending' ? 'include_pending' : 'exclude_pending' }))}>switch</button></div>
+							<div class="small muted">{a.drift.convention === 'exclude_pending' ? 'excluding pending' : 'including pending'} · <button class="small" disabled={busy != null} onclick={() => run('conv', () => post(`/api/accounts/${a.id}/convention`, { convention: a.drift.convention === 'exclude_pending' ? 'include_pending' : 'exclude_pending' }))}>switch</button></div>
 						{:else if a.drift.drift === 0}<span class="status paid">reconciled</span>{:else}<span class="muted">no balance</span>{/if}</td>
 					<td>{#if a.isDebt}{#if a.terms}<span class="small">APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ?? '—'} <span class="muted">({a.terms.source})</span></span>{:else}<span class="muted small">no terms</span>{/if}
 							<button class="small" onclick={() => (termsFor = { id: a.id, name: a.name, terms: a.terms })}>edit</button>{/if}</td>
 					<td>
 						<button class="small" onclick={() => (balanceFor = { id: a.id, current: a.balance ? (a.balance.current / 100).toFixed(2) : '', asOf: data.today })}>balance</button>
-						<button class="small" onclick={() => (editFor = { id: a.id, name: a.name, type: a.type, onBudget: a.onBudget, closed: a.closedAt != null })}>edit</button>
+						<button class="small" onclick={() => (editFor = { id: a.id, name: a.name, type: a.type, onBudget: a.onBudget, closed: a.closedAt != null, closedAt: a.closedAt })}>edit</button>
 						<label class="small">csv <input type="file" accept=".csv,text/csv" hidden onchange={(e) => importCsv(a.id, e.currentTarget)} /></label>
 					</td>
 				</tr>
@@ -101,7 +101,7 @@
 
 {#if editFor}
 <Dialog open={true} title="Edit account" onclose={() => (editFor = null)}>
-	<form class="grid" onsubmit={(e) => { e.preventDefault(); const f = editFor!; editFor = null; run('edit', () => post(`/api/accounts/${f.id}`, { name: f.name, type: f.type, onBudget: f.onBudget, closedAt: f.closed ? data.today : null })); }}>
+	<form class="grid" onsubmit={(e) => { e.preventDefault(); const f = editFor!; editFor = null; run('edit', () => post(`/api/accounts/${f.id}`, { name: f.name, type: f.type, onBudget: f.onBudget, closedAt: f.closed ? (f.closedAt ?? data.today) : null })); }}>
 		<label for="e-name">Name</label><input id="e-name" bind:value={editFor.name} required />
 		<label for="e-type">Type</label><select id="e-type" bind:value={editFor.type}>{#each v.types as t}<option value={t}>{t}</option>{/each}</select>
 		<label for="e-ob">On budget</label><input id="e-ob" type="checkbox" bind:checked={editFor.onBudget} />
