@@ -3,7 +3,7 @@ import { openMemoryDatabase, type Db } from '../db';
 import { accounts, connections, transactions, transactionSplits } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, uncategorizedId, systemCategoryId } from './categories';
 import { ensurePeriods, periodIdForDate } from '../budget/periods';
-import { createTransaction, setSplits, linkTransfer, unlinkTransfer, softDelete, setReplacedBy, getTransaction } from './transactions';
+import { createTransaction, setSplits, linkTransfer, unlinkTransfer, softDelete, setReplacedBy, getTransaction, updateTransaction } from './transactions';
 import { InvariantError } from './errors';
 import { eq } from 'drizzle-orm';
 
@@ -137,5 +137,39 @@ describe('softDelete', () => {
 		const reposted = createTransaction(db, { accountId: checking, externalId: 'a2', postedDate: '2026-03-21', amount: -100, payeeRaw: 'P', source: 'sync' });
 		expect(() => linkTransfer(db, b, reposted)).not.toThrow();
 		expect(getTransaction(db, b).transferPeerId).toBe(reposted);
+	});
+});
+
+describe('updateTransaction', () => {
+	it('moves a single split when the amount changes', () => {
+		const id = createTransaction(db, { accountId: checking, externalId: 'u1', postedDate: '2026-03-20', amount: -1000, payeeRaw: 'X', source: 'sync' });
+		const r = updateTransaction(db, id, { amount: -1250, payeeRaw: 'X INC' });
+		const t = getTransaction(db, id);
+		expect(r).toEqual({ amountChanged: true, flagged: false });
+		expect(t.amount).toBe(-1250);
+		expect(t.splits[0].amount).toBe(-1250);
+		expect(t.payeeRaw).toBe('X INC');
+		expect(t.needsReview).toBe(false);
+	});
+	it('flags a multi-split transaction instead of guessing', () => {
+		const id = createTransaction(db, { accountId: checking, externalId: 'u2', postedDate: '2026-03-20', amount: -1000, payeeRaw: 'X', source: 'sync',
+			splits: [{ categoryId: groceries, amount: -600 }, { categoryId: uncategorizedId(db), amount: -400 }] });
+		const r = updateTransaction(db, id, { amount: -900 });
+		const t = getTransaction(db, id);
+		expect(r).toEqual({ amountChanged: true, flagged: true });
+		expect(t.amount).toBe(-900);
+		expect(t.splits.map((s) => s.amount).sort()).toEqual([-600, -400].sort());
+		expect(t.needsReview).toBe(true);
+		expect(t.reviewReason).toBe('amount_changed');
+	});
+	it('leaves period, payee, and memo alone', () => {
+		const id = createTransaction(db, { accountId: checking, externalId: 'u3', postedDate: '2026-03-20', amount: -100, payeeRaw: 'RAW', payee: 'Clean', memo: 'note', source: 'sync' });
+		const before = getTransaction(db, id);
+		updateTransaction(db, id, { postedDate: '2026-04-02', pending: false, payeeRaw: 'RAW2' });
+		const t = getTransaction(db, id);
+		expect(t.periodId).toBe(before.periodId);
+		expect(t.payee).toBe('Clean');
+		expect(t.memo).toBe('note');
+		expect(t.postedDate).toBe('2026-04-02');
 	});
 });

@@ -171,6 +171,46 @@ export function clearReview(db: DbOrTx, id: number): void {
 	db.update(transactions).set({ needsReview: false, reviewReason: null, ...touch() }).where(eq(transactions.id, id)).run();
 }
 
+export type TransactionPatch = {
+	amount?: number;
+	postedDate?: string;
+	transactedAt?: string | null;
+	pending?: boolean;
+	payeeRaw?: string;
+	providerCategory?: string | null;
+	memo?: string | null;
+};
+
+/** Spec §5.6: provider modifications touch amount, dates, pending, raw payee, provider category. */
+export function updateTransaction(db: DbOrTx, id: number, patch: TransactionPatch): { amountChanged: boolean; flagged: boolean } {
+	const row = db.select().from(transactions).where(eq(transactions.id, id)).get();
+	if (!row) throw new Error(`transaction ${id} not found`);
+	const amountChanged = patch.amount !== undefined && patch.amount !== row.amount;
+	return db.transaction((tx) => {
+		const set: Partial<typeof transactions.$inferInsert> = { ...touch() };
+		if (patch.amount !== undefined) set.amount = patch.amount;
+		if (patch.postedDate !== undefined) set.postedDate = patch.postedDate;
+		if (patch.transactedAt !== undefined) set.transactedAt = patch.transactedAt;
+		if (patch.pending !== undefined) set.pending = patch.pending;
+		if (patch.payeeRaw !== undefined) set.payeeRaw = patch.payeeRaw;
+		if (patch.providerCategory !== undefined) set.providerCategory = patch.providerCategory;
+		if (patch.memo !== undefined) set.memo = patch.memo;
+		let flagged = false;
+		if (amountChanged) {
+			const splits = tx.select().from(transactionSplits).where(eq(transactionSplits.transactionId, id)).all();
+			if (splits.length === 1) {
+				tx.update(transactionSplits).set({ amount: patch.amount! }).where(eq(transactionSplits.id, splits[0].id)).run();
+			} else {
+				set.needsReview = true;
+				set.reviewReason = 'amount_changed';
+				flagged = true;
+			}
+		}
+		tx.update(transactions).set(set).where(eq(transactions.id, id)).run();
+		return { amountChanged, flagged };
+	});
+}
+
 export function markProcessed(db: DbOrTx, ids: number[]): void {
 	if (ids.length === 0) return;
 	db.update(transactions).set({ processedAt: nowIso() }).where(inArray(transactions.id, ids)).run();
