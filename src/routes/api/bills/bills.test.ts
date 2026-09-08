@@ -12,6 +12,7 @@ import { createCategory, systemCategoryId } from '$lib/server/ledger/categories'
 import { POST as createBillRoute } from './+server';
 import { POST as patchBillRoute } from './[id]/+server';
 import { POST as createIncomeRoute } from '../income/+server';
+import { POST as patchIncomeRoute } from '../income/[id]/+server';
 import { POST as occurrenceRoute } from '../occurrences/[id]/+server';
 import { POST as incomeOccurrenceRoute } from '../income-occurrences/[id]/+server';
 
@@ -59,5 +60,14 @@ describe('bill and income routes', () => {
 		expect((await createBillRoute({ request: req({ name: 'X', categoryId: rent, payFromAccountId: chk, expectedAmount: 1, cadence: 'monthly' }) } as never)).status).toBe(400);
 		expect(db.select().from(bills).all()).toHaveLength(0);
 		expect((await occurrenceRoute({ request: req({ action: 'explode' }), params: { id: String(occ.id) } } as never)).status).toBe(400);
+	});
+	it('edits an income source; rejects an invalid schedule patch (400) and an unknown id (404)', async () => {
+		const { db, chk } = setup();
+		const { id } = await (await createIncomeRoute({ request: req({ name: 'Salary', categoryId: systemCategoryId(db, 'income'), depositAccountId: chk, expectedAmount: 275000, cadence: 'semi_monthly', dueDay: 15, dueDay2: 30 }) } as never)).json();
+		expect((await patchIncomeRoute({ request: req({ expectedAmount: 280000, active: false }), params: { id: String(id) } } as never)).status).toBe(200);
+		expect(db.select().from(incomeSources).where(eq(incomeSources.id, id)).get()).toMatchObject({ expectedAmount: 280000, active: false });
+		expect((await patchIncomeRoute({ request: req({ cadence: 'every_n_weeks', interval: 0, anchorDate: '2026-09-01' }), params: { id: String(id) } } as never)).status).toBe(400);
+		expect(db.select().from(incomeSources).where(eq(incomeSources.id, id)).get()!.cadence).toBe('semi_monthly');
+		expect((await patchIncomeRoute({ request: req({ expectedAmount: 1 }), params: { id: '999999' } } as never)).status).toBe(404);
 	});
 });
