@@ -68,7 +68,7 @@ src/hooks.server.ts                          (modify) start scheduler
 **Interfaces:**
 - Consumes: `transactions`, `transactionSplits` schema; `flagForReview`; `touch`.
 - Produces:
-  - `type TransactionPatch = { amount?: number; postedDate?: string; transactedAt?: string | null; pending?: boolean; payeeRaw?: string; providerCategory?: string | null; memo?: string | null }`
+  - `type TransactionPatch = { amount?: number; postedDate?: string; transactedAt?: string | null; pending?: boolean; payeeRaw?: string; providerCategory?: string | null }` — memo is a user edit and is deliberately absent (spec §5.6; corrected by the Task 1 review ruling)
   - `updateTransaction(db: DbOrTx, id: number, patch: TransactionPatch): { amountChanged: boolean; flagged: boolean }` — spec §5.6 modified rule: a changed amount moves the split when there is exactly one split; with several splits the row is flagged `amount_changed` and the splits are left alone (the invariant that splits sum to the amount is deliberately broken until the user fixes it, and `needs_review` says so). `periodId`, `payee`, and user-edited fields are never touched.
 
 - [ ] **Step 1: Write the failing tests** (append to `transactions.test.ts`)
@@ -126,7 +126,6 @@ export type TransactionPatch = {
 	pending?: boolean;
 	payeeRaw?: string;
 	providerCategory?: string | null;
-	memo?: string | null;
 };
 
 /** Spec §5.6: provider modifications touch amount, dates, pending, raw payee, provider category. */
@@ -142,7 +141,6 @@ export function updateTransaction(db: DbOrTx, id: number, patch: TransactionPatc
 		if (patch.pending !== undefined) set.pending = patch.pending;
 		if (patch.payeeRaw !== undefined) set.payeeRaw = patch.payeeRaw;
 		if (patch.providerCategory !== undefined) set.providerCategory = patch.providerCategory;
-		if (patch.memo !== undefined) set.memo = patch.memo;
 		let flagged = false;
 		if (amountChanged) {
 			const splits = tx.select().from(transactionSplits).where(eq(transactionSplits.transactionId, id)).all();
