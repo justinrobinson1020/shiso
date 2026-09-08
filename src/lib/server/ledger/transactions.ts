@@ -163,6 +163,11 @@ export function setReplacedBy(db: DbOrTx, pendingId: number, replacementId: numb
 	db.update(transactions).set({ replacedById: replacementId, ...touch() }).where(eq(transactions.id, pendingId)).run();
 }
 
+/** Bring a soft-deleted row back (a provider re-sent it). It is flagged so the user sees the reversal. */
+export function restoreTransaction(db: DbOrTx, id: number, reason = 'provider_readded'): void {
+	db.update(transactions).set({ deletedAt: null, needsReview: true, reviewReason: reason, ...touch() }).where(eq(transactions.id, id)).run();
+}
+
 export function flagForReview(db: DbOrTx, id: number, reason: string): void {
 	db.update(transactions).set({ needsReview: true, reviewReason: reason, ...touch() }).where(eq(transactions.id, id)).run();
 }

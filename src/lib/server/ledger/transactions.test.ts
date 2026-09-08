@@ -3,7 +3,7 @@ import { openMemoryDatabase, type Db } from '../db';
 import { accounts, connections, transactions, transactionSplits } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, uncategorizedId, systemCategoryId } from './categories';
 import { ensurePeriods, periodIdForDate } from '../budget/periods';
-import { createTransaction, setSplits, linkTransfer, unlinkTransfer, softDelete, setReplacedBy, getTransaction, updateTransaction } from './transactions';
+import { createTransaction, setSplits, linkTransfer, unlinkTransfer, softDelete, setReplacedBy, restoreTransaction, getTransaction, updateTransaction } from './transactions';
 import { InvariantError } from './errors';
 import { eq } from 'drizzle-orm';
 
@@ -137,6 +137,18 @@ describe('softDelete', () => {
 		const reposted = createTransaction(db, { accountId: checking, externalId: 'a2', postedDate: '2026-03-21', amount: -100, payeeRaw: 'P', source: 'sync' });
 		expect(() => linkTransfer(db, b, reposted)).not.toThrow();
 		expect(getTransaction(db, b).transferPeerId).toBe(reposted);
+	});
+});
+
+describe('restoreTransaction', () => {
+	it('clears deleted_at and flags the row for review', () => {
+		const id = createTransaction(db, { accountId: checking, externalId: 'a', postedDate: '2026-03-20', amount: -100, payeeRaw: 'P', source: 'sync' });
+		softDelete(db, id, 'provider_removed');
+		restoreTransaction(db, id);
+		const row = getTransaction(db, id);
+		expect(row.deletedAt).toBeNull();
+		expect(row.needsReview).toBe(true);
+		expect(row.reviewReason).toBe('provider_readded');
 	});
 });
 
