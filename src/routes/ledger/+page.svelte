@@ -11,7 +11,7 @@
 	let error = $state('');
 	let splitting = $state<(typeof v.rows)[number] | null>(null);
 	let ruleFor = $state<{ id: number; payeeRaw: string; payee: string; pattern: string; categoryId: number | null } | null>(null);
-	let adding = $state(false); let add = $state({ accountId: 0, postedDate: '', amount: '', payee: '', memo: '', categoryId: null as number | null });
+	let adding = $state(false); let add = $state({ accountId: null as number | null, postedDate: '', amount: '', payee: '', memo: '', categoryId: null as number | null });
 	const run = async (fn: () => Promise<unknown>) => { error = ''; try { await fn(); await invalidateAll(); } catch (e) { error = (e as Error).message; } };
 	const patch = (id: number, body: unknown) => run(() => post(`/api/transactions/${id}`, body));
 	function setParam(k: string, val: string | null) { const u = new URL(page.url); if (val) u.searchParams.set(k, val); else u.searchParams.delete(k); u.searchParams.delete('page'); goto(u.pathname + u.search); }
@@ -39,9 +39,9 @@
 {#if v.drift.length}<div class="strip">{#each v.drift as d}<span>Drift on {d.accountName}: <Money cents={d.drift} signed /> — <a href="/accounts#account-{d.accountId}">reconcile</a></span>{/each}</div>{/if}
 
 {#if adding}
-<form class="card" onsubmit={(e) => { e.preventDefault(); run(() => post('/api/transactions', { accountId: add.accountId, postedDate: add.postedDate, amount: decimalToCents(add.amount), payee: add.payee, memo: add.memo || null, categoryId: add.categoryId })).then(() => { adding = false; }); }}>
+<form class="card" onsubmit={(e) => { e.preventDefault(); if (add.accountId == null) { error = 'Choose an account'; return; } run(() => post('/api/transactions', { accountId: add.accountId, postedDate: add.postedDate, amount: decimalToCents(add.amount), payee: add.payee, memo: add.memo || null, categoryId: add.categoryId })).then(() => { adding = false; }); }}>
 	<div class="toolbar">
-		<select bind:value={add.accountId} required><option value={0}>Account…</option>{#each manualAccounts as a}<option value={a.id}>{a.name}</option>{/each}</select>
+		<select bind:value={add.accountId} required><option value={null}>Account…</option>{#each manualAccounts as a}<option value={a.id}>{a.name}</option>{/each}</select>
 		<input type="date" bind:value={add.postedDate} required /><input class="num" placeholder="-12.34" bind:value={add.amount} required /><input placeholder="Payee" bind:value={add.payee} required />
 		<select bind:value={add.categoryId}><option value={null}>Uncategorized</option>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories.filter((c) => !c.hidden) as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select>
 		<input placeholder="Memo" bind:value={add.memo} /><button class="primary" type="submit">Add</button>
