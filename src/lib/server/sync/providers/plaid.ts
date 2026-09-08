@@ -13,10 +13,12 @@ type PlaidTransaction = {
 };
 type SyncData = { added: PlaidTransaction[]; modified: PlaidTransaction[]; removed: { transaction_id: string; account_id: string }[]; next_cursor: string; has_more: boolean; accounts: PlaidAccount[] };
 type Apr = { apr_type: string; apr_percentage: number };
-type CreditLiability = { account_id: string; aprs: Apr[]; minimum_payment_amount: number | null; next_payment_due_date: string | null; last_statement_balance: number | null; last_statement_issue_date: string | null };
-type StudentLiability = { account_id: string; interest_rate_percentage: number | null; minimum_payment_amount: number | null; next_payment_due_date: string | null; last_statement_balance: number | null };
+// Plaid names these arrays `credit` / `student` / `mortgage`, and leaves `account_id` nullable on the
+// first two. Every field is widened to what the SDK actually promises so PlaidApi satisfies this type.
+type CreditLiability = { account_id: string | null; aprs?: Apr[] | null; minimum_payment_amount: number | null; next_payment_due_date: string | null; last_statement_balance: number | null; last_statement_issue_date: string | null };
+type StudentLiability = { account_id: string | null; interest_rate_percentage: number | null; minimum_payment_amount: number | null; next_payment_due_date: string | null; last_statement_balance?: number | null; last_statement_issue_date?: string | null };
 type MortgageLiability = { account_id: string; interest_rate: { percentage: number | null } | null; next_monthly_payment: number | null; next_payment_due_date: string | null };
-type LiabilitiesData = { liabilities: { credit_cards?: CreditLiability[] | null; student_loans?: StudentLiability[] | null; mortgages?: MortgageLiability[] | null } };
+export type LiabilitiesData = { liabilities: { credit: CreditLiability[] | null; student: StudentLiability[] | null; mortgage: MortgageLiability[] | null } };
 
 export type PlaidClientLike = {
 	transactionsSync(req: { access_token: string; cursor?: string | null; count?: number; options?: { include_personal_finance_category?: boolean } }): Promise<{ data: SyncData }>;
@@ -70,18 +72,26 @@ function mapTransaction(t: PlaidTransaction): BatchTransaction {
 }
 function mapTerms(l: LiabilitiesData['liabilities'], asOf: string): BatchTerms[] {
 	const out: BatchTerms[] = [];
-	for (const c of l.credit_cards ?? []) out.push({
-		accountExternalId: c.account_id, asOf,
-		aprBps: bps(c.aprs.find((a) => a.apr_type === 'purchase_apr')?.apr_percentage), promoAprBps: bps(c.aprs.find((a) => a.apr_type === 'special')?.apr_percentage),
-		minPayment: cents(c.minimum_payment_amount), nextDueDate: c.next_payment_due_date ?? null,
-		lastStatementBalance: cents(c.last_statement_balance), lastStatementDate: c.last_statement_issue_date ?? null, annualFee: null
-	});
-	for (const s of l.student_loans ?? []) out.push({
-		accountExternalId: s.account_id, asOf, aprBps: bps(s.interest_rate_percentage), promoAprBps: null,
-		minPayment: cents(s.minimum_payment_amount), nextDueDate: s.next_payment_due_date ?? null,
-		lastStatementBalance: cents(s.last_statement_balance), lastStatementDate: null, annualFee: null
-	});
-	for (const m of l.mortgages ?? []) out.push({
+	// A liability with no account_id has no account to attach terms to; skip it rather than fail the sync.
+	for (const c of l.credit ?? []) {
+		if (c.account_id == null) continue;
+		const aprs = c.aprs ?? [];
+		out.push({
+			accountExternalId: c.account_id, asOf,
+			aprBps: bps(aprs.find((a) => a.apr_type === 'purchase_apr')?.apr_percentage), promoAprBps: bps(aprs.find((a) => a.apr_type === 'special')?.apr_percentage),
+			minPayment: cents(c.minimum_payment_amount), nextDueDate: c.next_payment_due_date ?? null,
+			lastStatementBalance: cents(c.last_statement_balance), lastStatementDate: c.last_statement_issue_date ?? null, annualFee: null
+		});
+	}
+	for (const s of l.student ?? []) {
+		if (s.account_id == null) continue;
+		out.push({
+			accountExternalId: s.account_id, asOf, aprBps: bps(s.interest_rate_percentage), promoAprBps: null,
+			minPayment: cents(s.minimum_payment_amount), nextDueDate: s.next_payment_due_date ?? null,
+			lastStatementBalance: cents(s.last_statement_balance), lastStatementDate: s.last_statement_issue_date ?? null, annualFee: null
+		});
+	}
+	for (const m of l.mortgage ?? []) out.push({
 		accountExternalId: m.account_id, asOf, aprBps: bps(m.interest_rate?.percentage), promoAprBps: null,
 		minPayment: cents(m.next_monthly_payment), nextDueDate: m.next_payment_due_date ?? null,
 		lastStatementBalance: null, lastStatementDate: null, annualFee: null

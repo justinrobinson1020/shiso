@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PlaidProvider, mapPlaidAccountType, plaidErrorCode, createLinkToken, exchangePublicToken, type PlaidClientLike } from './plaid';
+import { PlaidProvider, mapPlaidAccountType, plaidErrorCode, createLinkToken, exchangePublicToken, type LiabilitiesData, type PlaidClientLike } from './plaid';
 import { ProviderError } from '../types';
 
 type Page = { added?: unknown[]; modified?: unknown[]; removed?: unknown[]; next_cursor: string; has_more: boolean; accounts?: unknown[] };
@@ -9,7 +9,7 @@ const txn = (id: string, acct: string, amount: number, date: string, extra: Reco
 	({ transaction_id: id, account_id: acct, amount, date, authorized_date: null, authorized_datetime: null, name: `TX ${id}`, merchant_name: null, pending: false, pending_transaction_id: null, personal_finance_category: { primary: 'GENERAL_MERCHANDISE', detailed: 'x' }, ...extra });
 const plaidErr = (code: string) => Object.assign(new Error(code), { response: { data: { error_code: code, error_type: 'X', error_message: code } } });
 
-function fakeClient(pages: (Page | Error)[], liabilities: unknown = { credit_cards: [], student_loans: [], mortgages: [] }): PlaidClientLike & { syncCalls: unknown[] } {
+function fakeClient(pages: (Page | Error)[], liabilities: LiabilitiesData['liabilities'] = { credit: [], student: [], mortgage: [] }): PlaidClientLike & { syncCalls: unknown[] } {
 	const syncCalls: unknown[] = [];
 	return {
 		syncCalls,
@@ -20,7 +20,7 @@ function fakeClient(pages: (Page | Error)[], liabilities: unknown = { credit_car
 			if (p instanceof Error) throw p;
 			return { data: { added: [], modified: [], removed: [], accounts: [], ...p } as never };
 		},
-		async liabilitiesGet() { return { data: { liabilities: liabilities as never, accounts: [] } as never }; },
+		async liabilitiesGet() { return { data: { liabilities } }; },
 		async accountsBalanceGet() { return { data: { accounts: [account('a1', 'depository', 'checking', 123.45)] } as never }; },
 		async linkTokenCreate(req) { syncCalls.push({ link: req }); return { data: { link_token: 'link-1' } as never }; },
 		async itemPublicTokenExchange(req) { syncCalls.push({ exchange: req }); return { data: { access_token: 'access-9', item_id: 'item-9' } as never }; }
@@ -72,15 +72,29 @@ describe('PlaidProvider.fetch', () => {
 	it('maps liabilities into terms', async () => {
 		const client = fakeClient(
 			[{ accounts: [account('c1', 'credit', 'credit card', 100)], next_cursor: 'c', has_more: false }],
-			{ credit_cards: [{ account_id: 'c1', aprs: [{ apr_type: 'purchase_apr', apr_percentage: 27.49 }, { apr_type: 'special', apr_percentage: 0 }],
-				minimum_payment_amount: 35.6, next_payment_due_date: '2026-09-26', last_statement_balance: 11770.95, last_statement_issue_date: '2026-09-01', is_overdue: false }],
-			  student_loans: [{ account_id: 'l1', interest_rate_percentage: 15.25, minimum_payment_amount: 878.29, next_payment_due_date: '2026-09-21', last_statement_balance: 12989.71 }],
-			  mortgages: [] }
+			{ credit: [{ account_id: 'c1', aprs: [{ apr_type: 'purchase_apr', apr_percentage: 27.49 }, { apr_type: 'special', apr_percentage: 0 }],
+				minimum_payment_amount: 35.6, next_payment_due_date: '2026-09-26', last_statement_balance: 11770.95, last_statement_issue_date: '2026-09-01' }],
+			  student: [{ account_id: 'l1', interest_rate_percentage: 15.25, minimum_payment_amount: 878.29, next_payment_due_date: '2026-09-21', last_statement_balance: 12989.71, last_statement_issue_date: '2026-09-03' }],
+			  mortgage: [] }
 		);
 		const b = await new PlaidProvider(client).fetch({ credential: 'access', cursor: null, mode: 'full', todayIso: '2026-09-08' });
 		expect(b.terms).toEqual([
 			{ accountExternalId: 'c1', asOf: '2026-09-08', aprBps: 2749, promoAprBps: 0, minPayment: 3560, nextDueDate: '2026-09-26', lastStatementBalance: 1177095, lastStatementDate: '2026-09-01', annualFee: null },
-			{ accountExternalId: 'l1', asOf: '2026-09-08', aprBps: 1525, promoAprBps: null, minPayment: 87829, nextDueDate: '2026-09-21', lastStatementBalance: 1298971, lastStatementDate: null, annualFee: null }
+			{ accountExternalId: 'l1', asOf: '2026-09-08', aprBps: 1525, promoAprBps: null, minPayment: 87829, nextDueDate: '2026-09-21', lastStatementBalance: 1298971, lastStatementDate: '2026-09-03', annualFee: null }
+		]);
+	});
+	it('skips a liability with no account_id and a credit card with no aprs array', async () => {
+		const client = fakeClient(
+			[{ accounts: [account('c1', 'credit', 'credit card', 100)], next_cursor: 'c', has_more: false }],
+			{ credit: [
+				{ account_id: null, aprs: [{ apr_type: 'purchase_apr', apr_percentage: 21 }], minimum_payment_amount: 25, next_payment_due_date: null, last_statement_balance: null, last_statement_issue_date: null },
+				{ account_id: 'c2', minimum_payment_amount: 25, next_payment_due_date: null, last_statement_balance: null, last_statement_issue_date: null }
+			], student: [{ account_id: null, interest_rate_percentage: 5, minimum_payment_amount: 10, next_payment_due_date: null, last_statement_balance: null, last_statement_issue_date: null }], mortgage: [] }
+		);
+		const b = await new PlaidProvider(client).fetch({ credential: 'access', cursor: null, mode: 'full', todayIso: '2026-09-08' });
+		// the two null-account rows have nothing to attach terms to; the aprs-less card still maps, with null rates
+		expect(b.terms).toEqual([
+			{ accountExternalId: 'c2', asOf: '2026-09-08', aprBps: null, promoAprBps: null, minPayment: 2500, nextDueDate: null, lastStatementBalance: null, lastStatementDate: null, annualFee: null }
 		]);
 	});
 	it('balances mode only fetches balances and keeps the cursor', async () => {
