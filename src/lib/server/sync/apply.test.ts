@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { openMemoryDatabase, type Db } from '../db';
 import { accounts, accountBalances, accountTerms, bills, billOccurrences, billOccurrenceTransactions, connections, periods, transactions } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId, uncategorizedId } from '../ledger/categories';
@@ -184,6 +184,28 @@ describe('applyBatch pending reconciliation', () => {
 		const peer = getTransaction(db, peerId);
 		expect(peer.transferPeerId).toBeNull();
 		expect(peer.needsReview).toBe(true);
+	});
+
+	it('explicit: a stale re-send of an already-superseded pending row is ignored, not resurrected', () => {
+		applyBatch(db, conn, batch({ added: [tx({ externalId: 'p9', amount: -4200, postedDate: '2026-09-03', pending: true })] }), opts);
+		applyBatch(db, conn, batch({
+			added: [tx({ externalId: 'q9', pendingExternalId: 'p9', amount: -4200, postedDate: '2026-09-05', pending: false })]
+		}), opts);
+		const q9Id = byExt('q9')!.id;
+
+		const r = applyBatch(db, conn, batch({
+			added: [tx({ externalId: 'p9', amount: -4200, postedDate: '2026-09-03', pending: true })]
+		}), opts);
+		expect(r.added).toBe(0);
+		expect(r.modified).toBe(0);
+		const p9 = getTransaction(db, byExt('p9')!.id);
+		expect(p9.deletedAt).not.toBeNull();
+		expect(p9.replacedById).toBe(q9Id);
+		const live = db.select().from(transactions)
+			.where(and(isNull(transactions.deletedAt), inArray(transactions.externalId, ['p9', 'q9'])))
+			.all();
+		expect(live.length).toBe(1);
+		expect(live[0].externalId).toBe('q9');
 	});
 
 	it('heuristic: a pending row re-sent as modified in the same batch is not a stale candidate', () => {

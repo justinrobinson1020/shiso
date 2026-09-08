@@ -103,8 +103,11 @@ export function applyBatch(db: Db, connectionId: number, batch: SyncBatch, opts:
 
 			// The provider re-added a row it previously told us to remove; resurrect and update it
 			// rather than insert, which would collide with the (account, external_id) unique index.
+			// A row already superseded by pending reconciliation (replacedById set) is not resurrected —
+			// its live successor is the current row, so the re-sent id is simply stale and ignored.
 			const deleted = deletedByExternal(tx, a.id, t.externalId);
 			if (deleted) {
+				if (deleted.replacedById != null) continue;
 				restoreTransaction(tx, deleted.id);
 				applyModification(tx, deleted.id, t, result);
 				continue;
