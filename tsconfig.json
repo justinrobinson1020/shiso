@@ -16,7 +16,8 @@
 		"tests/**/*.js",
 		"tests/**/*.ts",
 		"tests/**/*.svelte",
-		"deploy/**/*.ts"
+		"deploy/**/*.ts",
+		"scripts/**/*.ts"
 	],
 	"compilerOptions": {
 		"rewriteRelativeImportExtensions": true,

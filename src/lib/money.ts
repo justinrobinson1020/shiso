@@ -7,9 +7,12 @@ export function decimalToCents(input: string | number): number {
 	}
 	let s = input.trim();
 	let negative = false;
-	if (s.startsWith('(') && s.endsWith(')')) {
+	// Accounting-negative parens may wrap the whole value ("(1,234.56)", "($1,234.50)")
+	// or follow a leading currency symbol with a space ("$ (1,234.56)").
+	const paren = /^\$?\s*\((.*)\)$/.exec(s);
+	if (paren) {
 		negative = true;
-		s = s.slice(1, -1);
+		s = paren[1];
 	}
 	s = s.replace(/[$,\s]/g, '');
 	if (s.startsWith('-')) {

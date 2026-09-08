@@ -1,0 +1,1 @@
+ALTER TABLE `accounts` ADD `opened_on` text;

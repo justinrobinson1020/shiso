@@ -13,7 +13,8 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"db:generate": "drizzle-kit generate",
-		"release": "bash scripts/release.sh"
+		"release": "bash scripts/release.sh",
+		"import:sheet": "tsx scripts/import-sheet.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/kit": "^2.63.0",
@@ -24,9 +25,11 @@
 		"fast-check": "^4.9.0",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
+		"tsx": "^4.23.13",
 		"typescript": "^6.0.3",
 		"vite": "^8.0.16",
-		"vitest": "^5.0.0"
+		"vitest": "^5.0.0",
+		"xlsx": "^0.18.5"
 	},
 	"dependencies": {
 		"@sveltejs/adapter-node": "^5.5.7",

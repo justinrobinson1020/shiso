@@ -87,13 +87,14 @@ export function upsertAccount(db: DbOrTx, connectionId: number, a: {
 
 const DEBT_TYPES: readonly string[] = ['credit', 'loan'];
 
-export function updateAccount(db: DbOrTx, id: number, patch: { name?: string; type?: AccountType; onBudget?: boolean; closedAt?: string | null }): void {
+export function updateAccount(db: DbOrTx, id: number, patch: { name?: string; type?: AccountType; onBudget?: boolean; closedAt?: string | null; openedOn?: string | null }): void {
 	const row = db.select().from(accounts).where(eq(accounts.id, id)).get();
 	if (!row) throw new Error(`account ${id} not found`);
 	const set: Partial<typeof accounts.$inferInsert> = { ...touch() };
 	if (patch.name !== undefined) set.name = patch.name;
 	if (patch.onBudget !== undefined) set.onBudget = patch.onBudget;
 	if (patch.closedAt !== undefined) set.closedAt = patch.closedAt;
+	if (patch.openedOn !== undefined) set.openedOn = patch.openedOn;
 	if (patch.type !== undefined) {
 		const isDebt = DEBT_TYPES.includes(patch.type);
 		if (!isDebt && row.isDebt) {

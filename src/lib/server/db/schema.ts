@@ -61,6 +61,7 @@ export const accounts = sqliteTable('accounts', {
 	onBudget: integer('on_budget', { mode: 'boolean' }).notNull(),
 	isDebt: integer('is_debt', { mode: 'boolean' }).notNull(),
 	closedAt: text('closed_at'),
+	openedOn: text('opened_on'),
 	...timestamps
 }, (t) => [uniqueIndex('accounts_connection_external').on(t.connectionId, t.externalId)]);
 
