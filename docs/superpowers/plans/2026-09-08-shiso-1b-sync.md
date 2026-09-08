@@ -2386,6 +2386,20 @@ describe('runAllSyncs and maintenance', () => {
 		const outs = await runAllSyncs(db, 'cron', 'full', deps(p));
 		expect(outs.map((o) => [o.connectionId, o.status])).toEqual([[a, 'error'], [b, 'ok']]);
 	});
+	it('runMaintenance matches occurrences even when nothing is unprocessed', async () => {
+		const conn = createConnection(db, { provider: 'plaid', institutionName: 'T', credential: 'x', appKey: KEY });
+		await runSync(db, conn, 'manual', 'full', deps(new FakeProvider(async () => fixedBatch())));
+		// A bill defined after the sync: its occurrence is generated and must be matched with no new transactions.
+		const { createBill } = await import('../bills/bills');
+		const { createGroup, createCategory } = await import('../ledger/categories');
+		const { accounts, billOccurrences } = await import('../db/schema');
+		const chk = db.select().from(accounts).get()!.id;
+		const cat = createCategory(db, { groupId: createGroup(db, 'Bills'), name: 'Coffee', kind: 'bill' });
+		createBill(db, { name: 'Coffee', categoryId: cat, payFromAccountId: chk, expectedAmount: 1200, cadence: 'monthly', dueDay: 2, matchPattern: 'coffee' });
+		const m = runMaintenance(db, deps(new FakeProvider(async () => fixedBatch())));
+		expect(m.processed).toBe(0);
+		expect(db.select().from(billOccurrences).all().some((o) => o.status === 'paid')).toBe(true);
+	});
 	it('runMaintenance post-processes rows left unprocessed by a crash', async () => {
 		const conn = createConnection(db, { provider: 'plaid', institutionName: 'T', credential: 'x', appKey: KEY });
 		await runSync(db, conn, 'manual', 'full', deps(new FakeProvider(async () => fixedBatch())));
@@ -2409,7 +2423,7 @@ import { getConnection, getCredential, listActiveConnections, setConnectionStatu
 import { applyBatch, type ApplyResult } from './apply';
 import { processUnprocessed } from './postprocess';
 import { generateOccurrences } from '../bills/schedule';
-import { unwindRemovedTransactions } from '../bills/matching';
+import { matchAll, unwindRemovedTransactions } from '../bills/matching';
 import { ProviderError, type FetchMode, type SyncBatch, type SyncProvider } from './types';
 import { nowIso, todayIso } from '$lib/dates';
 
@@ -2473,6 +2487,8 @@ export async function runSync(db: Db, connectionId: number, trigger: 'cron' | 'm
 			const k = knobs(db);
 			generateOccurrences(db, { todayIso: today(), cadence: deps.cadence, graceDays: k.graceDays });
 			const post = processUnprocessed(db, { todayIso: today(), ...k });
+			// processUnprocessed returns early with no new rows; newly generated occurrences still need matching (§6.2).
+			if (post.processed === 0) matchAll(db, { todayIso: today(), graceDays: k.graceDays });
 			db.update(syncRuns).set({
 				status: 'ok', finishedAt: now(), endCursor: batch.nextCursor,
 				added: apply.added, modified: apply.modified, removed: apply.removed,
@@ -2497,6 +2513,7 @@ export function runMaintenance(db: Db, deps: SyncDeps) {
 	const k = knobs(db);
 	const occurrences = generateOccurrences(db, { todayIso: today, cadence: deps.cadence, graceDays: k.graceDays });
 	const post = processUnprocessed(db, { todayIso: today, ...k });
+	if (post.processed === 0) matchAll(db, { todayIso: today, graceDays: k.graceDays });
 	return { occurrences, processed: post.processed };
 }
 
