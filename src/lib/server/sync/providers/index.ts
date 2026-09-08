@@ -21,8 +21,8 @@ export function buildProviders(config: Config): Partial<Record<Provider, SyncPro
 	return providers;
 }
 
-export function cronExpressions(config: Pick<Config, 'syncHour' | 'balanceHour'>): { full: string; balances: string } {
-	return { full: `0 ${config.syncHour} * * *`, balances: `0 ${config.balanceHour} * * *` };
+export function cronExpressions(config: Pick<Config, 'syncHour' | 'balanceHour' | 'backupHour'>): { full: string; balances: string; backup: string } {
+	return { full: `0 ${config.syncHour} * * *`, balances: `0 ${config.balanceHour} * * *`, backup: `0 ${config.backupHour} * * *` };
 }
 
 export function buildSyncDeps(config: Config): SyncDeps {

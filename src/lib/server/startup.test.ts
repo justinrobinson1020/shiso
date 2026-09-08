@@ -15,7 +15,7 @@ afterEach(() => { rmSync(dir, { recursive: true, force: true }); resetForTests()
 const cfg = (d: string) => ({
 	dbPath: join(d, 'shiso.db'), backupDir: join(d, 'backups'), appKey: 'k'.repeat(40),
 	timeZone: 'America/New_York', migrationsDir: 'drizzle',
-	cadence: 'semi_monthly' as const, syncHour: 3, balanceHour: 7,
+	cadence: 'semi_monthly' as const, syncHour: 3, balanceHour: 7, backupHour: 4, backupKeep: 30,
 	plaid: { clientId: null, secret: null, env: 'sandbox' as const },
 	schedulerEnabled: false, plaidClientName: 'shiso'
 });

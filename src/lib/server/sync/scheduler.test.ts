@@ -10,15 +10,17 @@ vi.mock('node-cron', () => {
 });
 
 describe('startScheduler', () => {
-	it('schedules the two jobs in the configured zone and stops them', async () => {
+	it('schedules the three jobs in the configured zone and stops them', async () => {
 		const cron = (await import('node-cron')) as unknown as { __tasks: { expr: string; opts: { timezone: string; noOverlap: boolean }; destroy: () => void }[] };
 		const handle = startScheduler({
 			db: {} as never,
-			config: { syncHour: 3, balanceHour: 7, timeZone: 'America/New_York' } as never,
+			sqlite: {} as never,
+			config: { syncHour: 3, balanceHour: 7, backupHour: 4, timeZone: 'America/New_York', backupDir: '/tmp/x', backupKeep: 30 } as never,
 			deps: {} as never
 		});
-		expect(cron.__tasks.map((t) => t.expr)).toEqual(['0 3 * * *', '0 7 * * *']);
+		expect(cron.__tasks.map((t) => t.expr)).toEqual(['0 3 * * *', '0 7 * * *', '0 4 * * *']);
 		expect(cron.__tasks[0].opts).toMatchObject({ timezone: 'America/New_York', noOverlap: true });
+		expect(cron.__tasks).toHaveLength(3);
 		handle.stop();
 		expect(cron.__tasks.every((t) => (t.destroy as unknown as { mock: { calls: unknown[] } }).mock.calls.length === 1)).toBe(true);
 	});

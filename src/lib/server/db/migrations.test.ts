@@ -72,6 +72,24 @@ describe('openDatabase', () => {
 		expect(() => openDatabase({ path, backupDir })).toThrow(/snapshot failed/);
 	});
 
+	it('closes the sqlite handle when the snapshot fails, leaking nothing', () => {
+		const path = join(dir, 'shiso.db');
+		const backupDir = join(dir, 'backups');
+		// Existing database with no migrations applied: simulates an upgrade.
+		const pre = new Database(path);
+		pre.exec('create table legacy (x integer)');
+		pre.close();
+		// Occupy backupDir's path with a regular file so VACUUM INTO fails.
+		writeFileSync(backupDir, '');
+		expect(() => openDatabase({ path, backupDir })).toThrow(/snapshot failed/);
+		// No leaked handle: reopening the same path in exclusive mode must succeed.
+		const raw = new Database(path);
+		raw.pragma('locking_mode = EXCLUSIVE');
+		raw.exec('begin exclusive');
+		raw.exec('commit');
+		raw.close();
+	});
+
 	it('reports pending migrations by journal tag', () => {
 		const path = join(dir, 'shiso.db');
 		const raw = new Database(path);

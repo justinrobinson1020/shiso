@@ -34,32 +34,37 @@ export function openDatabase(opts: {
 	configure(sqlite);
 
 	let snapshot: string | null = null;
-	const pending = pendingMigrations(sqlite, migrationsFolder);
-	const isFresh = sqlite.prepare("select count(*) as n from sqlite_master where type='table'").get() as { n: number };
-	if (pending.length > 0 && isFresh.n > 0) {
-		const stamp = (opts.now?.() ?? new Date()).toISOString().replace(/[:.]/g, '-');
-		snapshot = join(opts.backupDir, `pre-migration-${stamp}-${pending[0]}.db`);
-		try {
-			mkdirSync(opts.backupDir, { recursive: true });
-			sqlite.exec(`VACUUM INTO '${snapshot.replace(/'/g, "''")}'`);
-		} catch (err) {
-			// Best-effort cleanup of any partial snapshot; the underlying failure
-			// (e.g. backupDir isn't a directory) may make this a no-op, which is fine.
+	try {
+		const pending = pendingMigrations(sqlite, migrationsFolder);
+		const isFresh = sqlite.prepare("select count(*) as n from sqlite_master where type='table'").get() as { n: number };
+		if (pending.length > 0 && isFresh.n > 0) {
+			const stamp = (opts.now?.() ?? new Date()).toISOString().replace(/[:.]/g, '-');
+			snapshot = join(opts.backupDir, `pre-migration-${stamp}-${pending[0]}.db`);
 			try {
-				rmSync(snapshot, { force: true });
-			} catch {
-				// ignored: the wrapped error below is what matters
+				mkdirSync(opts.backupDir, { recursive: true });
+				sqlite.exec(`VACUUM INTO '${snapshot.replace(/'/g, "''")}'`);
+			} catch (err) {
+				// Best-effort cleanup of any partial snapshot; the underlying failure
+				// (e.g. backupDir isn't a directory) may make this a no-op, which is fine.
+				try {
+					rmSync(snapshot, { force: true });
+				} catch {
+					// ignored: the wrapped error below is what matters
+				}
+				throw new Error(
+					`pre-migration snapshot failed; migrations not applied: ${(err as Error).message}`,
+					{ cause: err }
+				);
 			}
-			throw new Error(
-				`pre-migration snapshot failed; migrations not applied: ${(err as Error).message}`,
-				{ cause: err }
-			);
 		}
-	}
 
-	const db = drizzle({ client: sqlite, schema });
-	if (pending.length > 0) migrate(db, { migrationsFolder });
-	return { db, sqlite, snapshot };
+		const db = drizzle({ client: sqlite, schema });
+		if (pending.length > 0) migrate(db, { migrationsFolder });
+		return { db, sqlite, snapshot };
+	} catch (err) {
+		sqlite.close();
+		throw err;
+	}
 }
 
 export function openMemoryDatabase(migrationsFolder = DEFAULT_MIGRATIONS) {

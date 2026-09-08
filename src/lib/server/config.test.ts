@@ -34,4 +34,13 @@ describe('loadConfig', () => {
 		expect(() => loadConfig({ ...good, SHISO_SYNC_HOUR: 'noon' })).toThrowError(/SHISO_SYNC_HOUR/);
 		expect(() => loadConfig({ ...good, SHISO_BALANCE_HOUR: '24' })).toThrowError(/SHISO_BALANCE_HOUR/);
 	});
+	it('applies backup defaults', () => {
+		const c = loadConfig(good);
+		expect(c.backupHour).toBe(4);
+		expect(c.backupKeep).toBe(30);
+	});
+	it('rejects a malformed backup hour or keep count', () => {
+		expect(() => loadConfig({ ...good, SHISO_BACKUP_HOUR: '25' })).toThrowError(/SHISO_BACKUP_HOUR/);
+		expect(() => loadConfig({ ...good, SHISO_BACKUP_KEEP: '0' })).toThrowError(/SHISO_BACKUP_KEEP/);
+	});
 });
