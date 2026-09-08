@@ -1359,7 +1359,8 @@ export function detectTransfers(db: DbOrTx, candidateIds: number[], opts: { wind
 
 		let chosen = cands;
 		if (chosen.length > 1) {
-			const hinted = chosen.filter((c) => PAYMENT_HINT.test(c.payeeRaw) || PAYMENT_HINT.test(t.payeeRaw));
+			// Only the counterpart's payee can discriminate; the near side's own payee is common to every candidate pair.
+			const hinted = chosen.filter((c) => PAYMENT_HINT.test(c.payeeRaw));
 			if (hinted.length >= 1) chosen = hinted;
 		}
 		if (chosen.length > 1) { flagForReview(db, id, 'transfer_ambiguous'); flagged++; continue; }
