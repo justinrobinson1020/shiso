@@ -206,8 +206,12 @@ function inheritTransaction(tx: DbOrTx, oldId: number, t: BatchTransaction, acco
 	});
 	if (peer != null) {
 		if (sameAmount) {
+			// linkTransfer resets *both* sides to the transfer kind, so capture the peer's own
+			// categorisation first — sync must never overwrite it (§5.6).
+			const peerSplits = getTransaction(tx, peer).splits.map((s) => ({ categoryId: s.categoryId, amount: s.amount, memo: s.memo }));
 			linkTransfer(tx, newId, peer);
-			setSplits(tx, newId, splits);      // linkTransfer resets both sides to the transfer kind; restore the near side's categorisation
+			setSplits(tx, newId, splits);
+			setSplits(tx, peer, peerSplits);
 			clearReview(tx, peer);
 		} else {
 			// linkTransfer requires opposite amounts; a re-priced pending transfer can't relink automatically.

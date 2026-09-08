@@ -167,6 +167,30 @@ describe('applyBatch pending reconciliation', () => {
 		expect(db.select().from(billOccurrenceTransactions).all()).toEqual([{ billOccurrenceId: occId, transactionId: posted.id }]);
 	});
 
+	it('explicit: relinking a posted transfer keeps the peer\'s own categorisation', () => {
+		applyBatch(db, conn, batch({ added: [
+			tx({ externalId: 'p10', amount: -25000, postedDate: '2026-09-03', pending: true }),
+			tx({ externalId: 'k10', accountExternalId: 'card', amount: 25000, postedDate: '2026-09-03' })
+		] }), opts);
+		const pendingId = byExt('p10')!.id, peerId = byExt('k10')!.id;
+		linkTransfer(db, pendingId, peerId);
+		// post-processing (or the user) categorises each side away from the generic transfer category
+		const payCat = createCategory(db, { groupId: createGroup(db, 'Debt'), name: 'Card payment', kind: 'debt_payment', accountId: acct('card').id });
+		const nearCat = createCategory(db, { groupId: createGroup(db, 'Bills'), name: 'Near', kind: 'bill' });
+		setSplits(db, pendingId, [{ categoryId: nearCat, amount: -25000 }]);
+		setSplits(db, peerId, [{ categoryId: payCat, amount: 25000 }]);
+
+		applyBatch(db, conn, batch({ added: [tx({ externalId: 'q10', pendingExternalId: 'p10', amount: -25000, postedDate: '2026-09-05' })] }), opts);
+
+		const posted = getTransaction(db, byExt('q10')!.id);
+		expect(posted.transferPeerId).toBe(peerId);
+		expect(posted.splits.map((s) => s.categoryId)).toEqual([nearCat]);
+		const peer = getTransaction(db, peerId);
+		expect(peer.transferPeerId).toBe(posted.id);
+		expect(peer.splits.map((s) => s.categoryId)).toEqual([payCat]);
+		expect(peer.splits.map((s) => s.amount)).toEqual([25000]);
+	});
+
 	it('explicit: a re-priced pending transfer posts unlinked and flagged instead of throwing', () => {
 		applyBatch(db, conn, batch({ added: [
 			tx({ externalId: 'p4', amount: -25000, postedDate: '2026-09-03', pending: true }),
