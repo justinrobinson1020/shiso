@@ -987,7 +987,8 @@ export function applyBatch(db: Db, connectionId: number, batch: SyncBatch, opts:
 		}
 
 		// 6. Additions with pending reconciliation (§5.5).
-		const batchIds = new Set(batch.added.map((t) => t.externalId));
+		// Every external id returned by this fetch, added or modified: none of them can be a stale pending row (§5.5).
+		const batchIds = new Set([...batch.added, ...batch.modified].map((t) => t.externalId));
 		const addedPerAccount = new Map<number, { sum: number; earliest: string }>();
 		for (const t of [...batch.added, ...toAdd]) {
 			const a = acct(t.accountExternalId);
