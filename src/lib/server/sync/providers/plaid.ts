@@ -1,4 +1,4 @@
-import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
+import { Configuration, CountryCode, PlaidApi, PlaidEnvironments, Products, type LinkTokenCreateRequest } from 'plaid';
 import type { AccountType } from '../../db/schema';
 import { decimalToCents } from '$lib/money';
 import { ProviderError, type BatchAccount, type BatchBalance, type BatchTerms, type BatchTransaction, type FetchInput, type SyncBatch, type SyncProvider } from '../types';
@@ -8,7 +8,7 @@ type PlaidBalances = { current: number | null; available: number | null; limit: 
 type PlaidAccount = { account_id: string; name: string; official_name: string | null; mask: string | null; type: string; subtype: string | null; balances: PlaidBalances };
 type PlaidTransaction = {
 	transaction_id: string; account_id: string; amount: number; date: string; authorized_date: string | null; authorized_datetime?: string | null;
-	name: string; merchant_name: string | null; pending: boolean; pending_transaction_id: string | null;
+	name: string; merchant_name?: string | null; pending: boolean; pending_transaction_id: string | null;
 	personal_finance_category?: { primary: string; detailed: string } | null;
 };
 type SyncData = { added: PlaidTransaction[]; modified: PlaidTransaction[]; removed: { transaction_id: string; account_id: string }[]; next_cursor: string; has_more: boolean; accounts: PlaidAccount[] };
@@ -24,7 +24,7 @@ export type PlaidClientLike = {
 	transactionsSync(req: { access_token: string; cursor?: string | null; count?: number; options?: { include_personal_finance_category?: boolean } }): Promise<{ data: SyncData }>;
 	liabilitiesGet(req: { access_token: string }): Promise<{ data: LiabilitiesData }>;
 	accountsBalanceGet(req: { access_token: string }): Promise<{ data: { accounts: PlaidAccount[] } }>;
-	linkTokenCreate(req: Record<string, unknown>): Promise<{ data: { link_token: string } }>;
+	linkTokenCreate(req: LinkTokenCreateRequest): Promise<{ data: { link_token: string } }>;
 	itemPublicTokenExchange(req: { public_token: string }): Promise<{ data: { access_token: string; item_id: string } }>;
 };
 
@@ -162,8 +162,8 @@ export function createPlaidClient(cfg: { clientId: string; secret: string; env: 
 }
 
 export async function createLinkToken(client: PlaidClientLike, opts: { clientName: string; userId: string; accessToken?: string | null }): Promise<string> {
-	const req: Record<string, unknown> = { client_name: opts.clientName, user: { client_user_id: opts.userId }, country_codes: ['US'], language: 'en' };
-	if (opts.accessToken) req.access_token = opts.accessToken; else req.products = ['transactions', 'liabilities'];
+	const req: LinkTokenCreateRequest = { client_name: opts.clientName, user: { client_user_id: opts.userId }, country_codes: [CountryCode.Us], language: 'en' };
+	if (opts.accessToken) req.access_token = opts.accessToken; else req.products = [Products.Transactions, Products.Liabilities];
 	try { return (await client.linkTokenCreate(req)).data.link_token; } catch (err) { throw toProviderError(err); }
 }
 

@@ -10,8 +10,7 @@ import { PlaidProvider, createPlaidClient, type PlaidClientLike } from './plaid'
 /** The Plaid API client, or null when the credentials are not configured. */
 export function plaidClient(config: Config): PlaidClientLike | null {
 	if (!config.plaid.clientId || !config.plaid.secret) return null;
-	// PlaidApi widens a few optional fields (e.g. merchant_name may be undefined) that PlaidClientLike narrows; the provider treats them the same.
-	return createPlaidClient({ clientId: config.plaid.clientId, secret: config.plaid.secret, env: config.plaid.env }) as unknown as PlaidClientLike;
+	return createPlaidClient({ clientId: config.plaid.clientId, secret: config.plaid.secret, env: config.plaid.env });
 }
 
 /** `manual` and `simplefin` always; `plaid` only when both credentials are set. */
