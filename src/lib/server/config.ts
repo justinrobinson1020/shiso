@@ -12,6 +12,8 @@ export type Config = {
 	syncHour: number;
 	balanceHour: number;
 	plaid: { clientId: string | null; secret: string | null; env: 'sandbox' | 'production' };
+	schedulerEnabled: boolean;
+	plaidClientName: string;
 };
 
 function required(env: Record<string, string | undefined>, key: string): string {
@@ -48,7 +50,9 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
 		dbPath, backupDir, appKey, cadence, timeZone, migrationsDir,
 		syncHour: hour(env, 'SHISO_SYNC_HOUR', 3),
 		balanceHour: hour(env, 'SHISO_BALANCE_HOUR', 7),
-		plaid: { clientId: env.PLAID_CLIENT_ID ?? null, secret: env.PLAID_SECRET ?? null, env: plaidEnv }
+		plaid: { clientId: env.PLAID_CLIENT_ID ?? null, secret: env.PLAID_SECRET ?? null, env: plaidEnv },
+		schedulerEnabled: (env.SHISO_SCHEDULER ?? 'on') !== 'off',
+		plaidClientName: env.SHISO_PLAID_CLIENT_NAME || 'shiso'
 	};
 }
 

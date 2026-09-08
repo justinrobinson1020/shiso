@@ -16,7 +16,8 @@ const cfg = (d: string) => ({
 	dbPath: join(d, 'shiso.db'), backupDir: join(d, 'backups'), appKey: 'k'.repeat(40),
 	timeZone: 'America/New_York', migrationsDir: 'drizzle',
 	cadence: 'semi_monthly' as const, syncHour: 3, balanceHour: 7,
-	plaid: { clientId: null, secret: null, env: 'sandbox' as const }
+	plaid: { clientId: null, secret: null, env: 'sandbox' as const },
+	schedulerEnabled: false, plaidClientName: 'shiso'
 });
 
 describe('startup', () => {

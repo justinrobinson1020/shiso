@@ -5,6 +5,7 @@ import { pendingMigrations } from '$lib/server/db/migrations';
 import { periods } from '$lib/server/db/schema';
 import { currentPeriodId } from '$lib/server/budget/periods';
 import { getConfig } from '$lib/server/config';
+import { lastSuccessfulRun } from '$lib/server/sync/runner';
 import { todayIso } from '$lib/dates';
 import { eq } from 'drizzle-orm';
 
@@ -19,7 +20,7 @@ export const GET: RequestHandler = () => {
 			db: 'ok',
 			pendingMigrations: pendingMigrations(getSqlite(), config.migrationsDir).length,
 			currentPeriod: current?.label ?? null,
-			lastSync: null
+			lastSync: lastSuccessfulRun(db)
 		});
 	} catch (err) {
 		// The diagnostic endpoint must report the failure, not become one.

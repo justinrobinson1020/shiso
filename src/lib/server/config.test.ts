@@ -21,6 +21,11 @@ describe('loadConfig', () => {
 		expect(c.plaid.env).toBe('sandbox');
 		expect(c.timeZone).toBe('America/New_York');
 		expect(c.migrationsDir.endsWith('drizzle')).toBe(true);
+		expect(c.schedulerEnabled).toBe(true);
+		expect(c.plaidClientName).toBe('shiso');
+	});
+	it('disables the scheduler when SHISO_SCHEDULER is off', () => {
+		expect(loadConfig({ ...good, SHISO_SCHEDULER: 'off' }).schedulerEnabled).toBe(false);
 	});
 	it('rejects an unknown time zone', () => {
 		expect(() => loadConfig({ ...good, SHISO_TZ: 'Mars/Olympus' })).toThrowError(/SHISO_TZ/);
