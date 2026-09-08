@@ -93,14 +93,18 @@ production). See `.env.example` for every key.
 ## Operations
 
 - **Health**: `GET /api/health` returns pending-migration count, current
-  period, and last successful sync per connection; 200 when healthy, 503
-  otherwise.
+  period, and the single most recent successful sync run across all
+  connections (`{ connectionId, finishedAt }`, or `null`); 200 when
+  healthy, 503 otherwise. Per-connection sync status lives on the
+  Accounts page.
 - **Backups**: the nightly backup job writes a dated `VACUUM INTO` copy to
   `SHISO_BACKUP_DIR`, pruning down to `SHISO_BACKUP_KEEP`. Restore by
   stopping the service and copying a backup file over the live database.
-- **Migrations**: on startup, pending migrations trigger a timestamped
-  snapshot into the backup directory before applying. A failed migration
-  leaves the snapshot in place and the process refuses to serve.
+- **Migrations**: on startup, if the database already exists and has
+  pending migrations, a timestamped snapshot is written to the backup
+  directory before they're applied (a brand-new database has nothing to
+  snapshot). A failed migration leaves the snapshot in place and the
+  process refuses to serve.
 
 ## Deployment
 
