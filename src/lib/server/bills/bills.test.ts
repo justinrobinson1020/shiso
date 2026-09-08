@@ -46,6 +46,16 @@ describe('generateOccurrences', () => {
 		expect(o.windowStart).toBe('2026-09-01');
 		expect(o.windowEnd).toBe('2026-09-29');
 	});
+	it('falls back to the cadence when the terms due date is stale', () => {
+		createBill(db, { name: 'Card', categoryId: cardEnv, payFromAccountId: chk, expectedAmount: 5000, cadence: 'monthly', dueDay: 20, linkedDebtAccountId: card });
+		appendTermsIfChanged(db, card, { asOf: '2026-07-01', minPayment: 3560, nextDueDate: '2026-07-26', source: 'provider' });
+		expect(gen().billsCreated).toBe(2); // Aug 20 and Sep 20 inside [Aug 8, Sep 30]
+		const rows = db.select().from(billOccurrences).all().sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+		expect(rows.map((r) => r.dueDate)).toEqual(['2026-08-20', '2026-09-20']);
+		expect(rows[1].expectedAmount).toBe(5000);
+		expect(rows[1].statementBalance).toBeNull();
+		expect(rows[1].windowStart).toBe('2026-08-26');
+	});
 	it('back-fills at most 31 days for a new definition', () => {
 		createBill(db, { name: 'New', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 100, cadence: 'semi_monthly', dueDay: 5, dueDay2: 20 });
 		gen();

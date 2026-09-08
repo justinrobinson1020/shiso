@@ -32,7 +32,7 @@ export function dueDatesBetween(s: Schedule, fromIso: string, throughIso: string
 			for (let m = m0; m <= m1; m++) for (const day of days) { const d = clampDay(y, m, day); if (inRange(d)) out.push(d); }
 		}
 	} else if (s.cadence === 'every_n_weeks') {
-		const step = (s.interval ?? 1) * 7;
+		const step = Math.max(1, s.interval ?? 1) * 7;
 		let d = s.anchorDate ?? fromIso;
 		while (compareIso(d, fromIso) < 0) d = addDays(d, step);
 		while (compareIso(d, throughIso) <= 0) { out.push(d); d = addDays(d, step); }
@@ -57,12 +57,12 @@ export function generateOccurrences(db: DbOrTx, opts: { todayIso: string; cadenc
 		const terms = b.linkedDebtAccountId != null ? latestTerms(db, b.linkedDebtAccountId) : null;
 		const isDebt = b.linkedDebtAccountId != null;
 		let plan: { due: string; expected: number; statement: number | null; windowStart: string }[];
-		if (isDebt && terms?.nextDueDate) {
-			const due = terms.nextDueDate;
-			plan = compareIso(due, floor) >= 0 && compareIso(due, horizonEnd) <= 0
-				? [{ due, expected: terms.minPayment ?? b.expectedAmount, statement: terms.lastStatementBalance ?? null,
-					windowStart: terms.lastStatementDate ?? addDays(due, -DEBT_WINDOW_BEFORE) }]
-				: [];
+		const termsDue = terms?.nextDueDate;
+		const termsInRange = termsDue != null && compareIso(termsDue, floor) >= 0 && compareIso(termsDue, horizonEnd) <= 0;
+		if (isDebt && termsInRange) {
+			const due = termsDue!;
+			plan = [{ due, expected: terms!.minPayment ?? b.expectedAmount, statement: terms!.lastStatementBalance ?? null,
+				windowStart: terms!.lastStatementDate ?? addDays(due, -DEBT_WINDOW_BEFORE) }];
 		} else {
 			plan = dueDatesBetween(b, floor, horizonEnd).map((due) => ({
 				due, expected: b.expectedAmount, statement: null, windowStart: addDays(due, -(isDebt ? DEBT_WINDOW_BEFORE : BILL_WINDOW_BEFORE))

@@ -18,4 +18,7 @@ describe('dueDatesBetween', () => {
 		expect(dueDatesBetween({ cadence: 'yearly', anchorDate: '2024-06-20' }, '2026-01-01', '2027-12-31'))
 			.toEqual(['2026-06-20', '2027-06-20']);
 	});
+	it('treats a zero or missing interval as one week', () => {
+		expect(dueDatesBetween({ cadence: 'every_n_weeks', interval: 0, anchorDate: '2026-01-02' }, '2026-01-01', '2026-01-20')).toEqual(['2026-01-02', '2026-01-09', '2026-01-16']);
+	});
 });
