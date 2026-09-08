@@ -43,4 +43,14 @@ describe('budget routes', () => {
 		expect((await assignRoute({ request: req({ periodId: p, categoryId: 1, assigned: 1.5 }) } as never)).status).toBe(400);
 		expect(db.select().from(budgetAssignments).all()).toHaveLength(0);
 	});
+	it('rejects moving to the same category (409) and a non-positive amount (409)', async () => {
+		const db = getDb(); const p = currentPeriodId(db, 'semi_monthly', '2026-09-08');
+		const group = db.select().from(categoryGroups).where(eq(categoryGroups.name, 'Spending')).get()!.id;
+		const a = createCategory(db, { groupId: group, name: 'A', kind: 'spending' }); const b = createCategory(db, { groupId: group, name: 'B', kind: 'spending' });
+		const same = await moveRoute({ request: req({ periodId: p, fromCategoryId: a, toCategoryId: a, amount: 100 }) } as never);
+		expect(same.status).toBe(409); expect((await same.json()).code).toBe('MOVE_SAME_CATEGORY');
+		const zero = await moveRoute({ request: req({ periodId: p, fromCategoryId: a, toCategoryId: b, amount: 0 }) } as never);
+		expect(zero.status).toBe(409); expect((await zero.json()).code).toBe('MOVE_AMOUNT_NOT_POSITIVE');
+		expect(db.select().from(budgetAssignments).all()).toHaveLength(0);
+	});
 });
