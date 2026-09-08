@@ -3328,11 +3328,11 @@ git commit -m "feat: one-time sheet import of period balances, apr history, and 
 **Files:**
 - Modify: `README.md` (rewrite), `.env.example` (review every key has a comment), `docs/superpowers/plans/2026-09-08-shiso-1c-screens.md` (tick boxes are the executor's; do not edit the plan body)
 
-- [ ] **Step 1: README** covering: what shiso is (two sentences from spec §1); requirements (Node 24, no Docker); development (`cp .env.example .env`, generate `SHISO_APP_KEY`, `npm install`, `npm run dev`, `npm test`, `npm run check`); the six pages in one line each; data model summary (integer cents, sign convention, periods, envelopes; link to the spec); providers (Plaid Trial 10-Item cap; SimpleFIN; manual + Apple Card CSV); sync schedule and env knobs (`SHISO_SYNC_HOUR`, `SHISO_BALANCE_HOUR`, `SHISO_BACKUP_HOUR`, `SHISO_BACKUP_KEEP`, `SHISO_TZ`, `SHISO_CADENCE`, `SHISO_SCHEDULER`, `SHISO_MIGRATIONS_DIR`); operations (health route, backups, restore, migrations snapshot behaviour); deployment (link to `docs/deploy.md`); sheet import (link to `scripts/README-sheet-import.md`); the Phase 1 gaps from spec §12 in one list; layout of `src/`. No secrets, no session or tooling references.
+- [x] **Step 1: README** covering: what shiso is (two sentences from spec §1); requirements (Node 24, no Docker); development (`cp .env.example .env`, generate `SHISO_APP_KEY`, `npm install`, `npm run dev`, `npm test`, `npm run check`); the six pages in one line each; data model summary (integer cents, sign convention, periods, envelopes; link to the spec); providers (Plaid Trial 10-Item cap; SimpleFIN; manual + Apple Card CSV); sync schedule and env knobs (`SHISO_SYNC_HOUR`, `SHISO_BALANCE_HOUR`, `SHISO_BACKUP_HOUR`, `SHISO_BACKUP_KEEP`, `SHISO_TZ`, `SHISO_CADENCE`, `SHISO_SCHEDULER`, `SHISO_MIGRATIONS_DIR`); operations (health route, backups, restore, migrations snapshot behaviour); deployment (link to `docs/deploy.md`); sheet import (link to `scripts/README-sheet-import.md`); the Phase 1 gaps from spec §12 in one list; layout of `src/`. No secrets, no session or tooling references.
 
-- [ ] **Step 2: Production smoke.** `npm run build`, then in the background `SHISO_DB_PATH=/tmp/shiso-smoke/shiso.db SHISO_BACKUP_DIR=/tmp/shiso-smoke/backups SHISO_APP_KEY=$(openssl rand -base64 48) SHISO_SCHEDULER=off SHISO_MIGRATIONS_DIR=$PWD/drizzle PORT=3999 ORIGIN=http://localhost:3999 node build`; `curl -sf localhost:3999/api/health`, and `curl -sf -o /dev/null -w '%{http_code}\n' localhost:3999/{,budget,ledger,spending,accounts,bills}` → six `200`s; `POST /api/connections` with a manual checking account, `POST /api/accounts/<id>/balance`, then `GET /` contains the account name. Stop the server, `rm -rf /tmp/shiso-smoke`. Put the health body and the six status codes in the report.
+- [x] **Step 2: Production smoke.** `npm run build`, then in the background `SHISO_DB_PATH=/tmp/shiso-smoke/shiso.db SHISO_BACKUP_DIR=/tmp/shiso-smoke/backups SHISO_APP_KEY=$(openssl rand -base64 48) SHISO_SCHEDULER=off SHISO_MIGRATIONS_DIR=$PWD/drizzle PORT=3999 ORIGIN=http://localhost:3999 node build`; `curl -sf localhost:3999/api/health`, and `curl -sf -o /dev/null -w '%{http_code}\n' localhost:3999/{,budget,ledger,spending,accounts,bills}` → six `200`s; `POST /api/connections` with a manual checking account, `POST /api/accounts/<id>/balance`, then `GET /` contains the account name. Stop the server, `rm -rf /tmp/shiso-smoke`. Put the health body and the six status codes in the report.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add README.md .env.example
@@ -3351,3 +3351,18 @@ git commit -m "docs: readme for development, operation, deployment, and the shee
 ## Handoff to Phase 2
 
 Phase 2 (debt planner, payoff projections, promo sub-ledger) reads `account_terms` (APR history now also from the sheet import), `accounts.opened_on`, `bill_occurrences.extra_amount` (accumulates after 1B's fix wave), and `underfunded` from `budgetForPeriod`; it writes `planned_extras` (spec §4.6, table designed, not yet migrated) as assignments to payment categories with a projection attached, and adds the `balance_transfer` rule from spec §12. The Month page's "planned card payments" card is the natural home for the what-if input.
+
+## Execution amendments (1C, 2026-09-08)
+
+Rulings made while executing, each already reflected in the code; the task text above is the original plan:
+- `Dialog` routes backdrop clicks through `el.close()` so the native `close` event is the single path to `onclose` (T1).
+- Budget: `available` is the engine's gross figure and can be negative; the System group renders with only its envelope-bearing categories (Interest, Fees) — the plan's "no System group" assertion was wrong (T4).
+- `categoryTree` categories carry `groupId` (T5). `spendingView` takes `cadence`; the quarter's previous range uses `addMonths` (T8).
+- The transaction patch route pre-checks the period and the manual-create route maps "no period covers" to 400 (T6). Routes may read tables directly; spec §9 forbids direct writes only.
+- Ledger page: the manual-add account placeholder is `null` with a submit guard; the split editor keeps a line's since-hidden category selectable (T7).
+- Accounts page: `Window.Plaid` lives in `src/app.d.ts`; re-saving a closed account keeps its original `closedAt` (T11).
+- Bills: the shared helper is `src/routes/api/bills/bills-shared.ts`; income "received" is status `paid`; occurrence routes 404 unknown ids; `rent.next` is null at 2026-09-08 because the horizon ends with the period after today (T12). The bills "linked" count is plain text; a Ledger `ids` filter is deferred (T13).
+- Every mutating route has a happy-path and an invariant test (spec §10); the plan's test files omitted the move, account-patch, and income-patch cases (T4, T10, T12).
+- Ops: the unit ships `HOST=0.0.0.0` (Caddy is on CT 130) (T15). `tsconfig.json` carries an explicit `include` with `deploy/**/*.ts` and `scripts/**/*.ts`; `vite.config.ts` includes `deploy/**/*.test.ts` (T15, T16).
+- Sheet import: the test fixture filler is `Array(offset - 13)`; `decimalToCents` accepts `$ (1,234.56)` (T16).
+- Parked for a follow-up commit: deploy hardening (checksum sidecar, `npm ci` as the service user, unit re-sync) — see the workspace patch in the final report.
