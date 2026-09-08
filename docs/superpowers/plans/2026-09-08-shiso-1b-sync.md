@@ -23,6 +23,7 @@
 - Per-connection credentials are stored encrypted in `connections.credential_enc` with the app key; only Plaid client credentials and the app key live in the environment (§3.3).
 - Service functions take `DbOrTx`; `InvariantError` carries the code only.
 - Commit messages: conventional prefix, no trailer, no reference to AI tooling. Run `npm test` and `npm run check` before every commit.
+- Do not use Drizzle's relational query API (`db.query.<table>.findFirst/findMany`) anywhere: on the synchronous better-sqlite3 driver it returns a lazy object that needs `.sync()`, and plain property access silently yields `undefined`. Use `db.select().from(...).get()/.all()`.
 
 ## File structure
 
@@ -695,7 +696,7 @@ Rules implemented (spec §5.1 step 3, §5.5, §5.6 opening balance, §4.1 pendin
 import { describe, it, expect, beforeEach } from 'vitest';
 import { eq, and } from 'drizzle-orm';
 import { openMemoryDatabase, type Db } from '../db';
-import { accounts, accountBalances, accountTerms, bills, billOccurrences, billOccurrenceTransactions, transactions } from '../db/schema';
+import { accounts, accountBalances, accountTerms, bills, billOccurrences, billOccurrenceTransactions, connections, periods, transactions } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId, uncategorizedId } from '../ledger/categories';
 import { createTransaction, getTransaction, linkTransfer, setSplits } from '../ledger/transactions';
 import { createConnection } from './connections';
@@ -757,9 +758,9 @@ describe('applyBatch first sync', () => {
 		expect(db.select().from(transactions).where(and(eq(transactions.accountId, acct('card').id), eq(transactions.source, 'opening'))).all().length).toBe(0);
 		// pending row took its period from the transacted date
 		const t2 = byExt('t2')!;
-		expect(db.query.periods.findFirst({ where: (p, { eq }) => eq(p.id, t2.periodId) })!.startDate).toBe('2026-09-01');
+		expect(db.select().from(periods).where(eq(periods.id, t2.periodId)).get()!.startDate).toBe('2026-09-01');
 		expect(r.newTransactionIds.length).toBe(3);
-		expect(db.query.connections.findFirst({ where: (c, { eq }) => eq(c.id, conn) })!.cursor).toBe('c1');
+		expect(db.select().from(connections).where(eq(connections.id, conn)).get()!.cursor).toBe('c1');
 	});
 
 	it('is idempotent on replay and treats re-added rows as modifications', () => {
@@ -1134,7 +1135,7 @@ git commit -m "feat: applyBatch with pending reconciliation and opening balances
 ```ts
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openMemoryDatabase, type Db } from '../db';
-import { accounts, connections } from '../db/schema';
+import { accounts, connections, payeeRules } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, uncategorizedId } from '../ledger/categories';
 import { ensurePeriods } from '../budget/periods';
 import { createTransaction, getTransaction, setSplits } from '../ledger/transactions';
@@ -1155,7 +1156,7 @@ describe('matchPayeeRule', () => {
 		createPayeeRule(db, { pattern: 'amzn', payee: 'Amazon', priority: 50 });
 		createPayeeRule(db, { pattern: '^AMZN MKTP', isRegex: true, payee: 'Amazon Marketplace', priority: 10 });
 		createPayeeRule(db, { pattern: '(', isRegex: true, payee: 'broken', priority: 1 });
-		const rules = db.query.payeeRules.findMany();
+		const rules = db.select().from(payeeRules).all();
 		expect(matchPayeeRule(rules, 'AMZN MKTP US*2K4')?.payee).toBe('Amazon Marketplace');
 		expect(matchPayeeRule(rules, 'Prime Video amzn.com')?.payee).toBe('Amazon');
 		expect(matchPayeeRule(rules, 'COSTCO')).toBeNull();
