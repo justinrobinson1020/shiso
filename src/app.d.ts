@@ -8,6 +8,11 @@ declare global {
 		// interface PageState {}
 		// interface Platform {}
 	}
+	interface Window {
+		Plaid?: {
+			create(o: { token: string; onSuccess: (publicToken: string, meta: { institution?: { name?: string } }) => void; onExit?: () => void }): { open(): void };
+		};
+	}
 }
 
 export {};
