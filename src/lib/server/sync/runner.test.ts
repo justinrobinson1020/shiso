@@ -56,6 +56,23 @@ describe('runSync', () => {
 		const out = await runSync(db, conn, 'cron', 'full', deps(new FakeProvider(async () => { throw new Error('boom'); })));
 		expect(out).toMatchObject({ status: 'error', error: 'boom' });
 		expect(db.select().from(connections).where(eq(connections.id, conn)).get()!).toMatchObject({ status: 'error', cursor: null, lastError: 'boom' });
+		// A transient failure must not drop the connection from future scheduled runs.
+		const outs = await runAllSyncs(db, 'cron', 'full', deps(new FakeProvider(async () => fixedBatch())));
+		expect(outs.map((o) => [o.connectionId, o.status])).toEqual([[conn, 'ok']]);
+	});
+	it('records a post-apply failure without touching the connection status', async () => {
+		const conn = createConnection(db, { provider: 'plaid', institutionName: 'T', credential: 'x', appKey: KEY });
+		const out = await runSync(db, conn, 'manual', 'full', {
+			...deps(new FakeProvider(async () => fixedBatch())),
+			afterApply: () => { throw new Error('boom'); }
+		});
+		expect(out.status).toBe('error');
+		expect(out.error).toBe('post-processing: boom');
+		expect(out.apply?.added).toBe(1);
+		const run = db.select().from(syncRuns).where(eq(syncRuns.id, out.runId!)).get()!;
+		expect(run).toMatchObject({ status: 'error', error: 'post-processing: boom', added: 1, endCursor: 'cur-1' });
+		expect(db.select().from(connections).where(eq(connections.id, conn)).get()!).toMatchObject({ status: 'active', cursor: 'cur-1' });
+		expect(db.select().from(transactions).all().length).toBeGreaterThan(0);
 	});
 	it('skips a disabled connection', async () => {
 		const conn = createConnection(db, { provider: 'plaid', institutionName: 'T', credential: 'x', appKey: KEY });

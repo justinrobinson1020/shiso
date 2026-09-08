@@ -23,6 +23,7 @@ describe('connections', () => {
 		const id = createConnection(db, { provider: 'simplefin', institutionName: 'SF', credential: 'https://u:p@bridge/x', appKey: KEY });
 		setConnectionStatus(db, id, 'error', 'boom');
 		expect(db.select().from(connections).where(eq(connections.id, id)).get()!.lastError).toBe('boom');
+		expect(listActiveConnections(db).map((c) => c.id)).toContain(id);
 		recordConnectionSuccess(db, id, 'cursor-9', '2026-09-08T03:00:00.000Z');
 		const row = db.select().from(connections).where(eq(connections.id, id)).get()!;
 		expect(row.cursor).toBe('cursor-9');

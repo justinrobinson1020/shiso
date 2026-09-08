@@ -18,6 +18,8 @@ export type SyncDeps = {
 	timeZone: string;
 	now?: () => string;
 	today?: () => string;
+	/** Test-only: invoked right after `applyBatch` succeeds, before the post-apply steps. Lets tests inject a post-apply failure. */
+	afterApply?: () => void;
 };
 export type RunOutcome = {
 	runId: number | null; connectionId: number; status: 'ok' | 'error' | 'skipped';
@@ -64,9 +66,19 @@ export async function runSync(db: Db, connectionId: number, trigger: 'cron' | 'm
 			return fail(e.message, err instanceof ProviderError && err.needsRelink);
 		}
 
-		// Apply and post-process: synchronous.
+		// Phase A: apply the batch. On failure, the connection is at fault (fail() as usual).
+		let apply: ApplyResult;
 		try {
-			const apply = applyBatch(db, connectionId, batch, { cadence: deps.cadence, todayIso: today(), mode, now: now() });
+			apply = applyBatch(db, connectionId, batch, { cadence: deps.cadence, todayIso: today(), mode, now: now() });
+		} catch (err) {
+			return fail((err as Error).message);
+		}
+
+		// Phase B: unwind removals, generate occurrences, post-process. applyBatch already committed
+		// (recorded success and advanced the cursor), so a failure here is not a connection failure —
+		// leave the connection's status alone and record the run as an error with the apply counts.
+		try {
+			deps.afterApply?.();
 			unwindRemovedTransactions(db, apply.removedTransactionIds);
 			const k = knobs(db);
 			generateOccurrences(db, { todayIso: today(), cadence: deps.cadence, graceDays: k.graceDays });
@@ -80,7 +92,13 @@ export async function runSync(db: Db, connectionId: number, trigger: 'cron' | 'm
 			}).where(eq(syncRuns.id, runId)).run();
 			return { runId, connectionId, status: 'ok', apply, processed: post.processed };
 		} catch (err) {
-			return fail((err as Error).message);
+			const error = `post-processing: ${(err as Error).message}`;
+			db.update(syncRuns).set({
+				status: 'error', finishedAt: now(), error, endCursor: batch.nextCursor,
+				added: apply.added, modified: apply.modified, removed: apply.removed,
+				balancesWritten: apply.balancesWritten, termsWritten: apply.termsWritten
+			}).where(eq(syncRuns.id, runId)).run();
+			return { runId, connectionId, status: 'error', error, apply };
 		}
 	});
 }

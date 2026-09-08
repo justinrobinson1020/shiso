@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import {
 	accounts, accountBalances, accountTerms, connections,
@@ -47,11 +47,12 @@ export function getConnection(db: DbOrTx, connectionId: number) {
 	return row;
 }
 
+/** Runnable connections: `active` and `error` (a transient failure must not drop a connection from future scheduled runs). Excludes `needs_relink` and `disabled`. */
 export function listActiveConnections(db: DbOrTx) {
 	return db
 		.select({ id: connections.id, provider: connections.provider, institutionName: connections.institutionName, cursor: connections.cursor })
 		.from(connections)
-		.where(eq(connections.status, 'active'))
+		.where(inArray(connections.status, ['active', 'error']))
 		.all();
 }
 
