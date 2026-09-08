@@ -3,10 +3,13 @@ import { openMemoryDatabase, type Db } from '../db';
 import { accounts, connections, categories } from '../db/schema';
 import {
 	createGroup, createCategory, seedDefaultCategories, paymentCategoryForAccount,
-	systemCategoryId, uncategorizedId, renameCategory
+	systemCategoryId, uncategorizedId, renameCategory, updateCategory
 } from './categories';
 import { InvariantError } from './errors';
+import { createConnection, upsertAccount } from '../sync/connections';
 import { eq } from 'drizzle-orm';
+
+const KEY = 'k'.repeat(44);
 
 let db: Db;
 let cardId: number;
@@ -66,5 +69,21 @@ describe('seedDefaultCategories', () => {
 		const id = uncategorizedId(db);
 		renameCategory(db, id, 'Needs a category');
 		expect(uncategorizedId(db)).toBe(id);
+	});
+});
+
+describe('updateCategory', () => {
+	it('changes kind to debt_payment with an account, and clears the account when leaving it', () => {
+		const db = openMemoryDatabase().db; seedDefaultCategories(db);
+		const conn = createConnection(db, { provider: 'manual', institutionName: 'T', appKey: KEY });
+		const card = upsertAccount(db, conn, { externalId: 'c', name: 'C', type: 'credit' }).id;
+		const group = createGroup(db, 'G', 9);
+		const id = createCategory(db, { groupId: group, name: 'Card', kind: 'spending' });
+		updateCategory(db, id, { kind: 'debt_payment', accountId: card });
+		expect(paymentCategoryForAccount(db, card)).toBe(id);
+		updateCategory(db, id, { kind: 'spending' });
+		expect(paymentCategoryForAccount(db, card)).toBeNull();
+		expect(() => updateCategory(db, id, { kind: 'debt_payment' })).toThrow(InvariantError);
+		expect(() => updateCategory(db, systemCategoryId(db, 'income'), { kind: 'spending' })).toThrow(InvariantError);
 	});
 });

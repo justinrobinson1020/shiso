@@ -3,8 +3,9 @@ import { openMemoryDatabase, type Db } from '../db';
 import { accounts, connections, transactions, transactionSplits } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, uncategorizedId, systemCategoryId } from './categories';
 import { ensurePeriods, periodIdForDate } from '../budget/periods';
-import { createTransaction, setSplits, linkTransfer, unlinkTransfer, softDelete, setReplacedBy, restoreTransaction, getTransaction, updateTransaction } from './transactions';
+import { createTransaction, setSplits, linkTransfer, unlinkTransfer, softDelete, setReplacedBy, restoreTransaction, getTransaction, updateTransaction, createManualTransaction, deleteUserTransaction } from './transactions';
 import { InvariantError } from './errors';
+import { fixture } from '../test/fixture';
 import { eq } from 'drizzle-orm';
 
 let db: Db;
@@ -183,5 +184,19 @@ describe('updateTransaction', () => {
 		expect(t.payee).toBe('Clean');
 		expect(t.memo).toBe('note');
 		expect(t.postedDate).toBe('2026-04-02');
+	});
+});
+
+describe('manual transactions', () => {
+	it('creates an unprocessed manual row with one split and deletes only user rows', () => {
+		const f = fixture();
+		const id = createManualTransaction(f.db, { accountId: f.checking, postedDate: '2026-09-03', amount: -2500, payee: 'Farmers Market', categoryId: f.groceries });
+		const t = getTransaction(f.db, id);
+		expect(t.source).toBe('manual'); expect(t.externalId.startsWith('manual:')).toBe(true);
+		expect(t.processedAt).toBeNull(); expect(t.splits).toHaveLength(1); expect(t.splits[0].categoryId).toBe(f.groceries);
+		deleteUserTransaction(f.db, id);
+		expect(getTransaction(f.db, id).deletedAt).not.toBeNull();
+		const synced = createTransaction(f.db, { accountId: f.checking, externalId: 's1', postedDate: '2026-09-03', amount: -1, payeeRaw: 'X', source: 'sync' });
+		expect(() => deleteUserTransaction(f.db, synced)).toThrow(InvariantError);
 	});
 });

@@ -42,6 +42,35 @@ export function moveCategory(db: DbOrTx, id: number, groupId: number, sort: numb
 	db.update(categories).set({ groupId, sort, ...touch() }).where(eq(categories.id, id)).run();
 }
 
+export function updateCategory(db: DbOrTx, id: number, patch: {
+	name?: string; kind?: CategoryKind; accountId?: number | null; hidden?: boolean; groupId?: number; sort?: number;
+}): void {
+	const row = db.select().from(categories).where(eq(categories.id, id)).get();
+	if (!row) throw new Error(`category ${id} not found`);
+	const set: Partial<typeof categories.$inferInsert> = { ...touch() };
+	if (patch.name !== undefined) set.name = patch.name;
+	if (patch.hidden !== undefined) set.hidden = patch.hidden;
+	if (patch.groupId !== undefined) set.groupId = patch.groupId;
+	if (patch.sort !== undefined) set.sort = patch.sort;
+	if (patch.kind !== undefined || patch.accountId !== undefined) {
+		const kind = patch.kind ?? row.kind;
+		if (row.isSystem && kind !== row.kind) throw new InvariantError('SYSTEM_CATEGORY_KIND');
+		if (kind === 'debt_payment') {
+			const accountId = patch.accountId === undefined ? row.accountId : patch.accountId;
+			if (accountId == null) throw new InvariantError('DEBT_CATEGORY_NEEDS_ACCOUNT');
+			const acct = db.select().from(accounts).where(eq(accounts.id, accountId)).get();
+			if (!acct) throw new InvariantError('DEBT_CATEGORY_NEEDS_ACCOUNT', `account ${accountId} not found`);
+			if (!acct.isDebt) throw new InvariantError('DEBT_CATEGORY_ACCOUNT_NOT_DEBT');
+			const other = paymentCategoryForAccount(db, accountId);
+			if (other != null && other !== id) throw new InvariantError('DEBT_CATEGORY_DUPLICATE');
+			set.kind = kind; set.accountId = accountId;
+		} else {
+			set.kind = kind; set.accountId = null;
+		}
+	}
+	db.update(categories).set(set).where(eq(categories.id, id)).run();
+}
+
 export function paymentCategoryForAccount(db: DbOrTx, accountId: number): number | null {
 	const row = db
 		.select({ id: categories.id })

@@ -1,10 +1,11 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import {
-	accounts, accountBalances, accountTerms, connections,
+	accounts, accountBalances, accountTerms, connections, categories,
 	CASH_TYPES, type AccountType, type ConnectionStatus, type Provider
 } from '../db/schema';
 import { encryptSecret, decryptSecret } from './crypto';
+import { InvariantError } from '../ledger/errors';
 import { nowIso } from '$lib/dates';
 
 const touch = () => ({ updatedAt: nowIso() });
@@ -82,6 +83,26 @@ export function upsertAccount(db: DbOrTx, connectionId: number, a: {
 		isDebt: a.type === 'credit' || a.type === 'loan'
 	}).returning({ id: accounts.id }).get().id;
 	return { id, created: true };
+}
+
+const DEBT_TYPES: readonly string[] = ['credit', 'loan'];
+
+export function updateAccount(db: DbOrTx, id: number, patch: { name?: string; type?: AccountType; onBudget?: boolean; closedAt?: string | null }): void {
+	const row = db.select().from(accounts).where(eq(accounts.id, id)).get();
+	if (!row) throw new Error(`account ${id} not found`);
+	const set: Partial<typeof accounts.$inferInsert> = { ...touch() };
+	if (patch.name !== undefined) set.name = patch.name;
+	if (patch.onBudget !== undefined) set.onBudget = patch.onBudget;
+	if (patch.closedAt !== undefined) set.closedAt = patch.closedAt;
+	if (patch.type !== undefined) {
+		const isDebt = DEBT_TYPES.includes(patch.type);
+		if (!isDebt && row.isDebt) {
+			const cat = db.select({ id: categories.id }).from(categories).where(and(eq(categories.kind, 'debt_payment'), eq(categories.accountId, id))).get();
+			if (cat) throw new InvariantError('ACCOUNT_HAS_PAYMENT_CATEGORY', 'reassign or delete the payment category first');
+		}
+		set.type = patch.type; set.isDebt = isDebt;
+	}
+	db.update(accounts).set(set).where(eq(accounts.id, id)).run();
 }
 
 export function accountsForConnection(db: DbOrTx, connectionId: number) {

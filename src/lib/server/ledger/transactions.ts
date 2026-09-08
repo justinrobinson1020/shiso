@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { eq, inArray, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { transactions, transactionSplits, type TransactionSource } from '../db/schema';
@@ -213,6 +214,25 @@ export function updateTransaction(db: DbOrTx, id: number, patch: TransactionPatc
 		tx.update(transactions).set(set).where(eq(transactions.id, id)).run();
 		return { amountChanged, flagged };
 	});
+}
+
+export function createManualTransaction(db: DbOrTx, input: {
+	accountId: number; postedDate: string; amount: number; payee: string; memo?: string | null; categoryId?: number | null;
+}): number {
+	const categoryId = input.categoryId ?? uncategorizedId(db);
+	return createTransaction(db, {
+		accountId: input.accountId, externalId: `manual:${randomUUID()}`, postedDate: input.postedDate, amount: input.amount,
+		payeeRaw: input.payee, payee: input.payee, memo: input.memo ?? null, source: 'manual',
+		splits: [{ categoryId, amount: input.amount }]
+	});
+}
+
+/** Only rows the user created (manual entry or CSV import) can be deleted by the user; synced rows are the provider's. */
+export function deleteUserTransaction(db: DbOrTx, id: number): void {
+	const row = db.select({ source: transactions.source }).from(transactions).where(eq(transactions.id, id)).get();
+	if (!row) throw new Error(`transaction ${id} not found`);
+	if (row.source !== 'manual' && row.source !== 'import') throw new InvariantError('NOT_USER_ROW');
+	softDelete(db, id, 'user_deleted');
 }
 
 export function markProcessed(db: DbOrTx, ids: number[]): void {
