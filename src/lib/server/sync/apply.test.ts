@@ -68,6 +68,24 @@ describe('applyBatch first sync', () => {
 		expect(db.select().from(connections).where(eq(connections.id, conn)).get()!.cursor).toBe('c1');
 	});
 
+	it('counts pending rows toward the opening balance for credit accounts but not cash accounts', () => {
+		const r = applyBatch(db, conn, batch({
+			added: [
+				tx({ externalId: 'chk1', amount: -2500, postedDate: '2026-09-02' }),
+				tx({ externalId: 'chk2', amount: -1500, postedDate: '2026-09-05', pending: true }),
+				tx({ externalId: 'card1', accountExternalId: 'card', amount: -4000, postedDate: '2026-09-06' }),
+				tx({ externalId: 'card2', accountExternalId: 'card', amount: -3000, postedDate: '2026-09-06', pending: true })
+			]
+		}), opts);
+		expect(r.openingCreated).toBe(2);
+		// checking (cash): 100000 = opening + (-2500 posted); pending -1500 excluded
+		const chkOpening = db.select().from(transactions).where(and(eq(transactions.accountId, acct('chk').id), eq(transactions.source, 'opening'))).get()!;
+		expect(chkOpening.amount).toBe(102500);
+		// card (credit): -8000 = opening + (-4000 posted + -3000 pending); pending counted
+		const cardOpening = db.select().from(transactions).where(and(eq(transactions.accountId, acct('card').id), eq(transactions.source, 'opening'))).get()!;
+		expect(cardOpening.amount).toBe(-1000);
+	});
+
 	it('is idempotent on replay and treats re-added rows as modifications', () => {
 		const b = batch({ added: [tx({ externalId: 't1', amount: -2500, postedDate: '2026-09-02' })] });
 		applyBatch(db, conn, b, opts);
@@ -149,6 +167,40 @@ describe('applyBatch pending reconciliation', () => {
 		expect(db.select().from(billOccurrenceTransactions).all()).toEqual([{ billOccurrenceId: occId, transactionId: posted.id }]);
 	});
 
+	it('explicit: a re-priced pending transfer posts unlinked and flagged instead of throwing', () => {
+		applyBatch(db, conn, batch({ added: [
+			tx({ externalId: 'p4', amount: -25000, postedDate: '2026-09-03', pending: true }),
+			tx({ externalId: 'k4', accountExternalId: 'card', amount: 25000, postedDate: '2026-09-03' })
+		] }), opts);
+		const pendingId = byExt('p4')!.id, peerId = byExt('k4')!.id;
+		linkTransfer(db, pendingId, peerId);
+
+		expect(() => applyBatch(db, conn, batch({
+			added: [tx({ externalId: 'q4', pendingExternalId: 'p4', amount: -25500, postedDate: '2026-09-05' })]
+		}), opts)).not.toThrow();
+		const posted = getTransaction(db, byExt('q4')!.id);
+		expect(posted.transferPeerId).toBeNull();
+		expect(posted.reviewReason).toBe('transfer_unlinked');
+		const peer = getTransaction(db, peerId);
+		expect(peer.transferPeerId).toBeNull();
+		expect(peer.needsReview).toBe(true);
+	});
+
+	it('heuristic: a pending row re-sent as modified in the same batch is not a stale candidate', () => {
+		const b = batch({ sendsRemovals: false, added: [tx({ externalId: 'sf-3', amount: -900, postedDate: '2026-09-03', pending: true })] });
+		applyBatch(db, conn, b, opts);
+		const pendingId = byExt('sf-3')!.id;
+		const r = applyBatch(db, conn, {
+			...b,
+			added: [tx({ externalId: 'sf-4', amount: -900, postedDate: '2026-09-05', pending: false })],
+			modified: [tx({ externalId: 'sf-3', amount: -900, postedDate: '2026-09-03', pending: true })]
+		}, opts);
+		expect(r.added).toBe(1);
+		expect(getTransaction(db, pendingId).deletedAt).toBeNull();
+		const posted = getTransaction(db, byExt('sf-4')!.id);
+		expect(posted.splits[0].categoryId).toBe(uncategorizedId(db));
+	});
+
 	it('heuristic: matches one pending row by amount and date when the provider sends no removals', () => {
 		const b = batch({ sendsRemovals: false, added: [tx({ externalId: 'sf-1', amount: -777, postedDate: '2026-09-03', pending: true })] });
 		applyBatch(db, conn, b, opts);
@@ -179,6 +231,16 @@ describe('applyBatch modified, removed, terms', () => {
 		expect(r.removed).toBe(1);
 		expect(r.removedTransactionIds).toEqual([byExt('r1')!.id]);
 		expect(byExt('r1')!.reviewReason).toBe('provider_removed');
+	});
+	it('restores a soft-deleted external id when the provider re-adds it', () => {
+		applyBatch(db, conn, batch({ added: [tx({ externalId: 'g1', amount: -100, postedDate: '2026-09-03' })] }), opts);
+		applyBatch(db, conn, batch({ removed: [{ accountExternalId: 'chk', externalId: 'g1' }] }), opts);
+		expect(() => applyBatch(db, conn, batch({ added: [tx({ externalId: 'g1', amount: -150, postedDate: '2026-09-04' })] }), opts)).not.toThrow();
+		const rows = db.select().from(transactions).where(eq(transactions.externalId, 'g1')).all();
+		expect(rows.length).toBe(1);
+		expect(rows[0].deletedAt).toBeNull();
+		expect(rows[0].reviewReason).toBe('provider_readded');
+		expect(rows[0].amount).toBe(-150);
 	});
 	it('applies modifications through updateTransaction', () => {
 		applyBatch(db, conn, batch({ added: [tx({ externalId: 'm1', amount: -100, postedDate: '2026-09-03' })] }), opts);

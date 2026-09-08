@@ -1,9 +1,9 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db';
 import { accounts, billOccurrenceTransactions, transactions, CASH_TYPES } from '../db/schema';
 import { ensurePeriods, periodBoundsFor, nextPeriodStart, type Cadence } from '../budget/periods';
 import {
-	createTransaction, updateTransaction, softDelete, setReplacedBy, setSplits, linkTransfer, unlinkTransfer,
+	createTransaction, updateTransaction, softDelete, setReplacedBy, restoreTransaction, setSplits, linkTransfer, unlinkTransfer,
 	clearReview, flagForReview, markProcessed, getTransaction
 } from '../ledger/transactions';
 import { systemCategoryId } from '../ledger/categories';
@@ -29,6 +29,12 @@ function dayDiff(a: string, b: string): number {
 function liveByExternal(tx: DbOrTx, accountId: number, externalId: string) {
 	return tx.select().from(transactions)
 		.where(and(eq(transactions.accountId, accountId), eq(transactions.externalId, externalId), isNull(transactions.deletedAt)))
+		.get() ?? null;
+}
+
+function deletedByExternal(tx: DbOrTx, accountId: number, externalId: string) {
+	return tx.select().from(transactions)
+		.where(and(eq(transactions.accountId, accountId), eq(transactions.externalId, externalId), isNotNull(transactions.deletedAt)))
 		.get() ?? null;
 }
 
@@ -87,12 +93,22 @@ export function applyBatch(db: Db, connectionId: number, batch: SyncBatch, opts:
 		}
 
 		// 6. Additions with pending reconciliation (§5.5).
-		const batchIds = new Set(batch.added.map((t) => t.externalId));
+		// Every external id returned by this fetch, added or modified: none of them can be a stale pending row (§5.5).
+		const batchIds = new Set([...batch.added, ...batch.modified].map((t) => t.externalId));
 		const addedPerAccount = new Map<number, { sum: number; earliest: string }>();
 		for (const t of [...batch.added, ...toAdd]) {
 			const a = acct(t.accountExternalId);
 			const existing = liveByExternal(tx, a.id, t.externalId);
 			if (existing) { applyModification(tx, existing.id, t, result); continue; }
+
+			// The provider re-added a row it previously told us to remove; resurrect and update it
+			// rather than insert, which would collide with the (account, external_id) unique index.
+			const deleted = deletedByExternal(tx, a.id, t.externalId);
+			if (deleted) {
+				restoreTransaction(tx, deleted.id);
+				applyModification(tx, deleted.id, t, result);
+				continue;
+			}
 
 			let inheritFrom: number | null = null;
 			let ambiguous = false;
@@ -186,9 +202,16 @@ function inheritTransaction(tx: DbOrTx, oldId: number, t: BatchTransaction, acco
 		...plain(t, accountId), pendingExternalId: old.externalId, payee: old.payee, memo: old.memo, periodId: old.periodId, splits
 	});
 	if (peer != null) {
-		linkTransfer(tx, newId, peer);
-		setSplits(tx, newId, splits);      // linkTransfer resets both sides to the transfer kind; restore the near side's categorisation
-		clearReview(tx, peer);
+		if (sameAmount) {
+			linkTransfer(tx, newId, peer);
+			setSplits(tx, newId, splits);      // linkTransfer resets both sides to the transfer kind; restore the near side's categorisation
+			clearReview(tx, peer);
+		} else {
+			// linkTransfer requires opposite amounts; a re-priced pending transfer can't relink automatically.
+			// Leave both sides unlinked (unlinkTransfer above already flagged the peer) and let the user re-pair them.
+			flagForReview(tx, newId, 'transfer_unlinked');
+			result.flagged++;
+		}
 	}
 	tx.update(billOccurrenceTransactions).set({ transactionId: newId }).where(eq(billOccurrenceTransactions.transactionId, oldId)).run();
 	softDelete(tx, oldId, 'pending_replaced');
