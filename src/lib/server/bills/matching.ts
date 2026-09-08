@@ -154,6 +154,21 @@ export function skipOccurrence(db: DbOrTx, occurrenceId: number): void {
 	db.update(billOccurrences).set({ status: 'skipped', markedBy: 'manual', needsReview: false, ...touch() }).where(eq(billOccurrences.id, occurrenceId)).run();
 }
 
+export function markIncomeReceived(db: DbOrTx, occurrenceId: number, opts: { transactionId?: number | null; amount?: number | null } = {}): void {
+	const o = db.select().from(incomeOccurrences).where(eq(incomeOccurrences.id, occurrenceId)).get();
+	if (!o) throw new Error(`income occurrence ${occurrenceId} not found`);
+	const received = opts.amount ?? (opts.transactionId != null ? getTransaction(db, opts.transactionId).amount : o.expectedAmount);
+	db.update(incomeOccurrences).set({ status: 'paid', receivedAmount: received, transactionId: opts.transactionId ?? null, markedBy: 'manual', ...touch() }).where(eq(incomeOccurrences.id, occurrenceId)).run();
+}
+
+export function unmarkIncome(db: DbOrTx, occurrenceId: number): void {
+	db.update(incomeOccurrences).set({ status: 'pending', receivedAmount: 0, transactionId: null, markedBy: 'manual', ...touch() }).where(eq(incomeOccurrences.id, occurrenceId)).run();
+}
+
+export function skipIncome(db: DbOrTx, occurrenceId: number): void {
+	db.update(incomeOccurrences).set({ status: 'skipped', markedBy: 'manual', ...touch() }).where(eq(incomeOccurrences.id, occurrenceId)).run();
+}
+
 /** §5.7: a removed transaction releases auto-matched occurrences; manual marks stay. */
 export function unwindRemovedTransactions(db: DbOrTx, transactionIds: number[]): { reopened: number } {
 	if (transactionIds.length === 0) return { reopened: 0 };

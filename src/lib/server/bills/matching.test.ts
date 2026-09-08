@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { openMemoryDatabase, type Db } from '../db';
 import { accounts, billOccurrences, billOccurrenceTransactions, connections, incomeOccurrences } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId } from '../ledger/categories';
 import { ensurePeriods } from '../budget/periods';
 import { createTransaction, linkTransfer, softDelete, getTransaction } from '../ledger/transactions';
+import { fixture } from '../test/fixture';
 import { createBill, createIncomeSource } from './bills';
 import { generateOccurrences } from './schedule';
-import { matchBillOccurrences, matchIncomeOccurrences, markOverdue, markOccurrencePaid, unmarkOccurrence, skipOccurrence, unwindRemovedTransactions } from './matching';
+import {
+	matchBillOccurrences, matchIncomeOccurrences, markOverdue, markOccurrencePaid, unmarkOccurrence, skipOccurrence,
+	unwindRemovedTransactions, markIncomeReceived, unmarkIncome, skipIncome
+} from './matching';
 
 let db: Db; let chk: number; let card: number; let rentCat: number; let cardEnv: number;
 const TODAY = '2026-09-08';
@@ -145,5 +149,23 @@ describe('income matching', () => {
 		const o = db.select().from(incomeOccurrences).all().find((x) => x.dueDate === '2026-08-30')!;
 		expect(o).toMatchObject({ status: 'paid', receivedAmount: 310000, transactionId: t, markedBy: 'auto' });
 		expect(getTransaction(db, t).splits[0].categoryId).toBe(systemCategoryId(db, 'income'));
+	});
+});
+
+describe('income manual actions', () => {
+	it('marks received, unmarks, and skips', () => {
+		const f = fixture();
+		createIncomeSource(f.db, { name: 'Salary', categoryId: f.income, depositAccountId: f.checking, expectedAmount: 275000, cadence: 'semi_monthly', dueDay: 15, dueDay2: 30 });
+		generateOccurrences(f.db, { todayIso: '2026-09-08', cadence: 'semi_monthly', graceDays: 3 });
+		const occ = f.db.select().from(incomeOccurrences).orderBy(asc(incomeOccurrences.dueDate)).all().find((o) => o.dueDate >= '2026-09-01')!;
+		const t = createTransaction(f.db, { accountId: f.checking, externalId: 'pay', postedDate: '2026-09-14', amount: 274000, payeeRaw: 'PAYROLL', source: 'sync' });
+		markIncomeReceived(f.db, occ.id, { transactionId: t });
+		let row = f.db.select().from(incomeOccurrences).where(eq(incomeOccurrences.id, occ.id)).get()!;
+		expect(row).toMatchObject({ status: 'paid', receivedAmount: 274000, transactionId: t, markedBy: 'manual' });
+		unmarkIncome(f.db, occ.id);
+		row = f.db.select().from(incomeOccurrences).where(eq(incomeOccurrences.id, occ.id)).get()!;
+		expect(row).toMatchObject({ status: 'pending', receivedAmount: 0, transactionId: null, markedBy: 'manual' });
+		skipIncome(f.db, occ.id);
+		expect(f.db.select().from(incomeOccurrences).where(eq(incomeOccurrences.id, occ.id)).get()!.status).toBe('skipped');
 	});
 });
