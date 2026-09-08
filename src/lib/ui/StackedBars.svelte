@@ -1,0 +1,26 @@
+<script lang="ts">
+	import { formatCents } from '$lib/money';
+	let { buckets, categories, compare }: { buckets: { key: string; label: string; total: number; prevTotal: number | null; byCategory: Record<string, number> }[]; categories: { id: number; name: string }[]; compare: boolean } = $props();
+	const PALETTE = ['#2f6f4e', '#d98c2b', '#4a6fb5', '#b5484a', '#7a5ab5', '#3c9d9b', '#a0a028', '#8a6d4b', '#9a9a9a'];
+	const W = 720, H = 260, PAD = 36, BW = $derived(Math.max(8, (W - PAD * 2) / Math.max(buckets.length, 1) - 8));
+	const max = $derived(Math.max(1, ...buckets.map((b) => Math.max(b.total, b.prevTotal ?? 0))));
+	const y = (v: number) => H - PAD - (v / max) * (H - PAD * 2);
+	const x = (i: number) => PAD + i * ((W - PAD * 2) / Math.max(buckets.length, 1)) + 4;
+	const keyOf = (c: { id: number }) => (c.id === 0 ? 'other' : String(c.id));
+	const linePath = $derived(buckets.map((b, i) => `${i ? 'L' : 'M'}${x(i) + BW / 2},${y(b.total)}`).join(' '));
+	const prevPath = $derived(buckets.every((b) => b.prevTotal != null) ? buckets.map((b, i) => `${i ? 'L' : 'M'}${x(i) + BW / 2},${y(b.prevTotal!)}`).join(' ') : '');
+</script>
+<svg class="chart" viewBox="0 0 {W} {H}">
+	{#each buckets as b, i}
+		{@const segs = categories.map((c) => ({ c, v: b.byCategory[keyOf(c)] ?? 0 }))}
+		{#each segs as s, j}
+			{@const prior = segs.slice(0, j).reduce((a, q) => a + q.v, 0)}
+			<rect x={x(i)} y={y(prior + s.v)} width={BW} height={y(prior) - y(prior + s.v)} fill={PALETTE[j % PALETTE.length]}><title>{b.label} · {s.c.name}: {formatCents(s.v)}</title></rect>
+		{/each}
+		<text x={x(i) + BW / 2} y={H - PAD + 14} text-anchor="middle" font-size="10" fill="var(--muted)">{b.label}</text>
+	{/each}
+	{#if compare && prevPath}<path d={prevPath} fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3" opacity=".6" />{/if}
+	<path d={linePath} fill="none" stroke="var(--fg)" stroke-width="1.5" />
+	<text x={PAD} y={PAD - 8} font-size="10" fill="var(--muted)">{formatCents(max)}</text>
+</svg>
+<div class="legend">{#each categories as c, j}<span><i style="background:{PALETTE[j % PALETTE.length]}"></i>{c.name}</span>{/each}{#if compare}<span><i style="background:var(--muted);opacity:.6"></i>previous range</span>{/if}</div>
