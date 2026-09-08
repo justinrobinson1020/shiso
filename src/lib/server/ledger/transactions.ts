@@ -178,7 +178,7 @@ export type TransactionPatch = {
 	pending?: boolean;
 	payeeRaw?: string;
 	providerCategory?: string | null;
-	memo?: string | null;
+	// memo, payee, periodId, and categories are user edits; sync never writes them (spec §5.6)
 };
 
 /** Spec §5.6: provider modifications touch amount, dates, pending, raw payee, provider category. */
@@ -194,7 +194,6 @@ export function updateTransaction(db: DbOrTx, id: number, patch: TransactionPatc
 		if (patch.pending !== undefined) set.pending = patch.pending;
 		if (patch.payeeRaw !== undefined) set.payeeRaw = patch.payeeRaw;
 		if (patch.providerCategory !== undefined) set.providerCategory = patch.providerCategory;
-		if (patch.memo !== undefined) set.memo = patch.memo;
 		let flagged = false;
 		if (amountChanged) {
 			const splits = tx.select().from(transactionSplits).where(eq(transactionSplits.transactionId, id)).all();
