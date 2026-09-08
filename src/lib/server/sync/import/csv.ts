@@ -3,7 +3,7 @@ import type { Db } from '../../db';
 import { ensurePeriods, periodBoundsFor, nextPeriodStart, type Cadence } from '../../budget/periods';
 import { createTransaction } from '../../ledger/transactions';
 import { InvariantError } from '../../ledger/errors';
-import { contentHash } from '../hash';
+import { contentHash, normalizeDescription } from '../hash';
 import { decimalToCents } from '$lib/money';
 import { compareIso } from '$lib/dates';
 
@@ -47,7 +47,7 @@ export function importCsv(db: Db, accountId: number, text: string, opts: { caden
 	const ids: number[] = [];
 	db.transaction((tx) => {
 		for (const r of rows) {
-			const key = `${r.postedDate}|${r.amount}|${r.memo ?? r.payeeRaw}`;
+			const key = `${r.postedDate}|${r.amount}|${normalizeDescription(r.memo ?? r.payeeRaw)}`;
 			const ordinal = seen.get(key) ?? 0;
 			seen.set(key, ordinal + 1);
 			const externalId = contentHash({ accountKey: `csv:${accountId}`, date: r.postedDate, amount: r.amount, description: r.memo ?? r.payeeRaw, ordinal });

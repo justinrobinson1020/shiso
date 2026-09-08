@@ -41,4 +41,15 @@ describe('importCsv', () => {
 		expect(rows.length).toBe(4);
 		expect(rows.every((t) => t.source === 'import' && t.processedAt === null)).toBe(true);
 	});
+	it('normalises descriptions differing only in case or whitespace', () => {
+		const csvNormalize = `Transaction Date,Clearing Date,Description,Merchant,Category,Type,Amount (USD),Purchased By
+09/03/2026,09/04/2026,"WHOLE FOODS, MKT 10245",Whole Foods,Grocery,Purchase,84.12,Justin Robinson
+09/03/2026,09/04/2026,"whole foods,  mkt 10245",Whole Foods,Grocery,Purchase,84.12,Justin Robinson
+`;
+		const r1 = importCsv(db, card, csvNormalize, { cadence: 'semi_monthly', todayIso: '2026-09-08' });
+		expect(r1).toMatchObject({ created: 2, duplicates: 0 });
+		expect(r1.ids.length).toBe(2);
+		const r2 = importCsv(db, card, csvNormalize, { cadence: 'semi_monthly', todayIso: '2026-09-08' });
+		expect(r2).toMatchObject({ created: 0, duplicates: 2 });
+	});
 });
