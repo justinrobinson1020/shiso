@@ -93,10 +93,10 @@ production). See `.env.example` for every key.
 ## Operations
 
 - **Health**: `GET /api/health` returns pending-migration count, current
-  period, and the single most recent successful sync run across all
-  connections (`{ connectionId, finishedAt }`, or `null`); 200 when
-  healthy, 503 otherwise. Per-connection sync status lives on the
-  Accounts page.
+  period, and `lastSync`: an array with one `{ connectionId, finishedAt }`
+  entry per connection, its most recent successful sync run (`[]` when none
+  have synced yet); 200 when healthy, 503 otherwise. Per-connection sync
+  status lives on the Accounts page.
 - **Backups**: the nightly backup job writes a dated `VACUUM INTO` copy to
   `SHISO_BACKUP_DIR`, pruning down to `SHISO_BACKUP_KEEP`. Restore by
   stopping the service and copying a backup file over the live database.

@@ -5,7 +5,7 @@ import { connections, syncRuns, transactions } from '../db/schema';
 import { seedDefaultCategories } from '../ledger/categories';
 import { createConnection } from './connections';
 import { emptyBatch, ProviderError, type FetchInput, type SyncBatch, type SyncProvider } from './types';
-import { runSync, runAllSyncs, runMaintenance, lastSuccessfulRun, type SyncDeps } from './runner';
+import { runSync, runAllSyncs, runMaintenance, lastSuccessfulRuns, type SyncDeps } from './runner';
 
 const KEY = 'k'.repeat(44);
 let db: Db;
@@ -42,7 +42,7 @@ describe('runSync', () => {
 		expect(run.finishedAt).toBe('2026-09-08T03:00:00.000Z');
 		expect(db.select().from(connections).where(eq(connections.id, conn)).get()!.cursor).toBe('cur-1');
 		expect(db.select().from(transactions).all().every((t) => t.processedAt != null)).toBe(true);
-		expect(lastSuccessfulRun(db)).toEqual({ connectionId: conn, finishedAt: '2026-09-08T03:00:00.000Z' });
+		expect(lastSuccessfulRuns(db)).toEqual([{ connectionId: conn, finishedAt: '2026-09-08T03:00:00.000Z' }]);
 	});
 	it('marks the connection needs_relink on an auth error and records the failure', async () => {
 		const conn = createConnection(db, { provider: 'plaid', institutionName: 'T', credential: 'x', appKey: KEY });
@@ -125,5 +125,23 @@ describe('runAllSyncs and maintenance', () => {
 		await runSync(db, conn, 'manual', 'full', deps(new FakeProvider(async () => fixedBatch())));
 		db.update(transactions).set({ processedAt: null }).where(eq(transactions.source, 'sync')).run();
 		expect(runMaintenance(db, deps(new FakeProvider(async () => fixedBatch()))).processed).toBe(1);
+	});
+});
+
+describe('lastSuccessfulRuns', () => {
+	it("reports each connection's newest ok run, ignoring a newer error run on the same connection", async () => {
+		const a = createConnection(db, { provider: 'plaid', institutionName: 'A', credential: 'x', appKey: KEY });
+		const b = createConnection(db, { provider: 'plaid', institutionName: 'B', credential: 'y', appKey: KEY });
+		const depsAt = (now: string, impl: () => Promise<SyncBatch>): SyncDeps => ({ providers: { plaid: new FakeProvider(impl) }, appKey: KEY, cadence: 'semi_monthly', timeZone: 'UTC', now: () => now, today: () => '2026-09-08' });
+		await runSync(db, a, 'manual', 'full', depsAt('2026-09-06T03:00:00.000Z', async () => fixedBatch()));
+		await runSync(db, b, 'manual', 'full', depsAt('2026-09-07T03:00:00.000Z', async () => fixedBatch()));
+		await runSync(db, a, 'cron', 'full', depsAt('2026-09-08T03:00:00.000Z', async () => { throw new Error('boom'); }));
+		expect(lastSuccessfulRuns(db)).toEqual([
+			{ connectionId: a, finishedAt: '2026-09-06T03:00:00.000Z' },
+			{ connectionId: b, finishedAt: '2026-09-07T03:00:00.000Z' }
+		]);
+	});
+	it('is empty when no connection has an ok run', () => {
+		expect(lastSuccessfulRuns(db)).toEqual([]);
 	});
 });

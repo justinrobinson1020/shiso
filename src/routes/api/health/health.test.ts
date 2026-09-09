@@ -33,6 +33,6 @@ describe('GET /api/health', () => {
 		const body = await res.json();
 		expect(body.ok).toBe(true);
 		expect(body.currentPeriod).toBeTruthy();
-		expect(body.lastSync).toBeNull();
+		expect(body.lastSync).toEqual([]);
 	});
 });

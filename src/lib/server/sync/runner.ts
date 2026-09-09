@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db';
 import { syncRuns, type Provider } from '../db/schema';
 import type { Cadence } from '../budget/periods';
@@ -119,8 +119,13 @@ export function runMaintenance(db: Db, deps: SyncDeps) {
 	return { occurrences, processed: post.processed };
 }
 
-export function lastSuccessfulRun(db: Db): { connectionId: number; finishedAt: string } | null {
-	const row = db.select({ connectionId: syncRuns.connectionId, finishedAt: syncRuns.finishedAt }).from(syncRuns)
-		.where(eq(syncRuns.status, 'ok')).orderBy(desc(syncRuns.finishedAt), desc(syncRuns.id)).get();
-	return row && row.finishedAt ? { connectionId: row.connectionId, finishedAt: row.finishedAt } : null;
+/** Each connection's most recent successful (`status = 'ok'`) run, one row per connection, ordered by connectionId (§3.2). */
+export function lastSuccessfulRuns(db: Db): { connectionId: number; finishedAt: string }[] {
+	return db
+		.select({ connectionId: syncRuns.connectionId, finishedAt: sql<string>`max(${syncRuns.finishedAt})` })
+		.from(syncRuns)
+		.where(eq(syncRuns.status, 'ok'))
+		.groupBy(syncRuns.connectionId)
+		.orderBy(asc(syncRuns.connectionId))
+		.all();
 }
