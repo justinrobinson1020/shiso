@@ -8,6 +8,7 @@
 	import type { CategoryTree } from '$lib/server/read/categories';
 	let { kind, def, tree, accounts, cadences, onsave, onclose }: { kind: 'bill' | 'income'; def: Def; tree: CategoryTree; accounts: { id: number; name: string; type: string; isDebt: boolean }[]; cadences: readonly string[]; onsave: (body: Record<string, unknown>) => Promise<void>; onclose: () => void } = $props();
 	let f = $state({ ...def });
+	let error = $state('');
 	function body(): Record<string, unknown> {
 		const b: Record<string, unknown> = { name: f.name, categoryId: f.categoryId, expectedAmount: decimalToCents(f.expectedAmount), cadence: f.cadence, dueDay: f.dueDay, dueDay2: f.dueDay2, interval: f.interval, anchorDate: f.anchorDate, toleranceAbs: f.toleranceAbs ? decimalToCents(f.toleranceAbs) : 0, tolerancePct: f.tolerancePct, matchPattern: f.matchPattern || null };
 		if (kind === 'bill') { b.payFromAccountId = f.accountId; b.autopay = f.autopay; b.linkedDebtAccountId = f.linkedDebtAccountId; } else b.depositAccountId = f.accountId;
@@ -17,7 +18,13 @@
 	const cashAccounts = $derived(accounts.filter((a) => !a.isDebt)); const debtAccounts = $derived(accounts.filter((a) => a.isDebt));
 </script>
 <Dialog open={true} title={(f.id != null ? 'Edit ' : 'New ') + kind} {onclose}>
-	<form class="grid" onsubmit={(e) => { e.preventDefault(); onsave(body()); }}>
+	<form class="grid" onsubmit={(e) => {
+		e.preventDefault();
+		error = '';
+		let b: Record<string, unknown>;
+		try { b = body(); } catch (err) { error = (err as Error).message; return; }
+		onsave(b);
+	}}>
 		<label for="d-name">Name</label><input id="d-name" bind:value={f.name} required />
 		<label for="d-cat">Category</label><select id="d-cat" bind:value={f.categoryId} required><option value={null}>choose…</option>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select>
 		<label for="d-acct">{kind === 'bill' ? 'Paid from' : 'Deposited to'}</label><select id="d-acct" bind:value={f.accountId} required><option value={null}>choose…</option>{#each cashAccounts as a}<option value={a.id}>{a.name}</option>{/each}</select>
@@ -34,6 +41,7 @@
 			<label for="d-debt">Card / loan paid</label><select id="d-debt" bind:value={f.linkedDebtAccountId}><option value={null}>not a debt payment</option>{#each debtAccounts as a}<option value={a.id}>{a.name}</option>{/each}</select>
 		{/if}
 		{#if f.id != null}<label for="d-active">Active</label><input id="d-active" type="checkbox" bind:checked={f.active} />{/if}
+		{#if error}<p class="error" style="grid-column: 1 / -1">{error}</p>{/if}
 		<div class="actions" style="grid-column: 1 / -1"><button type="button" onclick={onclose}>Cancel</button><button class="primary" type="submit">Save</button></div>
 	</form>
 </Dialog>
