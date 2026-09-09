@@ -174,6 +174,8 @@ export function flagForReview(db: DbOrTx, id: number, reason: string): void {
 }
 
 export function clearReview(db: DbOrTx, id: number): void {
+	const row = db.select({ id: transactions.id }).from(transactions).where(eq(transactions.id, id)).get();
+	if (!row) throw new Error(`transaction ${id} not found`);
 	db.update(transactions).set({ needsReview: false, reviewReason: null, ...touch() }).where(eq(transactions.id, id)).run();
 }
 

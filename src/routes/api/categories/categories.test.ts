@@ -5,8 +5,9 @@ import { join } from 'node:path';
 import { startup, resetForTests } from '$lib/server/startup';
 import { setConfig } from '$lib/server/config';
 import { getDb } from '$lib/server/db/instance';
-import { categories } from '$lib/server/db/schema';
+import { categories, categoryGroups } from '$lib/server/db/schema';
 import { createConnection, upsertAccount } from '$lib/server/sync/connections';
+import { systemCategoryId } from '$lib/server/ledger/categories';
 import { POST as createGroupRoute } from '../category-groups/+server';
 import { POST as createRoute } from './+server';
 import { POST as patchRoute } from './[id]/+server';
@@ -43,5 +44,20 @@ describe('category routes', () => {
 		const dup = await createRoute({ request: req({ groupId: g.id, name: 'C again', kind: 'debt_payment', accountId: card }) } as never);
 		expect(dup.status).toBe(409); expect((await dup.json()).code).toBe('DEBT_CATEGORY_DUPLICATE');
 		expect(db.select().from(categories).where(eq(categories.accountId, card)).all()).toHaveLength(1);
+	});
+	it("rejects changing a system category's kind (409), leaving it unchanged", async () => {
+		const db = getDb();
+		const id = systemCategoryId(db, 'income');
+		const before = db.select().from(categories).where(eq(categories.id, id)).get()!;
+		const res = await patchRoute({ request: req({ kind: 'spending' }), params: { id: String(id) } } as never);
+		expect(res.status).toBe(409); expect((await res.json()).code).toBe('SYSTEM_CATEGORY_KIND');
+		expect(db.select().from(categories).where(eq(categories.id, id)).get()!.kind).toBe(before.kind);
+	});
+	it('rejects a blank category-group name (400), writing nothing', async () => {
+		const db = getDb();
+		const before = db.select().from(categoryGroups).all().length;
+		const res = await createGroupRoute({ request: req({ name: '   ' }) } as never);
+		expect(res.status).toBe(400);
+		expect(db.select().from(categoryGroups).all()).toHaveLength(before);
 	});
 });

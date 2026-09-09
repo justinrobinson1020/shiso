@@ -64,6 +64,32 @@ describe('transaction routes', () => {
 		const d = await del({ request: req({}), params: { id: String(s) } } as never);
 		expect(d.status).toBe(409); expect(getTransaction(db, s).deletedAt).toBeNull();
 	});
+	it('rejects a non-integer amount (400) and a postedDate outside any ensured period (400), writing nothing', async () => {
+		const db = getDb(); const { chk } = accountsFor(db);
+		const before = db.select().from(transactions).all().length;
+		const badAmount = await create({ request: req({ accountId: chk, postedDate: '2026-09-03', amount: 12.5, payee: 'Shop' }) } as never);
+		expect(badAmount.status).toBe(400);
+		const badDate = await create({ request: req({ accountId: chk, postedDate: '2020-01-01', amount: -1000, payee: 'Shop' }) } as never);
+		expect(badDate.status).toBe(400);
+		expect(db.select().from(transactions).all()).toHaveLength(before);
+	});
+	it('rejects linking two transactions whose amounts are not opposite (409), leaving them unlinked', async () => {
+		const db = getDb(); const { chk, card } = accountsFor(db);
+		const a = createTransaction(db, { accountId: chk, externalId: 'la', postedDate: '2026-09-04', amount: -5000, payeeRaw: 'PAY', source: 'sync' });
+		const b = createTransaction(db, { accountId: card, externalId: 'lb', postedDate: '2026-09-04', amount: 4000, payeeRaw: 'PAY', source: 'sync' });
+		const res = await link({ request: req({ peerId: b }), params: { id: String(a) } } as never);
+		expect(res.status).toBe(409); expect((await res.json()).code).toBe('TRANSFER_NOT_OPPOSITE');
+		expect(getTransaction(db, a).transferPeerId).toBeNull();
+		expect(getTransaction(db, b).transferPeerId).toBeNull();
+	});
+	it('rejects unlinking with a non-integer id (400)', async () => {
+		const res = await unlink({ request: req({}), params: { id: 'not-a-number' } } as never);
+		expect(res.status).toBe(400);
+	});
+	it('rejects clearing review on an unknown transaction (404)', async () => {
+		const res = await review({ request: req({}), params: { id: '999999' } } as never);
+		expect(res.status).toBe(404);
+	});
 	it('creates a payee rule and applies it to existing rows', async () => {
 		const db = getDb(); const { chk } = accountsFor(db);
 		const t = createTransaction(db, { accountId: chk, externalId: 'r', postedDate: '2026-09-04', amount: -700, payeeRaw: 'SQ *BLUE BOTTLE 42', source: 'sync' });

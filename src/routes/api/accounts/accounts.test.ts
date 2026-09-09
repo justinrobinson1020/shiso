@@ -84,4 +84,34 @@ describe('account and connection routes', () => {
 		expect(row.isDebt).toBe(true);
 		expect((await patchAccount({ request: req({ type: 'boat' }), params: { id: String(id) } } as never)).status).toBe(400);
 	});
+	it('rejects a connection with an invalid account type (400), writing no connection or account', async () => {
+		const db = getDb();
+		const beforeConns = db.select().from(connections).all().length;
+		const beforeAccts = db.select().from(accounts).all().length;
+		const res = await createConn({ request: req({ institutionName: 'Bad', accounts: [{ name: 'X', type: 'boat' }] }) } as never);
+		expect(res.status).toBe(400);
+		expect(db.select().from(connections).all()).toHaveLength(beforeConns);
+		expect(db.select().from(accounts).all()).toHaveLength(beforeAccts);
+	});
+	it('rejects a bad connection status (400) and an unknown connection id (404)', async () => {
+		const { connectionId } = await (await createConn({ request: req({ institutionName: 'Apple', accounts: [{ name: 'Apple Card', type: 'credit' }] }) } as never)).json();
+		expect((await connStatus({ request: req({ status: 'paused' }), params: { id: String(connectionId) } } as never)).status).toBe(400);
+		expect((await connStatus({ request: req({ status: 'active' }), params: { id: '999999' } } as never)).status).toBe(404);
+	});
+	it('rejects a non-integer balance current (400), writing nothing', async () => {
+		const db = getDb();
+		const { accountIds } = await (await createConn({ request: req({ institutionName: 'Apple', accounts: [{ name: 'Apple Card', type: 'credit' }] }) } as never)).json();
+		const before = db.select().from(accountBalances).all().length;
+		const res = await balance({ request: req({ current: '123.45', asOf: '2026-09-08' }), params: { id: String(accountIds[0]) } } as never);
+		expect(res.status).toBe(400);
+		expect(db.select().from(accountBalances).all()).toHaveLength(before);
+	});
+	it('rejects a bad terms asOf (400), writing nothing', async () => {
+		const db = getDb();
+		const { accountIds } = await (await createConn({ request: req({ institutionName: 'Apple', accounts: [{ name: 'Apple Card', type: 'credit' }] }) } as never)).json();
+		const before = db.select().from(accountTerms).all().length;
+		const res = await terms({ request: req({ asOf: 'not-a-date', aprBps: 100 }), params: { id: String(accountIds[0]) } } as never);
+		expect(res.status).toBe(400);
+		expect(db.select().from(accountTerms).all()).toHaveLength(before);
+	});
 });
