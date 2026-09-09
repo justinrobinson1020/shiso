@@ -303,4 +303,23 @@ describe('applyBatch modified, removed, terms', () => {
 		expect(applyBatch(db, conn, batch({ terms }), opts).termsWritten).toBe(0);
 		expect(db.select().from(accountTerms).all().length).toBe(1);
 	});
+	it('accepts a liability-only account (present via liabilitiesGet.accounts, absent from the transaction pages)', () => {
+		const b = batch({
+			accounts: [
+				{ externalId: 'chk', name: 'Checking', type: 'checking' },
+				{ externalId: 'loan1', name: 'Student Loan', type: 'loan' }
+			],
+			balances: [
+				{ accountExternalId: 'chk', asOf: TODAY, current: 100000 },
+				{ accountExternalId: 'loan1', asOf: TODAY, current: -1500000 }
+			],
+			terms: [{ accountExternalId: 'loan1', asOf: TODAY, aprBps: 550, minPayment: 20000, nextDueDate: '2026-10-01' }]
+		});
+		let r;
+		expect(() => { r = applyBatch(db, conn, b, opts); }).not.toThrow();
+		expect(r!.termsWritten).toBe(1);
+		expect(acct('loan1').type).toBe('loan');
+		const rows = db.select().from(accountTerms).where(eq(accountTerms.accountId, acct('loan1').id)).all();
+		expect(rows.length).toBe(1);
+	});
 });

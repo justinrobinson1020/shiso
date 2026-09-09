@@ -20,7 +20,7 @@ function fakeClient(pages: (Page | Error)[], liabilities: LiabilitiesData['liabi
 			if (p instanceof Error) throw p;
 			return { data: { added: [], modified: [], removed: [], accounts: [], ...p } as never };
 		},
-		async liabilitiesGet() { return { data: { liabilities } }; },
+		async liabilitiesGet() { return { data: { accounts: [], liabilities } }; },
 		async accountsBalanceGet() { return { data: { accounts: [account('a1', 'depository', 'checking', 123.45)] } as never }; },
 		async linkTokenCreate(req) { syncCalls.push({ link: req }); return { data: { link_token: 'link-1' } as never }; },
 		async itemPublicTokenExchange(req) { syncCalls.push({ exchange: req }); return { data: { access_token: 'access-9', item_id: 'item-9' } as never }; }
@@ -82,6 +82,34 @@ describe('PlaidProvider.fetch', () => {
 			{ accountExternalId: 'c1', asOf: '2026-09-08', aprBps: 2749, promoAprBps: 0, minPayment: 3560, nextDueDate: '2026-09-26', lastStatementBalance: 1177095, lastStatementDate: '2026-09-01', annualFee: null },
 			{ accountExternalId: 'l1', asOf: '2026-09-08', aprBps: 1525, promoAprBps: null, minPayment: 87829, nextDueDate: '2026-09-21', lastStatementBalance: 1298971, lastStatementDate: '2026-09-03', annualFee: null }
 		]);
+	});
+	it('merges liabilitiesGet accounts (loan accounts absent from the transaction pages) into batch.accounts and batch.balances', async () => {
+		const client = fakeClient(
+			[{ accounts: [account('a1', 'depository', 'checking', 1000)], next_cursor: 'c', has_more: false }],
+			{ credit: [], student: [{ account_id: 'l1', interest_rate_percentage: 5.5, minimum_payment_amount: 200, next_payment_due_date: '2026-10-01', last_statement_balance: 15000, last_statement_issue_date: '2026-09-01' }], mortgage: [] }
+		);
+		client.liabilitiesGet = async () => ({
+			data: {
+				accounts: [account('a1', 'depository', 'checking', 1000), account('l1', 'loan', 'student', 15000)],
+				liabilities: { credit: [], student: [{ account_id: 'l1', interest_rate_percentage: 5.5, minimum_payment_amount: 200, next_payment_due_date: '2026-10-01', last_statement_balance: 15000, last_statement_issue_date: '2026-09-01' }], mortgage: [] }
+			} as never
+		});
+		const b = await new PlaidProvider(client).fetch({ credential: 'access', cursor: null, mode: 'full', todayIso: '2026-09-08' });
+		expect(b.accounts).toEqual([
+			{ externalId: 'a1', name: 'a1 name', officialName: null, mask: '1234', type: 'checking' },
+			{ externalId: 'l1', name: 'l1 name', officialName: null, mask: '1234', type: 'loan' }
+		]);
+		expect(b.balances).toContainEqual({ accountExternalId: 'l1', asOf: '2026-09-08', current: -1500000, available: null, creditLimit: null });
+		expect(b.terms).toEqual([
+			{ accountExternalId: 'l1', asOf: '2026-09-08', aprBps: 550, promoAprBps: null, minPayment: 20000, nextDueDate: '2026-10-01', lastStatementBalance: 1500000, lastStatementDate: '2026-09-01', annualFee: null }
+		]);
+	});
+	it('keeps only the page accounts when liabilitiesGet fails with a skippable error', async () => {
+		const client = fakeClient([{ accounts: [account('a1', 'depository', 'checking', 1000)], next_cursor: 'c', has_more: false }]);
+		client.liabilitiesGet = async () => { throw plaidErr('NO_LIABILITY_ACCOUNTS'); };
+		const b = await new PlaidProvider(client).fetch({ credential: 'access', cursor: null, mode: 'full', todayIso: '2026-09-08' });
+		expect(b.accounts).toEqual([{ externalId: 'a1', name: 'a1 name', officialName: null, mask: '1234', type: 'checking' }]);
+		expect(b.terms).toEqual([]);
 	});
 	it('skips a liability with no account_id and a credit card with no aprs array', async () => {
 		const client = fakeClient(

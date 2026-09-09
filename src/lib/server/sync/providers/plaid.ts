@@ -18,7 +18,7 @@ type Apr = { apr_type: string; apr_percentage: number };
 type CreditLiability = { account_id: string | null; aprs?: Apr[] | null; minimum_payment_amount: number | null; next_payment_due_date: string | null; last_statement_balance: number | null; last_statement_issue_date: string | null };
 type StudentLiability = { account_id: string | null; interest_rate_percentage: number | null; minimum_payment_amount: number | null; next_payment_due_date: string | null; last_statement_balance?: number | null; last_statement_issue_date?: string | null };
 type MortgageLiability = { account_id: string; interest_rate: { percentage: number | null } | null; next_monthly_payment: number | null; next_payment_due_date: string | null };
-export type LiabilitiesData = { liabilities: { credit: CreditLiability[] | null; student: StudentLiability[] | null; mortgage: MortgageLiability[] | null } };
+export type LiabilitiesData = { accounts: PlaidAccount[]; liabilities: { credit: CreditLiability[] | null; student: StudentLiability[] | null; mortgage: MortgageLiability[] | null } };
 
 export type PlaidClientLike = {
 	transactionsSync(req: { access_token: string; cursor?: string | null; count?: number; options?: { include_personal_finance_category?: boolean } }): Promise<{ data: SyncData }>;
@@ -134,11 +134,18 @@ export class PlaidProvider implements SyncProvider {
 		}
 
 		let terms: BatchTerms[] = [];
-		try { terms = mapTerms((await this.client.liabilitiesGet({ access_token })).data.liabilities, input.todayIso); }
-		catch (err) { if (!SKIP_LIABILITY_CODES.includes(plaidErrorCode(err) ?? '')) throw toProviderError(err); }
+		let liabilityAccounts: PlaidAccount[] = [];
+		try {
+			const { accounts: la, liabilities } = (await this.client.liabilitiesGet({ access_token })).data;
+			liabilityAccounts = la;
+			terms = mapTerms(liabilities, input.todayIso);
+		} catch (err) { if (!SKIP_LIABILITY_CODES.includes(plaidErrorCode(err) ?? '')) throw toProviderError(err); }
 
 		const accountsById = new Map<string, PlaidAccount>();
 		for (const p of pages) for (const a of p.accounts ?? []) accountsById.set(a.account_id, a);
+		// /liabilities/get also returns accounts for loan-type accounts (student loans, mortgages) that
+		// never appear in a /transactions/sync page; merge them in without letting them override a page account.
+		for (const a of liabilityAccounts) if (!accountsById.has(a.account_id)) accountsById.set(a.account_id, a);
 		const accounts = [...accountsById.values()];
 		return {
 			accounts: accounts.map(mapAccount),
