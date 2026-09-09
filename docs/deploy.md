@@ -20,8 +20,13 @@ On the new container, install Node 24 via NodeSource:
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
-apt-get install -y nodejs
+apt-get install -y nodejs build-essential python3
 ```
+
+`build-essential` and `python3` are there for `better-sqlite3`: when no
+prebuilt binary matches the container's Node ABI, `npm ci` compiles the
+module with node-gyp, which needs `make`, a C++ toolchain, and Python.
+Without them the first `install.sh` run fails inside `npm ci`.
 
 ## 3. First release
 
