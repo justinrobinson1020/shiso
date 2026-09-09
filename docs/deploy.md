@@ -31,13 +31,14 @@ On the Mac, in the shiso repo:
 npm run release
 ```
 
-This produces `dist/shiso-<sha>.tar.gz`. Copy it to the container along with
-`deploy/install.sh` (both are needed to bootstrap — `install.sh` also ships
-inside the tarball's `deploy/` directory, so any later upgrade only needs
-the tarball):
+This produces `dist/shiso-<sha>.tar.gz` and a `dist/shiso-<sha>.tar.gz.sha256`
+checksum sidecar. Copy both to the container along with `deploy/install.sh`
+(all three are needed to bootstrap — `install.sh` also ships inside the
+tarball's `deploy/` directory, so any later upgrade only needs the tarball
+and its checksum file):
 
 ```bash
-scp dist/shiso-<sha>.tar.gz deploy/install.sh root@<CT-IP>:/root/
+scp dist/shiso-<sha>.tar.gz dist/shiso-<sha>.tar.gz.sha256 deploy/install.sh root@<CT-IP>:/root/
 ```
 
 On the container, as root:
@@ -46,10 +47,16 @@ On the container, as root:
 bash install.sh shiso-<sha>.tar.gz
 ```
 
-This creates the `shiso` system user, `/opt/shiso/{releases,data,backups}`,
-unpacks the release, runs `npm ci --omit=dev`, points `/opt/shiso/current`
-at the new release, installs the systemd unit and env file (first run
-only), and starts the service.
+`install.sh` refuses to run if the `.sha256` sidecar is missing or doesn't
+match the tarball — this catches a corrupted transfer or a tampered file
+before anything is extracted or executed. It then creates the `shiso`
+system user, `/opt/shiso/{releases,data,backups}`, unpacks the release,
+runs `npm ci --omit=dev` as the unprivileged `shiso` user (never as root —
+`npm ci` executes arbitrary lifecycle scripts from third-party packages),
+points `/opt/shiso/current` at the new release, syncs the systemd unit
+(always, so hardening changes to `deploy/shiso.service` aren't silently
+stuck at whatever was installed first) and the env file (only if missing,
+since it holds secrets), and starts the service.
 
 ## 4. Configure and restart
 

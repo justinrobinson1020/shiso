@@ -35,4 +35,8 @@ mkdir -p dist
 tarball="dist/shiso-${sha}.tar.gz"
 tar -czf "$tarball" build drizzle package.json package-lock.json deploy
 
+# install.sh verifies this checksum before extracting the tarball — scp it
+# alongside the tarball.
+shasum -a 256 "$tarball" | awk '{print $1}' > "${tarball}.sha256"
+
 echo "$tarball"

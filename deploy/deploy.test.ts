@@ -42,6 +42,31 @@ describe('deploy scripts', () => {
 			execFileSync('bash', ['-n', 'deploy/install.sh'], { cwd: repoRoot })
 		).not.toThrow();
 	});
+
+	it('scripts/release.sh emits a checksum sidecar for the tarball', () => {
+		const script = readDeployFile('scripts/release.sh');
+		expect(script).toMatch(/sha256/);
+	});
+
+	it('deploy/install.sh verifies the tarball checksum before extracting it', () => {
+		const script = readDeployFile('deploy/install.sh');
+		const checksumLine = script.indexOf('sha256sum');
+		const extractLine = script.indexOf('tar -xzf');
+		expect(checksumLine).toBeGreaterThan(-1);
+		expect(extractLine).toBeGreaterThan(-1);
+		expect(checksumLine).toBeLessThan(extractLine);
+	});
+
+	it('deploy/install.sh runs npm ci as the unprivileged shiso user, not root', () => {
+		const script = readDeployFile('deploy/install.sh');
+		expect(script).not.toMatch(/^\(cd .* npm ci/m);
+		expect(script).toMatch(/su -s \/bin\/bash shiso -c ".*npm ci/);
+	});
+
+	it('deploy/install.sh always syncs the systemd unit, not just on first install', () => {
+		const script = readDeployFile('deploy/install.sh');
+		expect(script).toMatch(/cmp -s .*shiso\.service/);
+	});
 });
 
 describe('deploy/shiso.env.example', () => {

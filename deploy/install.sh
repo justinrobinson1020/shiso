@@ -23,6 +23,19 @@ if [ "$(id -u)" -ne 0 ]; then
 	exit 1
 fi
 
+checksum_file="${tarball}.sha256"
+if [ ! -f "$checksum_file" ]; then
+	echo "checksum file not found: $checksum_file (scp it alongside the tarball — scripts/release.sh writes it)" >&2
+	exit 1
+fi
+expected_sha256="$(tr -d '[:space:]' < "$checksum_file")"
+actual_sha256="$(sha256sum "$tarball" | awk '{print $1}')"
+if [ "$expected_sha256" != "$actual_sha256" ]; then
+	echo "checksum mismatch for $tarball: expected $expected_sha256, got $actual_sha256" >&2
+	exit 1
+fi
+echo "==> checksum verified"
+
 sha="$(basename "$tarball" .tar.gz)"
 sha="${sha#shiso-}"
 
@@ -32,22 +45,28 @@ if ! id shiso >/dev/null 2>&1; then
 	useradd --system --no-create-home --shell /usr/sbin/nologin shiso
 fi
 
-mkdir -p /opt/shiso/releases /opt/shiso/data /opt/shiso/backups
-chown shiso:shiso /opt/shiso/data /opt/shiso/backups
+mkdir -p /opt/shiso/releases /opt/shiso/data /opt/shiso/backups /opt/shiso/home
+chown shiso:shiso /opt/shiso/data /opt/shiso/backups /opt/shiso/home
 
 release_dir="/opt/shiso/releases/${sha}"
 mkdir -p "$release_dir"
 tar -xzf "$tarball" -C "$release_dir"
-
-echo "==> installing production dependencies"
-(cd "$release_dir" && npm ci --omit=dev)
-
 chown -R shiso:shiso "$release_dir"
+
+# Run as the unprivileged shiso user, not root: npm ci executes arbitrary
+# lifecycle scripts from third-party packages (e.g. better-sqlite3's native
+# build step), and those should never run with root privileges.
+echo "==> installing production dependencies (as shiso)"
+su -s /bin/bash shiso -c "cd '$release_dir' && HOME=/opt/shiso/home npm ci --omit=dev"
 
 ln -sfn "$release_dir" /opt/shiso/current
 
-if [ ! -f /etc/systemd/system/shiso.service ]; then
-	echo "==> installing systemd unit"
+# Always sync the unit from the release, not just on first install — an
+# unmanaged /etc/systemd/system/shiso.service silently drifts from the
+# source-controlled hardening directives (ProtectSystem, NoNewPrivileges,
+# etc.) as they're tightened over time.
+if [ ! -f /etc/systemd/system/shiso.service ] || ! cmp -s "$release_dir/deploy/shiso.service" /etc/systemd/system/shiso.service; then
+	echo "==> installing/updating systemd unit"
 	cp "$release_dir/deploy/shiso.service" /etc/systemd/system/shiso.service
 fi
 
