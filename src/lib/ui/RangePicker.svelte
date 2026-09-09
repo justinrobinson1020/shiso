@@ -1,14 +1,15 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { addDays } from '$lib/dates';
-	let { range, compare }: { range: { kind: string; start: string; end: string; label: string; prevLabel: string }; compare: boolean } = $props();
+	import { stepBack, stepForward } from './rangeStep';
+	let { range, compare }: { range: { kind: string; start: string; end: string; label: string; prevStart: string; prevEnd: string; prevLabel: string }; compare: boolean } = $props();
 	function nav(changes: Record<string, string | null>) {
 		const u = new URL(page.url); for (const [k, v] of Object.entries(changes)) { if (v) u.searchParams.set(k, v); else u.searchParams.delete(k); } goto(u.pathname + u.search);
 	}
-	// Step by the range's own length: anchor moves to the day after `end` (forward) or the day before `start` (back).
-	const forward = () => nav({ anchor: addDays(range.end, 1), end: range.kind === 'custom' ? addDays(range.end, 1 + (Date.parse(range.end) - Date.parse(range.start)) / 86400000) : null });
-	const back = () => { const len = (Date.parse(range.end) - Date.parse(range.start)) / 86400000; nav({ anchor: addDays(range.start, -(len + 1)), end: range.kind === 'custom' ? addDays(range.start, -1) : null }); };
+	// forward steps to the day after `end`; back steps to the resolver's own previous range (`prevStart`/`prevEnd`),
+	// since ranges (months, quarters, semi-monthly periods) vary in length and a day-count step can skip one.
+	const forward = () => nav(stepForward(range));
+	const back = () => nav(stepBack(range));
 </script>
 <div class="toolbar">
 	<select value={range.kind} onchange={(e) => nav({ kind: (e.target as HTMLSelectElement).value, anchor: range.start, end: (e.target as HTMLSelectElement).value === 'custom' ? range.end : null })}>
