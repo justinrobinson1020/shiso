@@ -1,3 +1,4 @@
+import { and, desc, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { transactions } from '../db/schema';
 import { getTransaction, markProcessed, setSplits, unprocessedWhere } from '../ledger/transactions';
@@ -30,6 +31,45 @@ export function resolveProviderCategory(map: Record<string, number>, providerCat
 		if (providerCategory.startsWith(`${key}_`) && (bestKey == null || key.length > bestKey.length)) bestKey = key;
 	}
 	return bestKey == null ? undefined : map[bestKey];
+}
+
+/** Distinct `provider_category` values seen on live rows, most common first. */
+export function providerCategoryUsage(db: DbOrTx): { key: string; count: number }[] {
+	const rows = db
+		.select({ key: transactions.providerCategory, n: sql<number>`count(*)` })
+		.from(transactions)
+		.where(and(isNull(transactions.deletedAt), isNotNull(transactions.providerCategory)))
+		.groupBy(transactions.providerCategory)
+		.orderBy(desc(sql`count(*)`))
+		.all();
+	return rows.map((r) => ({ key: r.key as string, count: r.n }));
+}
+
+/**
+ * Re-run the provider category map over every live, non-transfer row that is still a single
+ * Uncategorized split — not just rows awaiting postprocessing — so editing the map after the
+ * fact can recategorize transactions synced before the mapping existed.
+ */
+export function applyProviderCategoryMap(db: DbOrTx): { categorized: number } {
+	const map = getProviderCategoryMap(db);
+	const uncategorized = uncategorizedId(db);
+	const candidates = db
+		.select({ id: transactions.id, providerCategory: transactions.providerCategory })
+		.from(transactions)
+		.where(and(isNull(transactions.deletedAt), isNull(transactions.transferPeerId)))
+		.all();
+	return db.transaction((tx) => {
+		let categorized = 0;
+		for (const row of candidates) {
+			const target = resolveProviderCategory(map, row.providerCategory);
+			if (target == null) continue;
+			const t = getTransaction(tx, row.id);
+			if (t.splits.length !== 1 || t.splits[0].categoryId !== uncategorized) continue;
+			setSplits(tx, row.id, [{ categoryId: target, amount: t.amount }]);
+			categorized++;
+		}
+		return { categorized };
+	});
 }
 
 /** Spec §5.6, over every row with processed_at IS NULL regardless of which run inserted it (§5.1). */

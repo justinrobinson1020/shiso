@@ -3,11 +3,12 @@ import { openMemoryDatabase, type Db } from '../db';
 import { accounts, connections } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, uncategorizedId, systemCategoryId } from '../ledger/categories';
 import { ensurePeriods } from '../budget/periods';
-import { createTransaction, getTransaction } from '../ledger/transactions';
+import { createTransaction, getTransaction, linkTransfer } from '../ledger/transactions';
 import { createPayeeRule } from './payees';
 import { createBill } from '../bills/bills';
 import { generateOccurrences } from '../bills/schedule';
-import { processUnprocessed, resolveProviderCategory, setProviderCategoryMap } from './postprocess';
+import { applyProviderCategoryMap, processUnprocessed, resolveProviderCategory, setProviderCategoryMap } from './postprocess';
+import { fixture } from '../test/fixture';
 
 let db: Db; let chk: number; let card: number; let groceries: number; let dining: number; let rentCat: number;
 const TODAY = '2026-09-08';
@@ -70,5 +71,33 @@ describe('resolveProviderCategory', () => {
 	});
 	it('returns undefined for a null provider category', () => {
 		expect(resolveProviderCategory({ FOOD_AND_DRINK: 3 }, null)).toBeUndefined();
+	});
+});
+
+describe('applyProviderCategoryMap', () => {
+	it('categorizes uncategorized rows via the map, leaving categorized and transfer rows alone', () => {
+		const f = fixture();
+		setProviderCategoryMap(f.db, { FOOD_AND_DRINK_GROCERIES: f.groceries, TRAVEL: f.rent });
+		const exact = createTransaction(f.db, { accountId: f.checking, externalId: 'exact', postedDate: f.today, amount: -1000, payeeRaw: 'Store', providerCategory: 'FOOD_AND_DRINK_GROCERIES', source: 'sync' });
+		const viaPrimary = createTransaction(f.db, { accountId: f.checking, externalId: 'primary', postedDate: f.today, amount: -1200, payeeRaw: 'Airline', providerCategory: 'TRAVEL_FLIGHTS', source: 'sync' });
+		const unmapped = createTransaction(f.db, { accountId: f.checking, externalId: 'none', postedDate: f.today, amount: -500, payeeRaw: 'Mystery', providerCategory: 'UNKNOWN', source: 'sync' });
+		const already = createTransaction(f.db, {
+			accountId: f.checking, externalId: 'already', postedDate: f.today, amount: -300, payeeRaw: 'Already', providerCategory: 'FOOD_AND_DRINK_GROCERIES', source: 'sync',
+			splits: [{ categoryId: f.groceries, amount: -300 }]
+		});
+		const t1 = createTransaction(f.db, { accountId: f.checking, externalId: 't1', postedDate: f.today, amount: -700, payeeRaw: 'Transfer out', providerCategory: 'TRAVEL', source: 'sync' });
+		const t2 = createTransaction(f.db, { accountId: f.savings, externalId: 't2', postedDate: f.today, amount: 700, payeeRaw: 'Transfer in', providerCategory: 'TRAVEL', source: 'sync' });
+		linkTransfer(f.db, t1, t2);
+
+		const result = applyProviderCategoryMap(f.db);
+
+		expect(result.categorized).toBe(2);
+		expect(getTransaction(f.db, exact).splits[0].categoryId).toBe(f.groceries);
+		expect(getTransaction(f.db, viaPrimary).splits[0].categoryId).toBe(f.rent);
+		expect(getTransaction(f.db, unmapped).splits[0].categoryId).toBe(f.uncategorized);
+		expect(getTransaction(f.db, already).splits[0].categoryId).toBe(f.groceries);
+		const transferCat = systemCategoryId(f.db, 'transfer');
+		expect(getTransaction(f.db, t1).splits[0].categoryId).toBe(transferCat);
+		expect(getTransaction(f.db, t2).splits[0].categoryId).toBe(transferCat);
 	});
 });
