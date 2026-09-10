@@ -85,10 +85,13 @@ listen on all interfaces to be reachable over the network. The services
 VLAN (`10.10.50.x`) is the trust boundary here, not the loopback interface;
 nothing on that VLAN should be untrusted.
 
-On CT 101 (Pi-hole), add to `custom.list`:
+On CT 101 (Pi-hole), add to `custom.list`. The record points at **Caddy**
+(CT 130), not at the shiso container: every `*.home.local` name on this
+network resolves to the reverse proxy, which terminates TLS and forwards to
+the container by the address in the vhost.
 
 ```
-10.10.50.<ip> shiso.home.local
+10.10.50.130 shiso.home.local
 ```
 
 ## 6. Verify
