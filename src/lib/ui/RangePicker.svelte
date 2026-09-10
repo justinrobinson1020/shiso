@@ -11,7 +11,7 @@
 	const forward = () => nav(stepForward(range));
 	const back = () => nav(stepBack(range));
 </script>
-<div class="toolbar">
+<div class="toolbar range-toolbar">
 	<select value={range.kind} onchange={(e) => nav({ kind: (e.target as HTMLSelectElement).value, anchor: range.start, end: (e.target as HTMLSelectElement).value === 'custom' ? range.end : null })}>
 		{#each ['period', 'month', 'quarter', 'year', 'custom'] as k}<option value={k}>{k}</option>{/each}
 	</select>

@@ -66,3 +66,22 @@ dialog .grid { display: grid; grid-template-columns: max-content 1fr; gap: .5rem
 	.hide-sm { display: none; }
 	.only-sm { display: block; }
 }
+
+@media (max-width: 720px) {
+	button.small { min-height: 36px; padding: 0 8px; }
+
+	dialog .grid input, dialog .grid select, dialog .grid textarea { width: 100%; }
+
+	table.stack-sm, table.stack-sm thead, table.stack-sm tbody, table.stack-sm tr, table.stack-sm th, table.stack-sm td { display: block; width: 100%; white-space: normal; }
+	table.stack-sm thead { display: none; }
+	table.stack-sm tr { border-bottom: 1px solid var(--line); padding: .5rem 0; margin-bottom: .5rem; }
+	table.stack-sm td { border-bottom: none; padding: .2rem 0; }
+	table.stack-sm input, table.stack-sm select { width: 100%; }
+
+	.toolbar.range-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
+	.toolbar.range-toolbar > * { width: auto; }
+
+	.toolbar.month-nav { flex-direction: row; flex-wrap: nowrap; align-items: center; }
+	.toolbar.month-nav > * { width: auto; }
+	.toolbar.month-nav h1 { flex: 1; text-align: center; }
+}

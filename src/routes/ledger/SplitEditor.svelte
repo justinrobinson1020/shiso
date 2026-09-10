@@ -11,7 +11,7 @@
 	const remaining = $derived(row.amount - sum);
 </script>
 <Dialog open={true} title="Split transaction" {onclose}>
-	<table><thead><tr><th>Category</th><th class="num">Amount</th><th>Memo</th><th></th></tr></thead><tbody>
+	<table class="stack-sm"><thead><tr><th>Category</th><th class="num">Amount</th><th>Memo</th><th></th></tr></thead><tbody>
 	{#each lines as l, i}
 		<tr><td><select bind:value={l.categoryId}>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories.filter((c) => !c.hidden || c.id === l.categoryId) as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select></td>
 		<td><input class="num" bind:value={l.amount} /></td><td><input bind:value={l.memo} /></td>
