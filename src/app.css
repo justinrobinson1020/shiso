@@ -85,7 +85,10 @@ dialog .grid { display: grid; grid-template-columns: max-content 1fr; gap: .5rem
 }
 
 @media (max-width: 720px) {
-	button.small { min-height: 36px; padding: 0 8px; }
+	button.small { min-height: 44px; padding: 0 .75rem; }
+	td.row-actions { white-space: normal; }
+	td.row-actions button, td.row-actions label { display: block; width: 100%; margin: 0 0 .35rem; text-align: center; }
+	td.row-actions label { padding: .6rem 0; }
 
 	dialog .grid input, dialog .grid select, dialog .grid textarea { width: 100%; }
 
