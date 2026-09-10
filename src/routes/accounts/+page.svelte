@@ -60,7 +60,7 @@
 			{#if c.status === 'disabled'}<button disabled={busy != null} onclick={() => run('en', () => post(`/api/connections/${c.id}/status`, { status: 'active' }))}>Enable</button>{:else if c.provider !== 'manual'}<button disabled={busy != null} onclick={() => run('dis', () => post(`/api/connections/${c.id}/status`, { status: 'disabled' }))}>Disable</button>{/if}
 		</div>
 		{#if c.lastError}<p class="error small">{c.lastError}</p>{/if}
-		<table>
+		<table class="stack-sm">
 			<thead><tr><th>Account</th><th class="hide-sm">Type</th><th class="num">Balance</th><th class="num hide-sm">Ledger</th><th class="num">Drift</th><th class="hide-sm">Terms</th><th></th></tr></thead>
 			<tbody>
 			{#each c.accounts as a (a.id)}

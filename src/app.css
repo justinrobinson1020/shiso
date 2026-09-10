@@ -41,12 +41,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tr.group td { font-weight: 600; padding-top: 1.1rem; border-bottom-color: var(--muted); }
 table.history { margin: .25rem 0 .75rem 1rem; width: calc(100% - 1rem); font-size: var(--text-secondary); }
 td.expanded { padding: 0 .6rem .25rem; }
+td.row-actions { white-space: nowrap; }
 .money { font-variant-numeric: tabular-nums; } .money.neg { color: var(--neg); } .money.pos { color: var(--pos); }
 .status { font-size: var(--text-caption); padding: .1rem .45rem; border-radius: 1em; border: 1px solid var(--line); }
 .status.paid { color: var(--pos); } .status.overdue, .status.error, .status.needs_relink { color: var(--neg); } .status.pending { color: var(--warn); }
 .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .5rem 0 1rem; }
 input, select, button, textarea { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: .4rem; padding: .35rem .5rem; }
-input.inline { border-color: transparent; background: transparent; width: 100%; } input.inline:focus { border-color: var(--line); background: var(--card); }
+input.inline { border-color: transparent; background: transparent; width: 100%; padding-left: 0; padding-right: 0; } input.inline:focus { border-color: var(--line); background: var(--card); }
 input.num { text-align: right; width: 7em; font-variant-numeric: tabular-nums; }
 button.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; } button.danger { color: var(--neg); }
 button { cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out; }
@@ -105,6 +106,9 @@ input.w5 { width: 5em; } input.w4 { width: 4em; }
 @media (max-width: 720px) {
 	button.small { min-height: 44px; padding: 0 .75rem; }
 	td.row-actions { white-space: normal; }
+	input.inline.only-sm { min-height: 32px; }
+	.connection > .toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
+	.connection > .toolbar > * { width: auto; }
 	td.row-actions button, td.row-actions label { display: block; width: 100%; margin: 0 0 .35rem; text-align: center; }
 	td.row-actions label { padding: .6rem 0; }
 
@@ -115,6 +119,9 @@ input.w5 { width: 5em; } input.w4 { width: 4em; }
 	table.stack-sm tr { border-bottom: 1px solid var(--line); padding: .5rem 0; margin-bottom: .5rem; }
 	table.stack-sm td { border-bottom: none; padding: .2rem 0; }
 	table.stack-sm input, table.stack-sm select { width: 100%; }
+	table.stack-sm td.num { text-align: left; }
+	table.stack-sm td.hide-sm { display: none; }
+	table.stack-sm td:empty { display: none; }
 
 	.toolbar.range-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
 	.toolbar.range-toolbar > * { width: auto; }
