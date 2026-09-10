@@ -60,7 +60,8 @@
 			<td class="hide-sm">{row.accountName}</td>
 			<td><input class="inline" value={row.payee} title={row.payeeRaw} onchange={(e) => renamePayee(row, (e.target as HTMLInputElement).value)} />
 				<div class="only-sm"><Money cents={row.amount} /></div>
-				<div class="small muted only-sm">{row.accountName} · {periodLabel(row.periodId)}{#if row.memo} · {row.memo}{/if}</div></td>
+				<div class="small muted only-sm">{row.accountName} · {periodLabel(row.periodId)}</div>
+				<input class="inline only-sm" placeholder="Memo" value={row.memo ?? ''} onchange={(e) => patch(row.id, { memo: (e.target as HTMLInputElement).value || null })} /></td>
 			<td>{#if row.transferPeerId != null}<span class="muted">Transfer · {row.transferPeerAccountName}</span> <button class="small" onclick={() => run(() => post(`/api/transactions/${row.id}/unlink`))}>unlink</button>
 				{:else if row.splits.length === 1}<select value={row.splits[0].categoryId} onchange={(e) => patch(row.id, { splits: [{ categoryId: Number((e.target as HTMLSelectElement).value), amount: row.amount }] })}>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories.filter((c) => !c.hidden || c.id === row.splits[0].categoryId) as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select> <button class="small" onclick={() => (splitting = row)}>split</button>
 				{:else}<button class="small" onclick={() => (splitting = row)}>{row.splits.length} splits: {row.splits.map((s) => s.categoryName).join(', ')}</button>{/if}</td>
