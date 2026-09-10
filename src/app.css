@@ -32,11 +32,13 @@ h1 { font-size: 1.4rem; margin: .5rem 0 1rem; } h2 { font-size: 1.1rem; margin: 
 .facts dt { color: var(--muted); font-size: .8rem; }
 .facts dd { margin: 0; font-size: 1.1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .facts dd .small { font-weight: 400; }
-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: .6rem; overflow: hidden; }
+table { width: 100%; border-collapse: collapse; }
 th, td { padding: .45rem .6rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
 th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-tr.group td { background: var(--bg); font-weight: 600; }
+tr.group td { font-weight: 600; padding-top: 1.1rem; border-bottom-color: var(--muted); }
+table.history { margin: .25rem 0 .75rem 1rem; width: calc(100% - 1rem); font-size: .9rem; }
+td.expanded { padding: 0 .6rem .25rem; }
 .money.neg { color: var(--neg); } .money.pos { color: var(--pos); }
 .status { font-size: .75rem; padding: .1rem .45rem; border-radius: 1em; border: 1px solid var(--line); }
 .status.paid { color: var(--pos); } .status.overdue, .status.error, .status.needs_relink { color: var(--neg); } .status.pending { color: var(--warn); }
@@ -52,7 +54,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 dialog .grid { display: grid; grid-template-columns: max-content 1fr; gap: .5rem .75rem; align-items: center; }
 .actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .75rem; }
 .strip { display: flex; gap: .75rem; flex-wrap: wrap; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--card); margin-bottom: 1rem; }
-.chart { width: 100%; height: auto; background: var(--card); border: 1px solid var(--line); border-radius: .6rem; }
+.chart { width: 100%; height: auto; }
 .legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; font-size: .85rem; margin-top: .5rem; } .legend i { display: inline-block; width: .8em; height: .8em; border-radius: .2em; margin-right: .3em; }
 
 .only-sm { display: none; }
