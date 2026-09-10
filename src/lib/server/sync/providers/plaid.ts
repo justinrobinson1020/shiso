@@ -67,7 +67,7 @@ function mapTransaction(t: PlaidTransaction): BatchTransaction {
 		accountExternalId: t.account_id, externalId: t.transaction_id, pendingExternalId: t.pending_transaction_id ?? null,
 		postedDate: t.date, transactedAt: t.authorized_datetime ?? (t.authorized_date ? `${t.authorized_date}T00:00:00Z` : null),
 		amount: -decimalToCents(t.amount), payeeRaw: t.merchant_name ?? t.name, pending: t.pending,
-		providerCategory: t.personal_finance_category?.primary ?? null
+		providerCategory: t.personal_finance_category?.detailed ?? t.personal_finance_category?.primary ?? null
 	};
 }
 function mapTerms(l: LiabilitiesData['liabilities'], asOf: string): BatchTerms[] {

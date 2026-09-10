@@ -7,7 +7,7 @@ import { createTransaction, getTransaction } from '../ledger/transactions';
 import { createPayeeRule } from './payees';
 import { createBill } from '../bills/bills';
 import { generateOccurrences } from '../bills/schedule';
-import { processUnprocessed, setProviderCategoryMap } from './postprocess';
+import { processUnprocessed, resolveProviderCategory, setProviderCategoryMap } from './postprocess';
 
 let db: Db; let chk: number; let card: number; let groceries: number; let dining: number; let rentCat: number;
 const TODAY = '2026-09-08';
@@ -52,5 +52,23 @@ describe('processUnprocessed', () => {
 		expect(getTransaction(db, f).splits[0].categoryId).toBe(uncategorizedId(db));
 		for (const id of [a, b, c, d, e, f]) expect(getTransaction(db, id).processedAt).not.toBeNull();
 		expect(processUnprocessed(db, { todayIso: TODAY, graceDays: 3, transferWindowDays: 4 }).processed).toBe(0);
+	});
+});
+
+describe('resolveProviderCategory', () => {
+	it('matches an exact key', () => {
+		expect(resolveProviderCategory({ FOOD_AND_DRINK_GROCERIES: 5, FOOD_AND_DRINK: 3 }, 'FOOD_AND_DRINK_GROCERIES')).toBe(5);
+	});
+	it('falls back to a primary-category prefix when there is no exact entry', () => {
+		expect(resolveProviderCategory({ FOOD_AND_DRINK: 3 }, 'FOOD_AND_DRINK_GROCERIES')).toBe(3);
+	});
+	it('prefers the longest matching prefix', () => {
+		expect(resolveProviderCategory({ FOOD: 1, FOOD_AND_DRINK: 2 }, 'FOOD_AND_DRINK_GROCERIES')).toBe(2);
+	});
+	it('returns undefined when nothing matches', () => {
+		expect(resolveProviderCategory({ TRAVEL: 1 }, 'FOOD_AND_DRINK_GROCERIES')).toBeUndefined();
+	});
+	it('returns undefined for a null provider category', () => {
+		expect(resolveProviderCategory({ FOOD_AND_DRINK: 3 }, null)).toBeUndefined();
 	});
 });

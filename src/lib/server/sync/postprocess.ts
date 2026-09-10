@@ -16,6 +16,22 @@ export function setProviderCategoryMap(db: DbOrTx, map: Record<string, number>):
 	setSetting(db, PROVIDER_CATEGORY_MAP_KEY, map);
 }
 
+/**
+ * Match a Plaid `provider_category` (e.g. `FOOD_AND_DRINK_GROCERIES`) against the map: an exact
+ * key wins; otherwise the longest map key that is a prefix of the value up to a `_` boundary
+ * (so a mapping on the primary category, e.g. `FOOD_AND_DRINK`, still catches every detailed
+ * category under it once no more specific mapping exists).
+ */
+export function resolveProviderCategory(map: Record<string, number>, providerCategory: string | null): number | undefined {
+	if (providerCategory == null) return undefined;
+	if (Object.prototype.hasOwnProperty.call(map, providerCategory)) return map[providerCategory];
+	let bestKey: string | null = null;
+	for (const key of Object.keys(map)) {
+		if (providerCategory.startsWith(`${key}_`) && (bestKey == null || key.length > bestKey.length)) bestKey = key;
+	}
+	return bestKey == null ? undefined : map[bestKey];
+}
+
 /** Spec §5.6, over every row with processed_at IS NULL regardless of which run inserted it (§5.1). */
 export function processUnprocessed(db: DbOrTx, opts: { todayIso: string; graceDays: number; transferWindowDays: number }) {
 	const ids = db.select({ id: transactions.id }).from(transactions).where(unprocessedWhere).all().map((r) => r.id);
@@ -31,7 +47,7 @@ export function processUnprocessed(db: DbOrTx, opts: { todayIso: string; graceDa
 	for (const id of ids) {
 		const t = getTransaction(db, id);
 		if (t.deletedAt || t.transferPeerId != null || t.splits.length !== 1 || t.splits[0].categoryId !== uncategorized) continue;
-		const target = t.providerCategory ? map[t.providerCategory] : undefined;
+		const target = resolveProviderCategory(map, t.providerCategory);
 		if (target == null) continue;
 		setSplits(db, id, [{ categoryId: target, amount: t.amount }]);
 		mapped++;

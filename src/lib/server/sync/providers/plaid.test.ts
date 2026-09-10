@@ -6,7 +6,7 @@ type Page = { added?: unknown[]; modified?: unknown[]; removed?: unknown[]; next
 const account = (id: string, type: string, subtype: string, current: number, limit: number | null = null) =>
 	({ account_id: id, name: `${id} name`, official_name: null, mask: '1234', type, subtype, balances: { current, available: null, limit, iso_currency_code: 'USD' } });
 const txn = (id: string, acct: string, amount: number, date: string, extra: Record<string, unknown> = {}) =>
-	({ transaction_id: id, account_id: acct, amount, date, authorized_date: null, authorized_datetime: null, name: `TX ${id}`, merchant_name: null, pending: false, pending_transaction_id: null, personal_finance_category: { primary: 'GENERAL_MERCHANDISE', detailed: 'x' }, ...extra });
+	({ transaction_id: id, account_id: acct, amount, date, authorized_date: null, authorized_datetime: null, name: `TX ${id}`, merchant_name: null, pending: false, pending_transaction_id: null, personal_finance_category: { primary: 'GENERAL_MERCHANDISE', detailed: 'GENERAL_MERCHANDISE_OTHER' }, ...extra });
 const plaidErr = (code: string) => Object.assign(new Error(code), { response: { data: { error_code: code, error_type: 'X', error_message: code } } });
 
 function fakeClient(pages: (Page | Error)[], liabilities: LiabilitiesData['liabilities'] = { credit: [], student: [], mortgage: [] }): PlaidClientLike & { syncCalls: unknown[] } {
@@ -44,7 +44,7 @@ describe('PlaidProvider.fetch', () => {
 			{ accountExternalId: 'a1', asOf: '2026-09-08', current: 100050, available: null, creditLimit: null },
 			{ accountExternalId: 'c1', asOf: '2026-09-08', current: -25025, available: null, creditLimit: 500000 }
 		]);
-		expect(b.added[0]).toMatchObject({ accountExternalId: 'a1', externalId: 't1', amount: -1234, postedDate: '2026-09-02', payeeRaw: 'TX t1', providerCategory: 'GENERAL_MERCHANDISE', pending: false });
+		expect(b.added[0]).toMatchObject({ accountExternalId: 'a1', externalId: 't1', amount: -1234, postedDate: '2026-09-02', payeeRaw: 'TX t1', providerCategory: 'GENERAL_MERCHANDISE_OTHER', pending: false });
 		expect(b.added[1]).toMatchObject({ externalId: 't2', amount: 2000, payeeRaw: 'Refund Co', pending: true });
 		expect(b.modified[0]).toMatchObject({ externalId: 't1', amount: -1250 });
 		expect(b.removed).toEqual([{ accountExternalId: 'a1', externalId: 't0' }]);
