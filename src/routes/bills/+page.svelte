@@ -37,10 +37,11 @@
 {/snippet}
 
 <div class="toolbar"><h2 style="margin:0">Bills</h2><button class="primary" onclick={() => (editing = blank('bill'))}>+ Bill</button></div>
-<table><thead><tr><th>Bill</th><th>Schedule</th><th>From</th><th class="num">Expected</th><th>Next</th><th></th></tr></thead><tbody>
+<table><thead><tr><th>Bill</th><th class="hide-sm">Schedule</th><th>From</th><th class="num">Expected</th><th>Next</th><th></th></tr></thead><tbody>
 {#each v.bills as b (b.id)}
-	<tr class:muted={!b.active}><td>{b.name}{#if b.linkedDebtAccountId} <span class="muted small">card</span>{/if}{#if b.autopay} <span class="muted small">autopay</span>{/if}{#if !b.active} <span class="status">inactive</span>{/if}</td>
-		<td class="small">{schedule(b)}</td><td>{b.payFromAccountName}</td><td class="num"><Money cents={b.expectedAmount} /></td>
+	<tr class:muted={!b.active}><td>{b.name}{#if b.linkedDebtAccountId} <span class="muted small">card</span>{/if}{#if b.autopay} <span class="muted small">autopay</span>{/if}{#if !b.active} <span class="status">inactive</span>{/if}
+		<div class="small muted only-sm">{schedule(b)}</div></td>
+		<td class="small hide-sm">{schedule(b)}</td><td>{b.payFromAccountName}</td><td class="num"><Money cents={b.expectedAmount} /></td>
 		<td>{#if b.next}{b.next.dueDate} <span class="status {b.next.status}">{b.next.status}</span>{:else}<span class="muted">—</span>{/if}</td>
 		<td><button class="small" onclick={() => (editing = fromBill(b))}>edit</button> <button class="small" onclick={() => (open[`b${b.id}`] = !open[`b${b.id}`])}>{open[`b${b.id}`] ? 'hide' : 'history'}</button></td></tr>
 	{#if open[`b${b.id}`]}<tr><td colspan="6">{@render history('bill', b.history)}</td></tr>{/if}
@@ -48,9 +49,9 @@
 </tbody></table>
 
 <div class="toolbar"><h2 style="margin:0">Income</h2><button class="primary" onclick={() => (editing = blank('income'))}>+ Income</button></div>
-<table><thead><tr><th>Source</th><th>Schedule</th><th>To</th><th class="num">Expected</th><th>Next</th><th></th></tr></thead><tbody>
+<table><thead><tr><th>Source</th><th class="hide-sm">Schedule</th><th>To</th><th class="num">Expected</th><th>Next</th><th></th></tr></thead><tbody>
 {#each v.income as s (s.id)}
-	<tr class:muted={!s.active}><td>{s.name}</td><td class="small">{schedule(s)}</td><td>{s.depositAccountName}</td><td class="num"><Money cents={s.expectedAmount} /></td>
+	<tr class:muted={!s.active}><td>{s.name}<div class="small muted only-sm">{schedule(s)}</div></td><td class="small hide-sm">{schedule(s)}</td><td>{s.depositAccountName}</td><td class="num"><Money cents={s.expectedAmount} /></td>
 		<td>{#if s.next}{s.next.dueDate} <span class="status {s.next.status}">{s.next.status}</span>{:else}<span class="muted">—</span>{/if}</td>
 		<td><button class="small" onclick={() => (editing = fromIncome(s))}>edit</button> <button class="small" onclick={() => (open[`i${s.id}`] = !open[`i${s.id}`])}>{open[`i${s.id}`] ? 'hide' : 'history'}</button></td></tr>
 	{#if open[`i${s.id}`]}<tr><td colspan="6">{@render history('income', s.history)}</td></tr>{/if}

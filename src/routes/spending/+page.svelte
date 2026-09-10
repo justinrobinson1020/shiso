@@ -25,8 +25,8 @@
 <StackedBars buckets={v.overTime.buckets} categories={v.overTime.categories} compare={v.filter.compare ?? false} />
 
 <h2>By category</h2>
-<table><thead><tr><th>Category</th><th>Group</th><th class="num">Amount</th><th class="num">Share</th>{#if v.prevTotal != null}<th class="num">Previous</th><th class="num">Δ</th>{/if}<th></th></tr></thead>
-<tbody>{#each v.byCategory as c}<tr><td>{c.name}</td><td class="muted">{c.groupName}</td><td class="num"><Money cents={c.amount} /></td><td class="num">{(c.share * 100).toFixed(1)}%</td>
+<table><thead><tr><th>Category</th><th class="hide-sm">Group</th><th class="num">Amount</th><th class="num">Share</th>{#if v.prevTotal != null}<th class="num">Previous</th><th class="num">Δ</th>{/if}<th></th></tr></thead>
+<tbody>{#each v.byCategory as c}<tr><td>{c.name}</td><td class="muted hide-sm">{c.groupName}</td><td class="num"><Money cents={c.amount} /></td><td class="num">{(c.share * 100).toFixed(1)}%</td>
 	{#if v.prevTotal != null}<td class="num"><Money cents={c.prevAmount ?? 0} /></td><td class="num">{delta(c.amount, c.prevAmount)}</td>{/if}<td><a href={ledgerLink(c.categoryId)}>transactions →</a></td></tr>{:else}<tr><td colspan="7" class="muted">No spending in this range.</td></tr>{/each}</tbody></table>
 
 <h2>By merchant</h2>

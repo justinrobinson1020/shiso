@@ -38,14 +38,14 @@
 	<div class="strip">{#each v.underfunded as u}<span>{u.accountName}: owes <Money cents={u.owed} />, envelope <Money cents={u.available} />, <strong>underfunded <Money cents={u.underfunded} /></strong></span>{/each}</div>
 {/if}
 <table>
-	<thead><tr><th>Category</th><th class="num">Carried</th><th class="num">Assigned</th><th class="num">Activity</th><th class="num">Available</th><th></th></tr></thead>
+	<thead><tr><th>Category</th><th class="num hide-sm">Carried</th><th class="num">Assigned</th><th class="num">Activity</th><th class="num">Available</th><th></th></tr></thead>
 	<tbody>
 	{#each v.groups as g}
 		<tr class="group"><td colspan="6">{g.name}</td></tr>
 		{#each g.categories.filter((c) => showHidden || !c.hidden) as c (c.id)}
 			<tr>
 				<td>{c.name}{#if c.hidden} <span class="muted small">hidden</span>{/if}{#if c.creditOverspend > 0} <span class="status overdue" title="credit overspend">{formatCents(c.creditOverspend)} on card</span>{/if}</td>
-				<td class="num"><Money cents={c.carried} /></td>
+				<td class="num hide-sm"><Money cents={c.carried} /></td>
 				<td class="num"><input class="num" value={dollars(c.assigned)} onchange={(e) => assignTo(c.id, (e.target as HTMLInputElement).value)} /></td>
 				<td class="num"><Money cents={c.activity} /></td>
 				<td class="num"><Money cents={c.available} signed /></td>

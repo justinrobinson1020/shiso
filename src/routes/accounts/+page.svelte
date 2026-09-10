@@ -61,19 +61,20 @@
 		</div>
 		{#if c.lastError}<p class="error small">{c.lastError}</p>{/if}
 		<table>
-			<thead><tr><th>Account</th><th>Type</th><th class="num">Balance</th><th class="num">Ledger</th><th class="num">Drift</th><th>Terms</th><th></th></tr></thead>
+			<thead><tr><th>Account</th><th>Type</th><th class="num">Balance</th><th class="num hide-sm">Ledger</th><th class="num">Drift</th><th>Terms</th><th></th></tr></thead>
 			<tbody>
 			{#each c.accounts as a (a.id)}
 				<tr id="account-{a.id}">
-					<td>{a.name}{#if a.mask} <span class="muted small">····{a.mask}</span>{/if}{#if a.closedAt} <span class="status">closed {a.closedAt}</span>{/if}{#if !a.onBudget} <span class="muted small">off-budget</span>{/if}</td>
+					<td>{a.name}{#if a.mask} <span class="muted small">····{a.mask}</span>{/if}{#if a.closedAt} <span class="status">closed {a.closedAt}</span>{/if}{#if !a.onBudget} <span class="muted small">off-budget</span>{/if}
+						<div class="small muted only-sm">Ledger <Money cents={a.drift.ledgerBalance} />{#if a.isDebt && a.terms} · APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ?? '—'}{/if}</div></td>
 					<td>{a.type}</td>
 					<td class="num">{#if a.balance}<Money cents={a.balance.current} /><div class="small muted">{a.balance.asOf} · {a.balance.source}</div>{:else}<span class="muted">—</span>{/if}</td>
-					<td class="num"><Money cents={a.drift.ledgerBalance} /></td>
+					<td class="num hide-sm"><Money cents={a.drift.ledgerBalance} /></td>
 					<td class="num">{#if a.drift.drift != null && a.drift.drift !== 0}<Money cents={a.drift.drift} signed />
 							<button class="small" disabled={busy != null} onclick={() => run(`adj-${a.id}`, () => post(`/api/accounts/${a.id}/adjust`, { amount: a.drift.drift, date: data.today }))}>adjust</button>
 							<div class="small muted">{a.drift.convention === 'exclude_pending' ? 'excluding pending' : 'including pending'} · <button class="small" disabled={busy != null} onclick={() => run('conv', () => post(`/api/accounts/${a.id}/convention`, { convention: a.drift.convention === 'exclude_pending' ? 'include_pending' : 'exclude_pending' }))}>switch</button></div>
 						{:else if a.drift.drift === 0}<span class="status paid">reconciled</span>{:else}<span class="muted">no balance</span>{/if}</td>
-					<td>{#if a.isDebt}{#if a.terms}<span class="small">APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ?? '—'} <span class="muted">({a.terms.source})</span></span>{:else}<span class="muted small">no terms</span>{/if}
+					<td>{#if a.isDebt}{#if a.terms}<span class="small hide-sm">APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ?? '—'} <span class="muted">({a.terms.source})</span></span>{:else}<span class="muted small hide-sm">no terms</span>{/if}
 							<button class="small" onclick={() => (termsFor = { id: a.id, name: a.name, terms: a.terms })}>edit</button>{/if}</td>
 					<td>
 						<button class="small" onclick={() => (balanceFor = { id: a.id, current: a.balance ? (a.balance.current / 100).toFixed(2) : '', asOf: data.today })}>balance</button>

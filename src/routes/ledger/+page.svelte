@@ -23,6 +23,7 @@
 	const catName = (id: number) => tree.groups.flatMap((g) => g.categories).find((c) => c.id === id)?.name ?? '';
 	const manualAccounts = $derived(v.accounts.filter((a) => !a.closed));
 	const pages = $derived(Math.max(1, Math.ceil(v.total / v.limit)));
+	const periodLabel = (id: number) => v.periods.find((p) => p.id === id)?.label ?? '';
 </script>
 
 <h1>Ledger</h1>
@@ -51,19 +52,20 @@
 {/if}
 
 <table>
-	<thead><tr><th>Date</th><th>Account</th><th>Payee</th><th>Category</th><th>Memo</th><th class="num">Amount</th><th>Period</th><th></th></tr></thead>
+	<thead><tr><th>Date</th><th class="hide-sm">Account</th><th>Payee</th><th>Category</th><th>Memo</th><th class="num">Amount</th><th class="hide-sm">Period</th><th></th></tr></thead>
 	<tbody>
 	{#each v.rows as row (row.id)}
 		<tr>
 			<td>{row.postedDate}{#if row.pending} <span class="muted small">pending</span>{/if}</td>
-			<td>{row.accountName}</td>
-			<td><input class="inline" value={row.payee} title={row.payeeRaw} onchange={(e) => renamePayee(row, (e.target as HTMLInputElement).value)} /></td>
+			<td class="hide-sm">{row.accountName}</td>
+			<td><input class="inline" value={row.payee} title={row.payeeRaw} onchange={(e) => renamePayee(row, (e.target as HTMLInputElement).value)} />
+				<div class="small muted only-sm">{row.accountName} · {periodLabel(row.periodId)}</div></td>
 			<td>{#if row.transferPeerId != null}<span class="muted">Transfer · {row.transferPeerAccountName}</span> <button class="small" onclick={() => run(() => post(`/api/transactions/${row.id}/unlink`))}>unlink</button>
 				{:else if row.splits.length === 1}<select value={row.splits[0].categoryId} onchange={(e) => patch(row.id, { splits: [{ categoryId: Number((e.target as HTMLSelectElement).value), amount: row.amount }] })}>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories.filter((c) => !c.hidden || c.id === row.splits[0].categoryId) as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select> <button class="small" onclick={() => (splitting = row)}>split</button>
 				{:else}<button class="small" onclick={() => (splitting = row)}>{row.splits.length} splits: {row.splits.map((s) => s.categoryName).join(', ')}</button>{/if}</td>
 			<td><input class="inline" value={row.memo ?? ''} onchange={(e) => patch(row.id, { memo: (e.target as HTMLInputElement).value || null })} /></td>
 			<td class="num"><Money cents={row.amount} /></td>
-			<td><select value={row.periodId} onchange={(e) => patch(row.id, { periodId: Number((e.target as HTMLSelectElement).value) })}>{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}</select></td>
+			<td class="hide-sm"><select value={row.periodId} onchange={(e) => patch(row.id, { periodId: Number((e.target as HTMLSelectElement).value) })}>{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}</select></td>
 			<td>{#if row.needsReview}<span class="status overdue" title={row.reviewReason ?? ''}>{row.reviewReason}</span> <button class="small" onclick={() => run(() => post(`/api/transactions/${row.id}/review`))}>clear</button>{/if}
 				{#if row.source === 'manual' || row.source === 'import'}<button class="small danger" onclick={() => run(() => post(`/api/transactions/${row.id}/delete`))}>delete</button>{/if}</td>
 		</tr>
