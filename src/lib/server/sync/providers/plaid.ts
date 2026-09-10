@@ -1,4 +1,4 @@
-import { Configuration, CountryCode, PlaidApi, PlaidEnvironments, Products, type LinkTokenCreateRequest } from 'plaid';
+import { Configuration, CountryCode, PlaidApi, PlaidEnvironments, Products, type LinkTokenCreateRequest, type LinkTokenTransactions } from 'plaid';
 import type { AccountType } from '../../db/schema';
 import { decimalToCents } from '$lib/money';
 import { ProviderError, type BatchAccount, type BatchBalance, type BatchTerms, type BatchTransaction, type FetchInput, type SyncBatch, type SyncProvider } from '../types';
@@ -170,7 +170,14 @@ export function createPlaidClient(cfg: { clientId: string; secret: string; env: 
 
 export async function createLinkToken(client: PlaidClientLike, opts: { clientName: string; userId: string; accessToken?: string | null }): Promise<string> {
 	const req: LinkTokenCreateRequest = { client_name: opts.clientName, user: { client_user_id: opts.userId }, country_codes: [CountryCode.Us], language: 'en' };
-	if (opts.accessToken) req.access_token = opts.accessToken; else req.products = [Products.Transactions, Products.Liabilities];
+	if (opts.accessToken) req.access_token = opts.accessToken;
+	else {
+		req.products = [Products.Transactions, Products.Liabilities];
+		// days_requested only applies when Transactions has not been initialised on the Item, so it is
+		// harmless to always send for new Items and pointless on relink.
+		const transactions: LinkTokenTransactions = { days_requested: 730 };
+		req.transactions = transactions;
+	}
 	try { return (await client.linkTokenCreate(req)).data.link_token; } catch (err) { throw toProviderError(err); }
 }
 

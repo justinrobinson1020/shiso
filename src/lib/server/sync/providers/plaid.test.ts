@@ -150,8 +150,9 @@ describe('helpers', () => {
 		expect(await createLinkToken(client, { clientName: 'shiso', userId: 'u1' })).toBe('link-1');
 		expect(await createLinkToken(client, { clientName: 'shiso', userId: 'u1', accessToken: 'access-1' })).toBe('link-1');
 		expect(await exchangePublicToken(client, 'public-1')).toEqual({ accessToken: 'access-9', itemId: 'item-9' });
-		expect(client.syncCalls[0]).toMatchObject({ link: { products: ['transactions', 'liabilities'], user: { client_user_id: 'u1' } } });
+		expect(client.syncCalls[0]).toMatchObject({ link: { products: ['transactions', 'liabilities'], transactions: { days_requested: 730 }, user: { client_user_id: 'u1' } } });
 		expect(client.syncCalls[1]).toMatchObject({ link: { access_token: 'access-1' } });
 		expect((client.syncCalls[1] as { link: Record<string, unknown> }).link.products).toBeUndefined();
+		expect((client.syncCalls[1] as { link: Record<string, unknown> }).link.transactions).toBeUndefined();
 	});
 });
