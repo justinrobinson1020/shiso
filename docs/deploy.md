@@ -94,6 +94,11 @@ the container by the address in the vhost.
 10.10.50.130 shiso.home.local
 ```
 
+Pi-hole (v5 on CT 101) only reads `custom.list` when FTL reloads its host
+lists, so after editing it run `pihole restartdns reload-lists` from a login
+shell, or `kill -HUP $(pidof pihole-FTL)`. Verify with
+`dig +short shiso.home.local @10.10.50.101` → `10.10.50.130`.
+
 ## 6. Verify
 
 ```bash
