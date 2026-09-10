@@ -1,6 +1,7 @@
 import { asc, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { accounts, categories, categoryGroups, CATEGORY_KINDS, type CategoryKind } from '../db/schema';
+import { getProviderCategoryMap, providerCategoryUsage } from '../sync/postprocess';
 
 export type CategoryTree = {
 	groups: {
@@ -53,4 +54,14 @@ export function categoryTree(db: DbOrTx): CategoryTree {
 		debtAccounts,
 		kinds: CATEGORY_KINDS
 	};
+}
+
+export type ProviderCategoryMapView = {
+	map: Record<string, number>;
+	providerCategories: { key: string; count: number }[];
+};
+
+/** Feeds the "Provider categories" section of the categories page: the same shape the GET route returns. */
+export function providerCategoryMapView(db: DbOrTx): ProviderCategoryMapView {
+	return { map: getProviderCategoryMap(db), providerCategories: providerCategoryUsage(db) };
 }

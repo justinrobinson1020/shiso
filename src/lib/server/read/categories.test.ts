@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { fixture } from '../test/fixture';
-import { categoryTree } from './categories';
+import { createTransaction } from '../ledger/transactions';
+import { setProviderCategoryMap } from '../sync/postprocess';
+import { categoryTree, providerCategoryMapView } from './categories';
 
 describe('categoryTree', () => {
 	it('lists groups in sort order with their categories, debt accounts, and kinds', () => {
@@ -11,5 +13,21 @@ describe('categoryTree', () => {
 		expect(debt.categories[0]).toMatchObject({ name: 'Sapphire', kind: 'debt_payment', accountId: f.card, isSystem: false });
 		expect(t.debtAccounts).toEqual([{ id: f.card, name: 'Sapphire' }]);
 		expect(t.kinds).toContain('spending');
+	});
+});
+
+describe('providerCategoryMapView', () => {
+	it('returns the saved map and the distinct provider categories seen, most common first', () => {
+		const f = fixture();
+		setProviderCategoryMap(f.db, { FOOD_AND_DRINK_GROCERIES: f.groceries });
+		createTransaction(f.db, { accountId: f.checking, externalId: 'a', postedDate: f.today, amount: -100, payeeRaw: 'A', providerCategory: 'TRAVEL', source: 'sync' });
+		createTransaction(f.db, { accountId: f.checking, externalId: 'b', postedDate: f.today, amount: -200, payeeRaw: 'B', providerCategory: 'TRAVEL', source: 'sync' });
+		createTransaction(f.db, { accountId: f.checking, externalId: 'c', postedDate: f.today, amount: -300, payeeRaw: 'C', providerCategory: 'FOOD_AND_DRINK_GROCERIES', source: 'sync' });
+		const view = providerCategoryMapView(f.db);
+		expect(view.map).toEqual({ FOOD_AND_DRINK_GROCERIES: f.groceries });
+		expect(view.providerCategories).toEqual([
+			{ key: 'TRAVEL', count: 2 },
+			{ key: 'FOOD_AND_DRINK_GROCERIES', count: 1 }
+		]);
 	});
 });

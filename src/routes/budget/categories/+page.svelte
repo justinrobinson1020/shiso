@@ -11,6 +11,19 @@
 		const d = draft[groupId]; await run(() => post('/api/categories', { groupId, name: d.name, kind: d.kind, accountId: d.kind === 'debt_payment' ? d.accountId : null })); delete draft[groupId];
 	}
 	const patch = (id: number, body: unknown) => run(() => post(`/api/categories/${id}`, body));
+
+	let pcmDraft = $state<Record<string, number>>({});
+	let pcmMessage = $state('');
+	const pcmValue = (key: string) => pcmDraft[key] ?? data.pcm.map[key] ?? 0;
+	async function savePcm() {
+		pcmMessage = '';
+		await run(async () => {
+			const map: Record<string, number> = {};
+			for (const p of data.pcm.providerCategories) { const v = pcmValue(p.key); if (v) map[p.key] = v; }
+			const res = await post<{ categorized: number }>('/api/provider-category-map', { map, applyToExisting: true });
+			pcmMessage = `Categorized ${res.categorized} existing rows`;
+		});
+	}
 </script>
 
 <h1>Categories</h1>
@@ -46,3 +59,34 @@
 		</tbody>
 	</table>
 {/each}
+
+<h2>Provider categories</h2>
+{#if data.pcm.providerCategories.length === 0}
+	<p class="small muted">No provider categories seen yet.</p>
+{:else}
+	<table>
+		<thead><tr><th>Provider category</th><th>Count</th><th>Category</th></tr></thead>
+		<tbody>
+		{#each data.pcm.providerCategories as p (p.key)}
+			<tr>
+				<td>{p.key}</td>
+				<td class="num">{p.count}</td>
+				<td>
+					<select value={pcmValue(p.key)} onchange={(e) => (pcmDraft[p.key] = Number((e.target as HTMLSelectElement).value))}>
+						<option value={0}>Unmapped</option>
+						{#each t.groups as g}
+							<optgroup label={g.name}>
+								{#each g.categories.filter((c) => !c.hidden || c.id === pcmValue(p.key)) as c}
+									<option value={c.id}>{c.name}</option>
+								{/each}
+							</optgroup>
+						{/each}
+					</select>
+				</td>
+			</tr>
+		{/each}
+		</tbody>
+	</table>
+	<button class="primary" onclick={savePcm}>Save mapping</button>
+	{#if pcmMessage}<p class="small">{pcmMessage}</p>{/if}
+{/if}
