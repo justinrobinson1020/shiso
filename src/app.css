@@ -2,7 +2,7 @@
 	--bg: #fafaf7; --fg: #1d1d1b; --muted: #6b6b66; --line: #e2e2dc; --card: #fffffc;
 	--accent: #2f6f4e; --on-accent: #fffffc; --neg: #b3261e; --pos: #1e6b3a; --warn: #8a5a00; --badge: #b3261e; --on-badge: #fffffc;
 	--chart-1: #2f6f4e; --chart-2: #c2781f; --chart-3: #3f6ab0; --chart-4: #b5484a; --chart-5: #7a5ab5; --chart-6: #2f8f8c; --chart-7: #8a8a24; --chart-8: #8a6d4b; --chart-9: #8f8f88;
-	--text-caption: .75rem; --text-secondary: .875rem; --text-body: 1rem; --text-subheading: 1.2rem; --text-heading: 1.5rem; --text-display: 2.25rem;
+	--text-caption: .75rem; --text-secondary: .875rem; --text-body: 1rem; --text-subheading: 1.2rem; --text-heading: 1.5rem; --text-display: 2.25rem; --text-table: .9375rem;
 	font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; line-height: 1.45; font-kerning: normal; color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -35,11 +35,11 @@ h1 { font-size: var(--text-heading); font-weight: 600; margin: .5rem 0 1rem; } h
 .facts dd { margin: 0; font-size: var(--text-subheading); font-weight: 600; font-variant-numeric: tabular-nums; }
 .facts dd .small { font-weight: 400; }
 table { width: 100%; border-collapse: collapse; }
-th, td { padding: .45rem .6rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; font-size: .9375rem; }
+th, td { padding: .45rem .6rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; font-size: var(--text-table); }
 th { color: var(--muted); font-weight: 500; font-size: var(--text-caption); text-transform: uppercase; letter-spacing: .06em; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tr.group td { font-weight: 600; padding-top: 1.1rem; border-bottom-color: var(--muted); }
-table.history { margin: .25rem 0 .75rem 1rem; width: calc(100% - 1rem); font-size: .9rem; }
+table.history { margin: .25rem 0 .75rem 1rem; width: calc(100% - 1rem); font-size: var(--text-secondary); }
 td.expanded { padding: 0 .6rem .25rem; }
 .money { font-variant-numeric: tabular-nums; } .money.neg { color: var(--neg); } .money.pos { color: var(--pos); }
 .status { font-size: var(--text-caption); padding: .1rem .45rem; border-radius: 1em; border: 1px solid var(--line); }
@@ -49,10 +49,18 @@ input, select, button, textarea { font: inherit; color: inherit; background: var
 input.inline { border-color: transparent; background: transparent; width: 100%; } input.inline:focus { border-color: var(--line); background: var(--card); }
 input.num { text-align: right; width: 7em; font-variant-numeric: tabular-nums; }
 button.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; } button.danger { color: var(--neg); }
-button:disabled { opacity: .5; }
+button { cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out; }
+button:hover:not(:disabled) { border-color: var(--muted); }
+button:active:not(:disabled) { background: var(--bg); }
+button.primary:hover:not(:disabled) { background: color-mix(in oklch, var(--accent), var(--fg) 12%); border-color: transparent; }
+button.primary:active:not(:disabled) { background: color-mix(in oklch, var(--accent), var(--bg) 12%); }
+button:disabled { opacity: .5; cursor: default; }
 .error { color: var(--neg); } .muted { color: var(--muted); } .small { font-size: var(--text-secondary); }
 dialog { border: 1px solid var(--line); border-radius: .6rem; background: var(--card); color: var(--fg); padding: 1rem 1.25rem; min-width: 320px; max-width: 90vw; }
 dialog::backdrop { background: rgba(0,0,0,.35); }
+dialog[open] { animation: dialog-in 140ms ease-out; }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { button { transition: none; } dialog[open] { animation: none; } }
 dialog .grid { display: grid; grid-template-columns: max-content 1fr; gap: .5rem .75rem; align-items: center; }
 dialog .grid > .actions, dialog .grid > .error { grid-column: 1 / -1; }
 dialog h2 { margin-top: 0; }

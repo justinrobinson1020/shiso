@@ -8,5 +8,5 @@
 	});
 </script>
 {#if points.length >= 2}
-	<svg class="chart" viewBox="0 0 {w} {height}" preserveAspectRatio="none"><path d={d} fill="none" stroke="var(--accent)" stroke-width="2" /></svg>
+	<svg class="chart" viewBox="0 0 {w} {height}" preserveAspectRatio="none"><path d={d} fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke" /></svg>
 {:else}<p class="muted small">Trend appears once two balance snapshots exist.</p>{/if}
