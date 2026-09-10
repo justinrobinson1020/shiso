@@ -35,8 +35,34 @@ button:disabled { opacity: .5; }
 .error { color: var(--neg); } .muted { color: var(--muted); } .small { font-size: .85rem; }
 dialog { border: 1px solid var(--line); border-radius: .6rem; background: var(--card); color: var(--fg); padding: 1rem 1.25rem; min-width: 320px; max-width: 90vw; }
 dialog::backdrop { background: rgba(0,0,0,.35); }
-dialog form.grid { display: grid; grid-template-columns: max-content 1fr; gap: .5rem .75rem; align-items: center; }
+dialog .grid { display: grid; grid-template-columns: max-content 1fr; gap: .5rem .75rem; align-items: center; }
 .actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .75rem; }
 .strip { display: flex; gap: .75rem; flex-wrap: wrap; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--card); margin-bottom: 1rem; }
 .chart { width: 100%; height: auto; background: var(--card); border: 1px solid var(--line); border-radius: .6rem; }
 .legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; font-size: .85rem; margin-top: .5rem; } .legend i { display: inline-block; width: .8em; height: .8em; border-radius: .2em; margin-right: .3em; }
+
+.only-sm { display: none; }
+
+@media (max-width: 720px) {
+	main { padding: .75rem .75rem 2rem; }
+
+	.topnav { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+	.topnav .brand, .topnav a { flex-shrink: 0; }
+
+	.toolbar { flex-direction: column; align-items: stretch; }
+	.toolbar > * { width: 100%; }
+	.toolbar > input, .toolbar > select, .toolbar > button { min-height: 44px; }
+
+	table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+	th, td { white-space: nowrap; padding: .35rem .45rem; }
+
+	input, select, button, textarea { min-height: 40px; font-size: 16px; }
+
+	dialog { width: calc(100vw - 2rem); max-width: none; max-height: 90vh; overflow: auto; }
+	dialog .grid { grid-template-columns: 1fr; }
+
+	.cards { grid-template-columns: 1fr; }
+
+	.hide-sm { display: none; }
+	.only-sm { display: block; }
+}

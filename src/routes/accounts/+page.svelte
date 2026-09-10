@@ -114,7 +114,7 @@
 {#if addManual}
 <Dialog open={true} title="Manual connection" onclose={() => (addManual = null)}>
 	<form onsubmit={(e) => { e.preventDefault(); const m = addManual!; addManual = null; run('manual', () => post('/api/connections', m)); }}>
-		<div class="grid" style="display:grid;grid-template-columns:max-content 1fr;gap:.5rem .75rem"><label for="m-inst">Institution</label><input id="m-inst" bind:value={addManual.institutionName} required /></div>
+		<div class="grid"><label for="m-inst">Institution</label><input id="m-inst" bind:value={addManual.institutionName} required /></div>
 		<table style="margin:.5rem 0"><thead><tr><th>Account</th><th>Type</th><th></th></tr></thead><tbody>
 		{#each addManual.accounts as a, i}<tr><td><input bind:value={a.name} required /></td><td><select bind:value={a.type}>{#each v.types as t}<option value={t}>{t}</option>{/each}</select></td><td><button type="button" onclick={() => addManual!.accounts.splice(i, 1)} disabled={addManual.accounts.length === 1}>×</button></td></tr>{/each}
 		</tbody></table>
