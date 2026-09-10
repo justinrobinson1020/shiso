@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { formatCents } from '$lib/money';
 	let { buckets, categories, compare }: { buckets: { key: string; label: string; total: number; prevTotal: number | null; byCategory: Record<string, number> }[]; categories: { id: number; name: string }[]; compare: boolean } = $props();
-	const PALETTE = ['#2f6f4e', '#d98c2b', '#4a6fb5', '#b5484a', '#7a5ab5', '#3c9d9b', '#a0a028', '#8a6d4b', '#9a9a9a'];
+	const PALETTE = Array.from({ length: 9 }, (_, i) => `var(--chart-${i + 1})`);
 	const W = 720, H = 260, PAD = 36, BW = $derived(Math.max(8, (W - PAD * 2) / Math.max(buckets.length, 1) - 8));
 	// Only positive segments stack visually, so `max` must track the tallest positive stack —
 	// not the net total, which a bucket with refunds can understate or (mixed with positives) overstate.
