@@ -11,14 +11,17 @@
 	<a href="/?month={v.next}">{v.next} →</a>
 </div>
 
-<div class="cards">
-	<div class="card"><div class="label">Cash on hand</div><div class="value"><Money cents={v.cash.total} /></div>
-		{#each v.cash.accounts as a}<div class="small">{a.name} <Money cents={a.current} /> <span class="muted">{a.asOf ?? 'no balance'}</span></div>{/each}</div>
-	<div class="card"><div class="label">Income received / expected</div><div class="value"><Money cents={v.income.received} /> <span class="muted">/ <Money cents={v.income.expected} /></span></div></div>
-	<div class="card"><div class="label">Bills paid / pending</div><div class="value"><Money cents={v.bills.paid} /> <span class="muted">/ <Money cents={v.bills.pending} /></span></div></div>
-	<div class="card"><div class="label">Card payments planned</div><div class="value"><Money cents={v.cardPayments.planned} /></div><div class="small">paid <Money cents={v.cardPayments.paid} />, extra <Money cents={v.cardPayments.extra} /></div></div>
-	<div class="card"><div class="label">Cash left at month end</div><div class="value"><Money cents={v.cashLeft} signed /></div></div>
+<div class="lead">
+	<div class="label">Cash left at month end</div>
+	<div class="value"><Money cents={v.cashLeft} signed /></div>
 </div>
+
+<dl class="facts">
+	<div><dt>Cash on hand</dt><dd><Money cents={v.cash.total} />{#each v.cash.accounts as a}<div class="small muted">{a.name} <Money cents={a.current} /> · {a.asOf ?? 'no balance'}</div>{/each}</dd></div>
+	<div><dt>Income received / expected</dt><dd><Money cents={v.income.received} /> <span class="muted">/ <Money cents={v.income.expected} /></span></dd></div>
+	<div><dt>Bills paid / pending</dt><dd><Money cents={v.bills.paid} /> <span class="muted">/ <Money cents={v.bills.pending} /></span></dd></div>
+	<div><dt>Card payments planned</dt><dd><Money cents={v.cardPayments.planned} /><div class="small muted">paid <Money cents={v.cardPayments.paid} />, extra <Money cents={v.cardPayments.extra} /></div></dd></div>
+</dl>
 
 <h2>Checking balance, last 90 days</h2>
 <Sparkline points={v.trend} />

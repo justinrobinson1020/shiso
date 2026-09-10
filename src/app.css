@@ -21,10 +21,17 @@ main { max-width: 1200px; margin: 0 auto; padding: 1rem 1.25rem 3rem; }
 .topnav a { color: var(--fg); text-decoration: none; padding: .25rem .5rem; border-radius: .4rem; }
 .topnav a.active { background: var(--accent); color: var(--on-accent); }
 .badge { display: inline-block; min-width: 1.2em; padding: 0 .35em; margin-left: .35em; border-radius: 1em; background: var(--badge); color: var(--on-badge); font-size: .75em; text-align: center; }
-h1 { font-size: 1.4rem; margin: .5rem 0 1rem; } h2 { font-size: 1.1rem; margin: 1.25rem 0 .5rem; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .75rem; }
+h1 { font-size: 1.4rem; margin: .5rem 0 1rem; } h2 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: .6rem; padding: .75rem 1rem; }
-.card .label { color: var(--muted); font-size: .85rem; } .card .value { font-size: 1.4rem; font-weight: 600; }
+.lead { margin: 1.25rem 0 1.5rem; }
+.lead .label { color: var(--muted); font-size: .85rem; }
+.lead .value { font-size: clamp(1.8rem, 1.2rem + 2vw, 2.6rem); font-weight: 650; letter-spacing: -.01em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.lead .sub { color: var(--muted); font-size: .85rem; margin-top: .25rem; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem 2rem; margin: 0 0 2.5rem; padding: .75rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.facts > div { display: flex; flex-direction: column; gap: .15rem; }
+.facts dt { color: var(--muted); font-size: .8rem; }
+.facts dd { margin: 0; font-size: 1.1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.facts dd .small { font-weight: 400; }
 table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: .6rem; overflow: hidden; }
 th, td { padding: .45rem .6rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
 th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; }
@@ -70,8 +77,6 @@ dialog .grid { display: grid; grid-template-columns: max-content 1fr; gap: .5rem
 
 	dialog { width: calc(100vw - 2rem); max-width: none; max-height: 90vh; overflow: auto; }
 	dialog .grid { grid-template-columns: 1fr; }
-
-	.cards { grid-template-columns: 1fr; }
 
 	.hide-sm { display: none; }
 	.only-sm { display: block; }

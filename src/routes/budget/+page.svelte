@@ -32,7 +32,7 @@
 	<label class="small"><input type="checkbox" bind:checked={showHidden} /> show hidden</label>
 	<a href="/budget/categories?period={v.period.id}" class="small">Manage categories</a>
 </div>
-<div class="cards"><div class="card"><div class="label">Ready to assign</div><div class="value"><Money cents={v.readyToAssign} signed /></div></div></div>
+<div class="lead"><div class="label">Ready to assign</div><div class="value"><Money cents={v.readyToAssign} signed /></div></div>
 {#if error}<p class="error">{error}</p>{/if}
 {#if v.underfunded.length}
 	<div class="strip">{#each v.underfunded as u}<span>{u.accountName}: owes <Money cents={u.owed} />, envelope <Money cents={u.available} />, <strong>underfunded <Money cents={u.underfunded} /></strong></span>{/each}</div>
