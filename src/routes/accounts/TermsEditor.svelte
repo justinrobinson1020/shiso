@@ -31,7 +31,7 @@
 		<label for="t-stmt">Last statement balance</label><input id="t-stmt" class="num" bind:value={f.lastStatementBalance} />
 		<label for="t-stmtd">Last statement date</label><input id="t-stmtd" type="date" bind:value={f.lastStatementDate} />
 		<label for="t-fee">Annual fee</label><input id="t-fee" class="num" bind:value={f.annualFee} />
-		{#if error}<p class="error" style="grid-column: 1 / -1">{error}</p>{/if}
-		<div class="actions" style="grid-column: 1 / -1"><button type="button" onclick={onclose}>Cancel</button><button class="primary" type="submit">Save terms</button></div>
+		{#if error}<p class="error">{error}</p>{/if}
+		<div class="actions"><button type="button" onclick={onclose}>Cancel</button><button class="primary" type="submit">Save terms</button></div>
 	</form>
 </Dialog>

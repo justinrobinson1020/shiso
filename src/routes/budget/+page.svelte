@@ -24,7 +24,7 @@
 </script>
 
 <div class="toolbar">
-	<h1 style="margin:0">Budget</h1>
+	<h1>Budget</h1>
 	<select value={v.period.id} onchange={(e) => goto(`/budget?period=${(e.target as HTMLSelectElement).value}`)}>
 		{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}
 	</select>
@@ -62,7 +62,7 @@
 		<label for="mv-from">From</label><select id="mv-from" bind:value={move.from}>{#each allCats as c}<option value={c.id}>{c.name} ({formatCents(c.available)})</option>{/each}</select>
 		<label for="mv-to">To</label><select id="mv-to" bind:value={move.to}><option value={null}>choose…</option>{#each allCats as c}<option value={c.id}>{c.name}</option>{/each}</select>
 		<label for="mv-amt">Amount</label><input id="mv-amt" class="num" bind:value={move.amount} placeholder="0.00" />
-		<div class="actions" style="grid-column: 1 / -1"><button type="button" onclick={() => (move = null)}>Cancel</button><button class="primary" type="submit">Move</button></div>
+		<div class="actions"><button type="button" onclick={() => (move = null)}>Cancel</button><button class="primary" type="submit">Move</button></div>
 	</form>
 </Dialog>
 {/if}

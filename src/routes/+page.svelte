@@ -7,7 +7,7 @@
 
 <div class="toolbar month-nav">
 	<a href="/?month={v.prev}">← {v.prev}</a>
-	<h1 style="margin:0">{v.label}</h1>
+	<h1>{v.label}</h1>
 	<a href="/?month={v.next}">{v.next} →</a>
 </div>
 

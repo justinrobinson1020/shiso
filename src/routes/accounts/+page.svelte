@@ -50,8 +50,8 @@
 {#if error}<p class="error">{error}</p>{/if}
 
 {#each v.connections as c (c.id)}
-	<div class="card" style="margin-bottom:1rem">
-		<div class="toolbar" style="margin:0 0 .5rem">
+	<div class="card connection">
+		<div class="toolbar">
 			<strong>{c.institutionName}</strong><span class="muted small">{c.provider}</span><span class="status {c.status}">{c.status}</span>
 			<span class="small muted">last success {fmtTime(c.lastSuccessAt)}</span>
 			{#if c.lastRun}<span class="small muted">last run {c.lastRun.status} · +{c.lastRun.added} ~{c.lastRun.modified} −{c.lastRun.removed}{#if c.lastRun.error} · {c.lastRun.error}{/if}</span>{/if}
@@ -96,7 +96,7 @@
 	<form class="grid" onsubmit={(e) => { e.preventDefault(); const b = balanceFor!; balanceFor = null; run('balance', () => post(`/api/accounts/${b.id}/balance`, { current: decimalToCents(b.current), asOf: b.asOf })); }}>
 		<label for="b-cur">Current balance</label><input id="b-cur" class="num" bind:value={balanceFor.current} placeholder="-1234.56 for money owed" required />
 		<label for="b-asof">As of</label><input id="b-asof" type="date" bind:value={balanceFor.asOf} required />
-		<div class="actions" style="grid-column: 1 / -1"><button type="button" onclick={() => (balanceFor = null)}>Cancel</button><button class="primary" type="submit">Save</button></div>
+		<div class="actions"><button type="button" onclick={() => (balanceFor = null)}>Cancel</button><button class="primary" type="submit">Save</button></div>
 	</form>
 </Dialog>
 {/if}
@@ -108,7 +108,7 @@
 		<label for="e-type">Type</label><select id="e-type" bind:value={editFor.type}>{#each v.types as t}<option value={t}>{t}</option>{/each}</select>
 		<label for="e-ob">On budget</label><input id="e-ob" type="checkbox" bind:checked={editFor.onBudget} />
 		<label for="e-cl">Closed</label><input id="e-cl" type="checkbox" bind:checked={editFor.closed} />
-		<div class="actions" style="grid-column: 1 / -1"><button type="button" onclick={() => (editFor = null)}>Cancel</button><button class="primary" type="submit">Save</button></div>
+		<div class="actions"><button type="button" onclick={() => (editFor = null)}>Cancel</button><button class="primary" type="submit">Save</button></div>
 	</form>
 </Dialog>
 {/if}
@@ -117,7 +117,7 @@
 <Dialog open={true} title="Manual connection" onclose={() => (addManual = null)}>
 	<form onsubmit={(e) => { e.preventDefault(); const m = addManual!; addManual = null; run('manual', () => post('/api/connections', m)); }}>
 		<div class="grid"><label for="m-inst">Institution</label><input id="m-inst" bind:value={addManual.institutionName} required /></div>
-		<table style="margin:.5rem 0"><thead><tr><th>Account</th><th>Type</th><th></th></tr></thead><tbody>
+		<table><thead><tr><th>Account</th><th>Type</th><th></th></tr></thead><tbody>
 		{#each addManual.accounts as a, i}<tr><td><input bind:value={a.name} required /></td><td><select bind:value={a.type}>{#each v.types as t}<option value={t}>{t}</option>{/each}</select></td><td><button type="button" onclick={() => addManual!.accounts.splice(i, 1)} disabled={addManual.accounts.length === 1}>×</button></td></tr>{/each}
 		</tbody></table>
 		<div class="actions"><button type="button" onclick={() => addManual!.accounts.push({ name: '', type: 'credit' })}>Add account</button><button type="button" onclick={() => (addManual = null)}>Cancel</button><button class="primary" type="submit">Create</button></div>
@@ -131,7 +131,7 @@
 	<form class="grid" onsubmit={(e) => { e.preventDefault(); const s = simplefin!; simplefin = null; run('simplefin', () => post('/api/simplefin/claim', s)); }}>
 		<label for="s-name">Institution</label><input id="s-name" bind:value={simplefin.institutionName} required />
 		<label for="s-tok">Setup token</label><textarea id="s-tok" rows="3" bind:value={simplefin.setupToken} required></textarea>
-		<div class="actions" style="grid-column: 1 / -1"><button type="button" onclick={() => (simplefin = null)}>Cancel</button><button class="primary" type="submit">Connect</button></div>
+		<div class="actions"><button type="button" onclick={() => (simplefin = null)}>Cancel</button><button class="primary" type="submit">Connect</button></div>
 	</form>
 </Dialog>
 {/if}

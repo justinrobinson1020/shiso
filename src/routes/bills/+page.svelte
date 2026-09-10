@@ -36,7 +36,7 @@
 	</tbody></table>
 {/snippet}
 
-<div class="toolbar"><h2 style="margin:0">Bills</h2><button class="primary" onclick={() => (editing = blank('bill'))}>+ Bill</button></div>
+<div class="toolbar"><h2>Bills</h2><button class="primary" onclick={() => (editing = blank('bill'))}>+ Bill</button></div>
 <table><thead><tr><th>Bill</th><th class="hide-sm">Schedule</th><th>From</th><th class="num">Expected</th><th>Next</th><th></th></tr></thead><tbody>
 {#each v.bills as b (b.id)}
 	<tr class:muted={!b.active}><td>{b.name}{#if b.linkedDebtAccountId} <span class="muted small">card</span>{/if}{#if b.autopay} <span class="muted small">autopay</span>{/if}{#if !b.active} <span class="status">inactive</span>{/if}
@@ -48,7 +48,7 @@
 {:else}<tr><td colspan="6" class="muted">No bills yet.</td></tr>{/each}
 </tbody></table>
 
-<div class="toolbar"><h2 style="margin:0">Income</h2><button class="primary" onclick={() => (editing = blank('income'))}>+ Income</button></div>
+<div class="toolbar"><h2>Income</h2><button class="primary" onclick={() => (editing = blank('income'))}>+ Income</button></div>
 <table><thead><tr><th>Source</th><th class="hide-sm">Schedule</th><th>To</th><th class="num">Expected</th><th>Next</th><th></th></tr></thead><tbody>
 {#each v.income as s (s.id)}
 	<tr class:muted={!s.active}><td>{s.name}<div class="small muted only-sm">{schedule(s)}</div></td><td class="small hide-sm">{schedule(s)}</td><td>{s.depositAccountName}</td><td class="num"><Money cents={s.expectedAmount} /></td>

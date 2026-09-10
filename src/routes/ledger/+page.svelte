@@ -87,7 +87,7 @@
 	<p class="small">Rename every transaction whose raw payee contains the pattern to <strong>{ruleFor.payee}</strong>{#if ruleFor.categoryId} and categorise it as {catName(ruleFor.categoryId)}{/if}.</p>
 	<form class="grid" onsubmit={(e) => { e.preventDefault(); const r = ruleFor!; ruleFor = null; run(() => post('/api/payee-rules', { pattern: r.pattern, payee: r.payee, categoryId: r.categoryId, applyToExisting: true })); }}>
 		<label for="rule-pattern">Pattern</label><input id="rule-pattern" bind:value={ruleFor.pattern} />
-		<div class="actions" style="grid-column: 1 / -1"><button type="button" onclick={() => (ruleFor = null)}>No thanks</button><button class="primary" type="submit">Create rule</button></div>
+		<div class="actions"><button type="button" onclick={() => (ruleFor = null)}>No thanks</button><button class="primary" type="submit">Create rule</button></div>
 	</form>
 </Dialog>
 {/if}

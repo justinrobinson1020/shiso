@@ -34,14 +34,14 @@
 		{#if f.cadence === 'semi_monthly'}<label for="d-day2">Second due day</label><input id="d-day2" type="number" min="1" max="31" bind:value={f.dueDay2} required />{/if}
 		{#if f.cadence === 'every_n_weeks'}<label for="d-int">Every N weeks</label><input id="d-int" type="number" min="1" bind:value={f.interval} required />{/if}
 		{#if f.cadence === 'every_n_weeks' || f.cadence === 'yearly'}<label for="d-anchor">Anchor date</label><input id="d-anchor" type="date" bind:value={f.anchorDate} required />{/if}
-		<label for="d-tol">Tolerance ($ / %)</label><span><input class="num" style="width:5em" bind:value={f.toleranceAbs} placeholder="0.00" /> <input type="number" min="0" max="100" style="width:4em" bind:value={f.tolerancePct} /></span>
+		<label for="d-tol">Tolerance ($ / %)</label><span><input class="num w5" bind:value={f.toleranceAbs} placeholder="0.00" /> <input type="number" min="0" max="100" class="w4" bind:value={f.tolerancePct} /></span>
 		<label for="d-pat">Match pattern</label><input id="d-pat" bind:value={f.matchPattern} placeholder="substring of the payee, optional" />
 		{#if kind === 'bill'}
 			<label for="d-auto">Autopay</label><input id="d-auto" type="checkbox" bind:checked={f.autopay} />
 			<label for="d-debt">Card / loan paid</label><select id="d-debt" bind:value={f.linkedDebtAccountId}><option value={null}>not a debt payment</option>{#each debtAccounts as a}<option value={a.id}>{a.name}</option>{/each}</select>
 		{/if}
 		{#if f.id != null}<label for="d-active">Active</label><input id="d-active" type="checkbox" bind:checked={f.active} />{/if}
-		{#if error}<p class="error" style="grid-column: 1 / -1">{error}</p>{/if}
-		<div class="actions" style="grid-column: 1 / -1"><button type="button" onclick={onclose}>Cancel</button><button class="primary" type="submit">Save</button></div>
+		{#if error}<p class="error">{error}</p>{/if}
+		<div class="actions"><button type="button" onclick={onclose}>Cancel</button><button class="primary" type="submit">Save</button></div>
 	</form>
 </Dialog>
