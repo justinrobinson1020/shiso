@@ -255,6 +255,19 @@ export const incomeOccurrences = sqliteTable('income_occurrences', {
 	...timestamps
 }, (t) => [uniqueIndex('income_occurrences_source_due').on(t.incomeSourceId, t.dueDate)]);
 
+// ---- Phase 4 targets (P4 §3) --------------------------------------------
+export const TARGET_KINDS = ['monthly', 'refill', 'by_date'] as const;
+export type TargetKind = (typeof TARGET_KINDS)[number];
+
+export const categoryTargets = sqliteTable('category_targets', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	categoryId: integer('category_id').notNull().references(() => categories.id),
+	kind: text('kind', { enum: TARGET_KINDS }).notNull(),
+	amount: integer('amount').notNull(),
+	targetDate: text('target_date'),
+	...timestamps
+}, (t) => [uniqueIndex('category_targets_category').on(t.categoryId)]);
+
 // ---- Phase 2 debt (P2 §3) -----------------------------------------------
 export const plannedExtras = sqliteTable('planned_extras', {
 	id: integer('id').primaryKey({ autoIncrement: true }),

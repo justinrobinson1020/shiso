@@ -29,6 +29,13 @@
       "when": 1789100047454,
       "tag": "0003_debt_plan",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789104702004,
+      "tag": "0004_category_targets",
+      "breakpoints": true
     }
   ]
 }

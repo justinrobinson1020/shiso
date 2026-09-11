@@ -10,7 +10,7 @@ const EXPECTED_TABLES = [
 	'category_groups', 'categories', 'periods', 'budget_assignments',
 	'bills', 'bill_occurrences', 'income_sources', 'income_occurrences',
 	'sync_runs', 'settings',
-	'planned_extras', 'promo_balances'
+	'planned_extras', 'promo_balances', 'category_targets'
 ];
 
 describe('schema', () => {
