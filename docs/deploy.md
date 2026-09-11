@@ -49,6 +49,9 @@ The mode argument is required, and through `npm run` it needs npm's own `--`
 separator first — npm swallows a bare `--dry-run` and never passes it on, which
 would silently turn a rehearsal into a live run. Calling
 `scripts/import-history.sh <dir> <map.txt> --dry-run` directly needs no separator.
+The script sends an `Origin` header matching `SHISO_URL` (SvelteKit's CSRF check
+rejects form posts without one) and passes `CURL_OPTS` through to curl, so
+`CURL_OPTS=-k` covers the homelab's self-signed certificate.
 
 The map file is a newline-delimited list of `<file-or-folder relative to the statement directory> <accountId>` entries; blank lines and lines starting with `#` are ignored. A folder entry imports all files in it in directory order. Synchrony accounts must first be created manually on the Accounts page as a manual connection before importing their statements.
 
