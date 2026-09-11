@@ -1,7 +1,7 @@
 # shiso — Phase 5: Account history import
 
 **Date:** 2026-09-11
-**Status:** Draft
+**Status:** Implemented (2026-09-11)
 **Scope:** Importing bank and card history from downloaded CSVs and PDF statements into the ledger, with balances, safe overlap with synced rows, opening-balance correction, and a budget-start boundary so history never disturbs the live budget. Section references are to the Phase 1 spec unless marked §P5.
 
 ## 1. Purpose

@@ -60,7 +60,8 @@ npm run check    # svelte-check
   the ones with no bill yet.
 - **Accounts** (`/accounts`) — connections and sync status, relink, manual
   sync, balance drift and adjustment, debt terms, manual balance entry, CSV
-  import.
+  and PDF statement import (Apple Card, Capital One, NASA FCU CSVs; Chase and
+  Synchrony statements).
 - **Bills** (`/bills`) — bill and income definitions and occurrence history.
 
 ## Data model
@@ -74,6 +75,8 @@ Envelopes (`categories` grouped by `category_groups`) carry an `assigned`
 amount per period; `available` is always computed, never stored. See
 [the Phase 1 design spec](docs/superpowers/specs/2026-09-04-shiso-phase1-foundation-design.md)
 (§4 for the schema, §7 for envelope semantics) for the full model.
+
+History imported from statements lands in real periods for the ledger and spending pages, but envelope math starts at the `budget_start` setting (pinned at first startup to the earliest period), so backfilling never changes the live budget. Imports dedup against synced rows by amount within three days and correct the account's opening-balance row so the ledger keeps summing to the balance.
 
 ## Providers
 

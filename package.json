@@ -14,7 +14,8 @@
 		"test:watch": "vitest",
 		"db:generate": "drizzle-kit generate",
 		"release": "bash scripts/release.sh",
-		"import:sheet": "tsx scripts/import-sheet.ts"
+		"import:sheet": "tsx scripts/import-sheet.ts",
+		"import:history": "zsh scripts/import-history.sh"
 	},
 	"devDependencies": {
 		"@sveltejs/kit": "^2.63.0",

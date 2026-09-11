@@ -20,13 +20,25 @@ On the new container, install Node 24 via NodeSource:
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
-apt-get install -y nodejs build-essential python3
+apt-get install -y nodejs build-essential python3 poppler-utils
 ```
 
 `build-essential` and `python3` are there for `better-sqlite3`: when no
 prebuilt binary matches the container's Node ABI, `npm ci` compiles the
 module with node-gyp, which needs `make`, a C++ toolchain, and Python.
 Without them the first `install.sh` run fails inside `npm ci`.
+`poppler-utils` provides `pdftotext`, which the Accounts page uses to read
+PDF statements; without it PDF imports fail with a 500 and CSV imports still work.
+
+### History backfill
+
+After the app is running, import account history with:
+
+```bash
+SHISO_URL=https://shiso.home.local npm run import:history /path/to/statements map.txt
+```
+
+The map file is a newline-delimited list of `<file-or-folder relative to the statement directory> <accountId>` entries; blank lines and lines starting with `#` are ignored. A folder entry imports all files in it in directory order. Synchrony accounts must first be created manually on the Accounts page as a manual connection before importing their statements.
 
 ## 3. First release
 
