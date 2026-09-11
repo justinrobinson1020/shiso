@@ -135,7 +135,7 @@ input.w5 { width: 5em; } input.w4 { width: 4em; }
 
 	.sheet { grid-template-columns: 1fr; }
 	table.block tfoot tr.grand td { font-size: var(--text-table); }
-	table.block td:first-child { white-space: normal; }
+	.sheet table.block td:first-child { white-space: normal; }
 	.toolbar.month-nav { flex-direction: row; flex-wrap: nowrap; align-items: center; }
 	.toolbar.month-nav > * { width: auto; }
 	.toolbar.month-nav h1 { flex: 1; text-align: center; }

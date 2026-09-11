@@ -69,14 +69,14 @@
 
 	<h2>Plan · {v.period.label}</h2>
 	<table class="block">
-		<thead><tr><th>Account</th><th class="num">Minimum</th><th class="num">Extra</th><th class="num">Planned</th><th class="num hide-sm">Envelope</th><th class="num">Shortfall</th><th></th></tr></thead>
+		<thead><tr><th>Account</th><th class="num">Minimum</th><th class="num">Extra</th><th class="num hide-sm">Planned</th><th class="num hide-sm">Envelope</th><th class="num">Shortfall</th><th></th></tr></thead>
 		<tbody>
 		{#each v.debts as d (d.id)}
 			<tr>
-				<td>{d.name}{#if d.categoryId == null}<div class="small muted">no payment category</div>{/if}<div class="small muted only-sm">envelope {#if d.available == null}—{:else}<Money cents={d.available} signed />{/if}</div></td>
+				<td>{d.name}{#if d.categoryId == null}<span class="muted small" title="no debt_payment category is linked to this account"> · no envelope</span>{:else}<div class="small muted only-sm">envelope <Money cents={d.available ?? 0} signed /></div>{/if}</td>
 				<td class="num">{#if d.minimum == null}<span class="muted" title="no terms minimum and no linked bill">none</span>{:else}<Money cents={d.minimum} />{/if}</td>
 				<td class="num"><input class="num" value={dollars(d.extra)} disabled={busy != null} onchange={(e) => saveExtra(d.id, (e.target as HTMLInputElement).value)} /></td>
-				<td class="num"><Money cents={d.planned} /></td>
+				<td class="num hide-sm"><Money cents={d.planned} /></td>
 				<td class="num hide-sm">{#if d.available == null}<span class="muted">—</span>{:else}<Money cents={d.available} signed />{/if}</td>
 				<td class="num">{#if d.categoryId == null}<span class="muted">—</span>{:else if d.shortfall > 0}<Money cents={d.shortfall} />{:else}<span class="status paid">funded</span>{/if}</td>
 				<td class="row-actions">{#if d.shortfall > 0}<button class="small" disabled={busy != null} onclick={() => run(`f-${d.id}`, () => post('/api/debt/fund', { periodId: v.period.id, accountId: d.id }))}>Fund</button>{/if}</td>
@@ -84,7 +84,7 @@
 		{/each}
 		</tbody>
 		<tfoot>
-			<tr><td>Total</td><td class="num"><Money cents={v.totals.minimum} /></td><td class="num"><Money cents={v.totals.extra} /></td><td class="num"><Money cents={v.totals.planned} /></td><td class="hide-sm"></td><td class="num"><Money cents={v.totals.shortfall} /></td><td></td></tr>
+			<tr><td>Total</td><td class="num"><Money cents={v.totals.minimum} /></td><td class="num"><Money cents={v.totals.extra} /></td><td class="num hide-sm"><Money cents={v.totals.planned} /></td><td class="hide-sm"></td><td class="num"><Money cents={v.totals.shortfall} /></td><td></td></tr>
 			<tr><td colspan="7" class="small muted">Ready to assign <Money cents={v.readyToAssign} signed />. Funding moves the shortfall from ready-to-assign into the payment envelope for this period.</td></tr>
 		</tfoot>
 	</table>
