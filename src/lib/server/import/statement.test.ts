@@ -4,6 +4,7 @@ import { fixture } from '../test/fixture';
 import { accounts, accountBalances, transactions, transactionSplits } from '../db/schema';
 import { createTransaction } from '../ledger/transactions';
 import { systemCategoryId } from '../ledger/categories';
+import { appendBalance } from '../sync/connections';
 import { importParsed, reconcileStatement } from './statement';
 import { ImportError, type ParsedFile, type ParsedRow } from './formats/types';
 const row = (postedDate: string, amount: number, payeeRaw: string, extra: Partial<ParsedRow> = {}): ParsedRow => ({ postedDate, transactedAt: null, amount, payeeRaw, memo: null, providerCategory: null, referenceId: null, ...extra });
@@ -19,6 +20,9 @@ describe('reconcileStatement', () => {
 		const bad = { ...ok, statement: { ...ok.statement!, newBalance: -2600 } };
 		expect(() => reconcileStatement(bad)).toThrow(ImportError);
 		expect(() => reconcileStatement(bad)).toThrow(/does not reconcile: previous -2000 \+ rows -500 ≠ new -2600 \(off by 100\)/);
+		// signed, so the direction survives: the same gap the other way reads -100, not 100
+		const other = { ...ok, statement: { ...ok.statement!, newBalance: -2400 } };
+		expect(() => reconcileStatement(other)).toThrow(/≠ new -2400 \(off by -100\)/);
 	});
 });
 
@@ -82,6 +86,15 @@ describe('importParsed', () => {
 		expect(importParsed(f.db, f.card, parsed, opts).balances).toBe(0);
 		expect(f.db.select().from(accountBalances).where(eq(accountBalances.accountId, f.card)).all()).toMatchObject([{ asOf: '2026-08-14', current: -250000, source: 'import' }]);
 	});
+	it('skips a statement balance dated on or after the newest synced balance', () => {
+		const f = fixture();
+		appendBalance(f.db, f.card, { asOf: '2026-09-08', current: -68691, source: 'sync' });
+		// the month-end sample is history; the one that ties the sync would outrank it and move ready-to-assign
+		const parsed = file([], { balances: [{ asOf: '2026-08-31', current: -60000 }, { asOf: '2026-09-08', current: -70000 }] });
+		expect(importParsed(f.db, f.card, parsed, opts).balances).toBe(1);
+		expect(f.db.select().from(accountBalances).where(and(eq(accountBalances.accountId, f.card), eq(accountBalances.source, 'import'))).all())
+			.toMatchObject([{ asOf: '2026-08-31', current: -60000 }]);
+	});
 	it('reduces and redates an existing opening row by the rows created on or before it', () => {
 		const f = fixture();
 		const recon = systemCategoryId(f.db, 'reconciliation');
@@ -101,24 +114,66 @@ describe('importParsed', () => {
 		const f = fixture();
 		const st = { opensOn: '2026-07-15', closesOn: '2026-08-14', previousBalance: -2000, newBalance: -2500 };
 		const r = importParsed(f.db, f.card, file([row('2026-08-01', -500, 'A')], { statement: st }), opts);
-		expect(r.opening).toEqual({ seeded: -2000, date: '2026-07-14' });
+		expect(r).toMatchObject({ opening: { seeded: -2000, date: '2026-07-14' }, previousDelta: 0, closingDelta: 0 });
 		expect(ledgerSum(f.db, f.card)).toBe(-2500);
 		const next = { opensOn: '2026-08-15', closesOn: '2026-09-14', previousBalance: -2500, newBalance: -2600 };
-		expect(importParsed(f.db, f.card, file([row('2026-09-01', -100, 'B')], { statement: next }), opts).opening).toBeNull();
+		const r2 = importParsed(f.db, f.card, file([row('2026-09-01', -100, 'B')], { statement: next }), opts);
+		expect(r2).toMatchObject({ opening: null, previousDelta: 0, closingDelta: 0 });   // the later statement's own opening day is already covered
 		expect(ledgerSum(f.db, f.card)).toBe(-2600);
+	});
+	it('keeps the seeded opening row out of transfer detection', () => {
+		const f = fixture();
+		const st = { opensOn: '2026-07-15', closesOn: '2026-08-14', previousBalance: -2000, newBalance: -2500 };
+		importParsed(f.db, f.card, file([row('2026-08-01', -500, 'A')], { statement: st }), opts);
+		expect(live(f.db, f.card).find((t) => t.source === 'opening')!.processedAt).not.toBeNull();
 	});
 	it('gives the same ledger whether an earlier statement arrives before or after a later one', () => {
 		const later = file([row('2026-08-01', -500, 'A')], { statement: { opensOn: '2026-07-15', closesOn: '2026-08-14', previousBalance: -2000, newBalance: -2500 } });
 		const earlier = file([row('2026-07-01', -1500, 'Z')], { statement: { opensOn: '2026-06-15', closesOn: '2026-07-14', previousBalance: -500, newBalance: -2000 } });
 		const a = fixture(); importParsed(a.db, a.card, later, opts); const ra = importParsed(a.db, a.card, earlier, opts);
-		const b = fixture(); importParsed(b.db, b.card, earlier, opts); importParsed(b.db, b.card, later, opts);
-		expect(ra.opening).toEqual({ from: -2000, to: -500, date: '2026-06-30' });
-		// the opening row's date differs by order (day before the earliest row seen at the time); its amount and every other row do not
-		const shape = (x: ReturnType<typeof fixture>) => live(x.db, x.card).filter((t) => t.source !== 'opening').map((t) => [t.postedDate, t.amount, t.source]).sort();
+		const b = fixture(); importParsed(b.db, b.card, earlier, opts); const rb = importParsed(b.db, b.card, later, opts);
+		// the plug belongs to the earliest statement either way: the day before it opens, holding its previous balance
+		expect(ra).toMatchObject({ opening: { from: -2000, to: -500, date: '2026-06-14' }, previousDelta: 0, closingDelta: 0 });
+		expect(rb).toMatchObject({ opening: null, previousDelta: 0, closingDelta: 0 });
+		const shape = (x: ReturnType<typeof fixture>) => live(x.db, x.card).map((t) => [t.postedDate, t.amount, t.source]).sort();
 		expect(shape(a)).toEqual(shape(b));
 		expect(live(a.db, a.card).find((t) => t.source === 'opening')!.amount).toBe(-500);
 		expect(live(b.db, b.card).find((t) => t.source === 'opening')!.amount).toBe(-500);
 		expect(ledgerSum(a.db, a.card)).toBe(-2500); expect(ledgerSum(b.db, b.card)).toBe(-2500);
+	});
+	it('reports the gap while a middle statement is missing and closes it when that statement arrives', () => {
+		const f = fixture();
+		const aug = file([row('2026-08-10', -500, 'Aug')], { statement: { opensOn: '2026-08-01', closesOn: '2026-08-31', previousBalance: -2000, newBalance: -2500 } });
+		const jun = file([row('2026-06-10', -1000, 'Jun')], { statement: { opensOn: '2026-06-01', closesOn: '2026-06-30', previousBalance: -500, newBalance: -1500 } });
+		const jul = file([row('2026-07-10', -500, 'Jul')], { statement: { opensOn: '2026-07-01', closesOn: '2026-07-31', previousBalance: -1500, newBalance: -2000 } });
+		expect(importParsed(f.db, f.card, aug, opts)).toMatchObject({ opening: { seeded: -2000, date: '2026-07-31' }, previousDelta: 0, closingDelta: 0 });
+		expect(ledgerSum(f.db, f.card)).toBe(-2500);
+		// June takes the plug over: it is now the earliest statement, and its previous balance is the whole history before it
+		expect(importParsed(f.db, f.card, jun, opts)).toMatchObject({ opening: { from: -2000, to: -500, date: '2026-05-31' }, previousDelta: 0, closingDelta: 0 });
+		expect(ledgerSum(f.db, f.card)).toBe(-2000);   // August's rows are in, July's are not: understated by exactly ΣJuly
+		expect(importParsed(f.db, f.card, jul, opts)).toMatchObject({ opening: null, previousDelta: 0, closingDelta: 0 });
+		expect(ledgerSum(f.db, f.card)).toBe(-2500);
+		// with all three in, every window closes: August's covers the whole ledger, June's and July's their own prefixes
+		for (const parsed of [aug, jun, jul]) expect(importParsed(f.db, f.card, parsed, opts)).toMatchObject({ created: 0, duplicates: 1, opening: null, previousDelta: 0, closingDelta: 0 });
+		expect(ledgerSum(f.db, f.card)).toBe(-2500);
+	});
+	it('reports a nonzero previousDelta when the statement claims history the ledger does not have', () => {
+		const f = fixture();
+		// July alone: nothing before it explains its -1500 previous balance, so the plug takes all of it and the gap is 0…
+		const jul = file([row('2026-07-10', -500, 'Jul')], { statement: { opensOn: '2026-07-01', closesOn: '2026-07-31', previousBalance: -1500, newBalance: -2000 } });
+		expect(importParsed(f.db, f.card, jul, opts)).toMatchObject({ opening: { seeded: -1500, date: '2026-06-30' }, previousDelta: 0, closingDelta: 0 });
+		// …but a September statement that expects August's -800 of rows sees them missing, before its window and inside it
+		const sep = file([row('2026-09-05', -100, 'Sep')], { statement: { opensOn: '2026-09-01', closesOn: '2026-09-30', previousBalance: -2800, newBalance: -2900 } });
+		expect(importParsed(f.db, f.card, sep, opts)).toMatchObject({ opening: null, previousDelta: 800, closingDelta: 800 });
+	});
+	it('reports a nonzero closingDelta when the statement window itself does not add up', () => {
+		const f = fixture();
+		// Plaid posted the same ride twice; the statement has it once, so one of the two is matched and the other stays
+		createTransaction(f.db, { accountId: f.card, externalId: 'plaid1', postedDate: '2026-08-19', amount: -1898, payeeRaw: 'Lyft', source: 'sync' });
+		createTransaction(f.db, { accountId: f.card, externalId: 'plaid2', postedDate: '2026-08-20', amount: -1898, payeeRaw: 'Lyft', source: 'sync' });
+		const aug = file([row('2026-08-19', -1898, 'LYFT *RIDE')], { statement: { opensOn: '2026-08-01', closesOn: '2026-08-31', previousBalance: -1000, newBalance: -2898 } });
+		// history before the statement is complete, but its window holds one -1898 too many
+		expect(importParsed(f.db, f.card, aug, opts)).toMatchObject({ created: 0, matched: 1, previousDelta: 0, closingDelta: -1898 });
 	});
 	it('dry run returns the report and leaves every table byte-identical', () => {
 		const f = fixture();

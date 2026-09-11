@@ -1,8 +1,8 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db';
 import { accounts, accountBalances, transactions, transactionSplits } from '../db/schema';
 import { ensurePeriods, periodBoundsFor, nextPeriodStart, periodIdForDate, type Cadence } from '../budget/periods';
-import { createTransaction } from '../ledger/transactions';
+import { createTransaction, markProcessed } from '../ledger/transactions';
 import { systemCategoryId } from '../ledger/categories';
 import { InvariantError } from '../ledger/errors';
 import { appendBalance } from '../sync/connections';
@@ -14,6 +14,10 @@ export type ImportReport = {
 	format: ImportFormat; mask: string | null; statement: ParsedStatement | null;
 	created: number; duplicates: number; matched: number; balances: number;
 	opening: { from: number; to: number; date: string } | { seeded: number; date: string } | null;
+	/** Σ of every live row dated before the statement's `opensOn` minus its previous balance; 0 when history up to it is complete, null with no statement. Reported, never rejected on. */
+	previousDelta: number | null;
+	/** The same through `closesOn` against the new balance. It differs from `previousDelta` by exactly what this statement's own window got wrong: a false match, or one that should have happened and did not. */
+	closingDelta: number | null;
 	processed: number; dryRun: boolean;
 };
 const MATCH_WINDOW_DAYS = 3;
@@ -24,7 +28,9 @@ export function reconcileStatement(parsed: ParsedFile): void {
 	const sum = parsed.rows.reduce((s, r) => s + r.amount, 0);
 	const expected = parsed.statement.previousBalance + sum;
 	if (expected !== parsed.statement.newBalance)
-		throw new ImportError('reconcile', `does not reconcile: previous ${parsed.statement.previousBalance} + rows ${sum} ≠ new ${parsed.statement.newBalance} (off by ${Math.abs(parsed.statement.newBalance - expected)})`);
+		// Signed, not absolute: over a 125-file run the direction is half the diagnosis. Positive means the parsed
+		// rows land above the statement's new balance — on a card, a debit the parser missed — negative below it.
+		throw new ImportError('reconcile', `does not reconcile: previous ${parsed.statement.previousBalance} + rows ${sum} ≠ new ${parsed.statement.newBalance} (off by ${expected - parsed.statement.newBalance})`);
 }
 
 const dayOf = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : null);
@@ -44,6 +50,9 @@ function closestMatch(cands: Candidate[], r: ParsedRow, claimed: Set<number>): C
 }
 const hasImportBalance = (db: DbOrTx, accountId: number, asOf: string, current: number) =>
 	!!db.select({ id: accountBalances.id }).from(accountBalances).where(and(eq(accountBalances.accountId, accountId), eq(accountBalances.asOf, asOf), eq(accountBalances.current, current), eq(accountBalances.source, 'import'))).get();
+/** The newest synced balance's date, or null. A statement sample on or after it would outrank it in `latestBalance` and move ready-to-assign. */
+const latestSyncBalanceDate = (db: DbOrTx, accountId: number): string | null =>
+	db.select({ asOf: accountBalances.asOf }).from(accountBalances).where(and(eq(accountBalances.accountId, accountId), eq(accountBalances.source, 'sync'))).orderBy(desc(accountBalances.asOf)).get()?.asOf ?? null;
 
 export function importParsed(db: Db, accountId: number, parsed: ParsedFile, opts: { cadence: Cadence; todayIso: string; dryRun?: boolean }): ImportReport {
 	const account = db.select({ id: accounts.id, mask: accounts.mask }).from(accounts).where(eq(accounts.id, accountId)).get();
@@ -60,7 +69,6 @@ export function importParsed(db: Db, accountId: number, parsed: ParsedFile, opts
 			ensurePeriods(tx, opts.cadence, earliest, next.endDate);
 		}
 		const existingRows = tx.select({ id: transactions.id, amount: transactions.amount, postedDate: transactions.postedDate, transactedAt: transactions.transactedAt, externalId: transactions.externalId, source: transactions.source }).from(transactions).where(and(eq(transactions.accountId, accountId), isNull(transactions.deletedAt))).all();
-		const existing: Candidate[] = existingRows;
 		const liveByExternalId = new Map<string, number>(existingRows.map((e) => [e.externalId, e.id]));
 		// Opening rows are a synthetic plug, not a real transaction a statement row could be — never a fuzzy-match candidate.
 		const byAmount = new Map<number, Candidate[]>(); for (const e of existingRows) if (e.source !== 'opening') byAmount.set(e.amount, [...(byAmount.get(e.amount) ?? []), e]);
@@ -81,27 +89,61 @@ export function importParsed(db: Db, accountId: number, parsed: ParsedFile, opts
 			} catch (err) { if (err instanceof InvariantError && err.code === 'DUPLICATE_EXTERNAL_ID') duplicates++; else throw err; }   // a soft-deleted row still owns the id
 		}
 		let balances = 0;
-		for (const b of parsed.balances) if (!hasImportBalance(tx, accountId, b.asOf, b.current)) { appendBalance(tx, accountId, { asOf: b.asOf, current: b.current, source: 'import' }); balances++; }
+		// A month-end sample dated on or after the newest sync balance would become the account's current
+		// balance and move ready-to-assign; only samples strictly older than it are history worth keeping.
+		const syncedThrough = latestSyncBalanceDate(tx, accountId);
+		for (const b of parsed.balances) {
+			if (syncedThrough && compareIso(b.asOf, syncedThrough) >= 0) continue;
+			if (hasImportBalance(tx, accountId, b.asOf, b.current)) continue;
+			appendBalance(tx, accountId, { asOf: b.asOf, current: b.current, source: 'import' }); balances++;
+		}
+		// The account's live rows as they stand now, this call's included.
+		const liveRows = () => tx.select({ amount: transactions.amount, postedDate: transactions.postedDate, source: transactions.source })
+			.from(transactions).where(and(eq(transactions.accountId, accountId), isNull(transactions.deletedAt))).all();
+		const sum = (rows: { amount: number }[]) => rows.reduce((s, t) => s + t.amount, 0);
+		/** Move the opening row to `amount`/`date`, its single reconciliation split with it, and keep it out of transfer detection. */
+		const moveOpening = (id: number, amount: number, date: string) => {
+			const openingSplits = tx.select({ id: transactionSplits.id }).from(transactionSplits).where(eq(transactionSplits.transactionId, id)).all();
+			if (openingSplits.length !== 1) throw new Error('opening row has multiple splits; cannot adjust');
+			ensurePeriods(tx, opts.cadence, date, date);
+			tx.update(transactions).set({ amount, postedDate: date, periodId: periodIdForDate(tx, date), updatedAt: nowIso() }).where(eq(transactions.id, id)).run();
+			tx.update(transactionSplits).set({ amount }).where(eq(transactionSplits.id, openingSplits[0].id)).run();
+			markProcessed(tx, [id]);
+		};
 		let opening: ImportReport['opening'] = null;
+		let previousDelta: number | null = null, closingDelta: number | null = null;
+		const S = parsed.statement;
 		const O = tx.select().from(transactions).where(and(eq(transactions.accountId, accountId), eq(transactions.source, 'opening'), isNull(transactions.deletedAt))).get();
-		if (O) {
+		if (S) {
+			// The statement states the balance the day before it opens, so the opening plug is whatever that
+			// balance is not already explained by: previousBalance − (live rows dated before opensOn).
+			const date = addDays(S.opensOn, -1);
+			const amount = S.previousBalance - sum(liveRows().filter((t) => t.source !== 'opening' && compareIso(t.postedDate, S.opensOn) < 0));
+			if (!O) {
+				try {
+					const id = createTransaction(tx, { accountId, externalId: 'opening', postedDate: date, amount, payeeRaw: 'Opening balance', payee: 'Opening balance', source: 'opening', splits: [{ categoryId: systemCategoryId(tx, 'reconciliation'), amount }] });
+					markProcessed(tx, [id]);
+					opening = { seeded: amount, date };
+				} catch (err) { if (!(err instanceof InvariantError && err.code === 'DUPLICATE_EXTERNAL_ID')) throw err; }   // a soft-deleted opening row still owns the id
+			} else if (compareIso(O.postedDate, date) >= 0 && (O.amount !== amount || O.postedDate !== date)) {
+				// O sits at or after this statement's opening day: this statement is the earliest history the
+				// account has, so it owns the plug. An O already earlier than that covers older history; leave it.
+				moveOpening(O.id, amount, date);
+				opening = { from: O.amount, to: amount, date };
+			}
+			const settled = liveRows();   // after the opening step, so both deltas read the ledger the caller will see
+			previousDelta = sum(settled.filter((t) => compareIso(t.postedDate, S.opensOn) < 0)) - S.previousBalance;
+			closingDelta = sum(settled.filter((t) => compareIso(t.postedDate, S.closesOn) <= 0)) - S.newBalance;
+		} else if (O) {
 			const before = createdRows.filter((c) => compareIso(c.postedDate, O.postedDate) <= 0);
 			if (before.length) {
-				const openingSplits = tx.select({ id: transactionSplits.id }).from(transactionSplits).where(eq(transactionSplits.transactionId, O.id)).all();
-				if (openingSplits.length !== 1) throw new Error('opening row has multiple splits; cannot adjust');
 				const to = O.amount - before.reduce((s, c) => s + c.amount, 0);
 				const date = addDays(before.map((c) => c.postedDate).reduce((m, d) => (compareIso(d, m) < 0 ? d : m)), -1);
-				ensurePeriods(tx, opts.cadence, date, date);
-				tx.update(transactions).set({ amount: to, postedDate: date, periodId: periodIdForDate(tx, date), updatedAt: nowIso() }).where(eq(transactions.id, O.id)).run();
-				tx.update(transactionSplits).set({ amount: to }).where(eq(transactionSplits.id, openingSplits[0].id)).run();
+				moveOpening(O.id, to, date);
 				opening = { from: O.amount, to, date };
 			}
-		} else if (parsed.statement && !existing.some((e) => compareIso(e.postedDate, parsed.statement!.opensOn) < 0)) {
-			const date = addDays(parsed.statement.opensOn, -1); const amount = parsed.statement.previousBalance;
-			createTransaction(tx, { accountId, externalId: 'opening', postedDate: date, amount, payeeRaw: 'Opening balance', payee: 'Opening balance', source: 'opening', splits: [{ categoryId: systemCategoryId(tx, 'reconciliation'), amount }] });
-			opening = { seeded: amount, date };
 		}
-		const report = { ...base, created, duplicates, matched, balances, opening };
+		const report = { ...base, created, duplicates, matched, balances, opening, previousDelta, closingDelta };
 		if (opts.dryRun) throw new DryRunRollback(report);
 		return report;
 	};

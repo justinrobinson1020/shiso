@@ -30,7 +30,8 @@ export function parseSynchronyStatement(text: string): ParsedFile {
 	const rows: ParsedRow[] = []; let section: string | null = null;
 	for (const line of text.split(/\r?\n/)) {
 		if (END.test(line)) { section = null; continue; }
-		const h = HEADINGS.find(([re]) => re.test(line)); if (h) { section = h[1]; continue; }
+		const heading = line.trimStart();   // pdftotext -layout indents a column's headings; the `$` anchors still have to bind
+		const h = HEADINGS.find(([re]) => re.test(heading)); if (h) { section = h[1]; continue; }
 		if (!section) continue;
 		const m = ROW.exec(line); if (!m) continue;
 		const amount = -dollars(m[5]); if (amount === 0) continue;

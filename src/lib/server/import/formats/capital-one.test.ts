@@ -14,4 +14,11 @@ describe('parseCapitalOneCsv', () => {
 		]);
 	});
 	it('rejects an unknown header', () => { expect(() => parseCapitalOneCsv('Date,Amount\n1,2')).toThrow(/header/); });
+	it('accepts US dates and rejects anything that is not a date', () => {
+		const us = CSV.replace('2026-09-06,2026-09-07', '09/06/2026,09/07/2026');
+		expect(parseCapitalOneCsv(us).rows[1]).toMatchObject({ postedDate: '2026-09-07', transactedAt: '2026-09-06T00:00:00Z' });
+		for (const bad of ['2026-13-01', '2026-09-31', 'Sep 6 2026', '']) {
+			expect(() => parseCapitalOneCsv(CSV.replace('2026-09-07', bad))).toThrow(/date/);
+		}
+	});
 });
