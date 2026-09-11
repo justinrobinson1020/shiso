@@ -11,4 +11,7 @@ describe('dates', () => {
 	it('reads printed dollar amounts as cents', () => {
 		expect(dollars('-$1,234.56')).toBe(-123456); expect(dollars('1,234.56')).toBe(123456); expect(dollars('$0.00')).toBe(0); expect(dollars('-2,466.61')).toBe(-246661);
 	});
+	it('rounds fractional amounts to 2 decimal places', () => {
+		expect(dollars('-60.00000')).toBe(-6000); expect(dollars('2168.92000')).toBe(216892); expect(dollars('1.005')).toBe(101); expect(dollars('-0.004')).toBe(0); expect(dollars('9.999')).toBe(1000);
+	});
 });

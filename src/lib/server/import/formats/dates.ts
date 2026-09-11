@@ -12,4 +12,27 @@ export function statementRowDate(mmdd: string, closesOn: string): string {
 	const year = +m[1] > closeMonth ? closeYear - 1 : closeYear;
 	return `${year}-${m[1]}-${m[2]}`;
 }
-export function dollars(s: string): number { return decimalToCents(s.replace(/[$,\s]/g, '')); }
+export function dollars(s: string): number {
+	const normalized = s.replace(/[$,\s]/g, '');
+	const [intPart, fracPart] = normalized.split('.');
+	const result = !fracPart || fracPart.length <= 2 ? decimalToCents(normalized) : (() => {
+		// Round fractional part to 2 digits: round half-up on the third digit
+		const firstTwoDigits = parseInt(fracPart.slice(0, 2), 10);
+		const thirdDigit = parseInt(fracPart[2], 10);
+		let roundedFraction = firstTwoDigits;
+		if (thirdDigit >= 5) roundedFraction += 1;
+		if (roundedFraction >= 100) {
+			// Carry over to integer part
+			const intValue = parseInt(intPart || '0', 10);
+			const isNegative = intPart.startsWith('-');
+			const absIntValue = Math.abs(intValue);
+			const newAbsInt = absIntValue + 1;
+			const newInt = isNegative ? -newAbsInt : newAbsInt;
+			return decimalToCents(`${newInt}.00`);
+		}
+		const normalizedStr = `${intPart}.${String(roundedFraction).padStart(2, '0')}`;
+		return decimalToCents(normalizedStr);
+	})();
+	// Normalize -0 to 0
+	return result === 0 ? 0 : result;
+}

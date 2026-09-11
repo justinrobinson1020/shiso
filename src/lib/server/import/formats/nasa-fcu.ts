@@ -1,6 +1,6 @@
 import { parse } from 'csv-parse/sync';
 import { ImportError, type ParsedBalance, type ParsedFile, type ParsedRow } from './types';
-import { usDateToIso } from './dates';
+import { dollars, usDateToIso } from './dates';
 export const NASA_HEADER = ['Transaction ID', 'Posting Date', 'Effective Date', 'Amount', 'Description', 'Balance'] as const;
 export function parseNasaFcuCsv(text: string): ParsedFile {
 	const records = parse(text, { columns: true, skip_empty_lines: true, bom: true, trim: true }) as Record<string, string>[];
@@ -9,7 +9,7 @@ export function parseNasaFcuCsv(text: string): ParsedFile {
 	// File order is newest first; each row's Balance is the balance after it.
 	const parsed = records.map((r) => ({
 		postedDate: usDateToIso(r['Posting Date']), transactedAt: r['Effective Date'] ? `${usDateToIso(r['Effective Date'])}T00:00:00Z` : null,
-		amount: Math.round(parseFloat(r['Amount']) * 100), balance: Math.round(parseFloat(r['Balance']) * 100), payeeRaw: r['Description'],
+		amount: dollars(r['Amount']), balance: dollars(r['Balance']), payeeRaw: r['Description'],
 		memo: r['Extended Description'] && r['Extended Description'] !== r['Description'] ? r['Extended Description'] : null,
 		providerCategory: r['Transaction Category'] || null, referenceId: `nasa:${r['Transaction ID']}`, raw: r
 	}));
