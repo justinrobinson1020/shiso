@@ -6,6 +6,7 @@
 	import StackedBars from '$lib/ui/StackedBars.svelte';
 	import LineChart from '$lib/ui/LineChart.svelte';
 	import Sparkline from '$lib/ui/Sparkline.svelte';
+	import { shortDate } from '$lib/dates';
 	let { data } = $props();
 	const v = $derived(data.view);
 	function setParam(k: string, val: string | null) { const u = new URL(page.url); if (val) u.searchParams.set(k, val); else u.searchParams.delete(k); goto(u.pathname + u.search); }
@@ -63,7 +64,7 @@
 	<thead><tr><th>Date</th><th>Payee</th><th class="hide-sm">Category</th><th class="num">Amount</th><th class="num hide-sm">Usual</th><th class="num">Multiple</th></tr></thead>
 	<tbody>
 	{#each v.outliers as o (o.id)}
-		<tr><td>{o.date}</td><td><a href="/ledger?q={encodeURIComponent(o.payee)}&from={o.date}&to={o.date}">{o.payee}</a><div class="small muted only-sm">{o.categoryName} · usual <Money cents={o.usual} /></div></td><td class="hide-sm">{o.categoryName}</td><td class="num"><Money cents={o.amount} /></td><td class="num hide-sm"><Money cents={o.usual} /></td><td class="num">{o.multiple}× <span class="muted small">{o.reason === 'category' ? 'for the category' : 'for this payee'}</span></td></tr>
+		<tr><td class="date">{shortDate(o.date)}</td><td><a href="/ledger?q={encodeURIComponent(o.payee)}&from={o.date}&to={o.date}">{o.payee}</a><div class="small muted only-sm">{o.categoryName} · usual <Money cents={o.usual} /></div></td><td class="hide-sm">{o.categoryName}</td><td class="num"><Money cents={o.amount} /></td><td class="num hide-sm"><Money cents={o.usual} /></td><td class="num">{o.multiple}× <span class="muted small">{o.reason === 'category' ? 'for the category' : 'for this payee'}</span></td></tr>
 	{:else}<tr><td colspan="6" class="muted">Nothing in this range stands out against the twelve months before it.</td></tr>{/each}
 	</tbody>
 </table>

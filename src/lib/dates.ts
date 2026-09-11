@@ -38,6 +38,20 @@ export function todayIso(timeZone: string): string {
 	return isoDateInZone(new Date(), timeZone);
 }
 
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "Sep 10" inside `today`'s year, "Sep 10, 2025" outside it. Display only; storage stays ISO. */
+export function shortDate(iso: string, today = isoDate(new Date())): string {
+	const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+	if (!m) return iso;
+	const base = `${MONTHS_SHORT[+m[2] - 1]} ${+m[3]}`;
+	return m[1] === today.slice(0, 4) ? base : `${base}, ${m[1]}`;
+}
+/** "September 2026" from a YYYY-MM. */
+export function monthLabel(ym: string): string {
+	const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+	return `${MONTHS[+ym.slice(5, 7) - 1]} ${ym.slice(0, 4)}`;
+}
+
 export function nowIso(): string {
 	return new Date().toISOString();
 }

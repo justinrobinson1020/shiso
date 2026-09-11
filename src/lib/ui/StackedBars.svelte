@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { formatCents } from '$lib/money';
-	let { buckets, categories, compare }: { buckets: { key: string; label: string; total: number; prevTotal: number | null; byCategory: Record<string, number> }[]; categories: { id: number; name: string }[]; compare: boolean } = $props();
+	let { buckets, categories, compare }: { buckets: { key: string; label: string; total: number; prevTotal: number | null; byCategory: Record<string, number>; future?: boolean }[]; categories: { id: number; name: string }[]; compare: boolean } = $props();
 	const PALETTE = Array.from({ length: 9 }, (_, i) => `var(--chart-${i + 1})`);
 	const W = 720, H = 260, PAD = 36, BW = $derived(Math.max(8, (W - PAD * 2) / Math.max(buckets.length, 1) - 8));
 	// Only positive segments stack visually, so `max` must track the tallest positive stack —
@@ -11,7 +11,8 @@
 	const yClamped = (v: number) => Math.min(H - PAD, Math.max(PAD, y(v)));
 	const x = (i: number) => PAD + i * ((W - PAD * 2) / Math.max(buckets.length, 1)) + 4;
 	const keyOf = (c: { id: number }) => (c.id === 0 ? 'other' : String(c.id));
-	const linePath = $derived(buckets.map((b, i) => `${i ? 'L' : 'M'}${x(i) + BW / 2},${yClamped(b.total)}`).join(' '));
+	// The total line stops at the last bucket that has begun; a future bucket has nothing to report yet.
+	const linePath = $derived(buckets.filter((b) => !b.future).map((b, i) => `${i ? 'L' : 'M'}${x(i) + BW / 2},${yClamped(b.total)}`).join(' '));
 	const prevPath = $derived(buckets.every((b) => b.prevTotal != null) ? buckets.map((b, i) => `${i ? 'L' : 'M'}${x(i) + BW / 2},${yClamped(b.prevTotal!)}`).join(' ') : '');
 </script>
 <svg class="chart" viewBox="0 0 {W} {H}">
@@ -26,7 +27,7 @@
 					<rect x={x(i)} y={y(prior + s.v)} width={BW} height={y(prior) - y(prior + s.v)} fill={PALETTE[j % PALETTE.length]}><title>{b.label} · {s.c.name}: {formatCents(s.v)}</title></rect>
 				{/if}
 			{/each}
-			<text x={x(i) + BW / 2} y={H - PAD + 14} text-anchor="middle" font-size="10" fill="var(--muted)">{b.label}</text>
+			<text x={x(i) + BW / 2} y={H - PAD + 14} text-anchor="middle" font-size="10" fill="var(--muted)" opacity={b.future ? 0.5 : 1}>{b.label}</text>
 		</g>
 	{/each}
 	{#if compare && prevPath}<path d={prevPath} fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3" opacity=".6" />{/if}

@@ -45,19 +45,21 @@
 	<div class="strip"><span>Targets need <strong><Money cents={v.targetsNeeded} /></strong> this period</span><button class="small primary" onclick={() => fund(null)}>Fund all</button></div>
 {/if}
 <table class="budget">
-	<thead><tr><th>Category</th><th class="hide-sm">Target</th><th class="num hide-sm">Carried</th><th class="num">Assigned</th><th class="num">Activity</th><th class="num">Available</th><th></th></tr></thead>
+	<thead><tr><th>Category<span class="only-sm-inline"> · available</span></th><th class="hide-sm">Target</th><th class="num hide-sm">Carried</th><th class="num hide-sm">Assigned</th><th class="num hide-sm">Activity</th><th class="num hide-sm">Available</th><th></th></tr></thead>
 	<tbody>
 	{#each v.groups as g}
 		<tr class="group"><td colspan="7">{g.name}</td></tr>
 		{#each g.categories.filter((c) => showHidden || !c.hidden) as c (c.id)}
 			<tr>
-				<td>{c.name}{#if c.hidden} <span class="muted small">hidden</span>{/if}{#if c.creditOverspend > 0} <span class="status overdue" title="credit overspend">{formatCents(c.creditOverspend)} on card</span>{/if}
+				<td class="env">
+					<div class="env-head"><span>{c.name}{#if c.hidden} <span class="muted small">hidden</span>{/if}{#if c.creditOverspend > 0} <span class="status overdue" title="credit overspend">{formatCents(c.creditOverspend)} on card</span>{/if}</span><span class="only-sm env-avail"><Money cents={c.available} signed /></span></div>
+					<div class="only-sm env-sub"><label class="small muted">assign <input class="num" value={dollars(c.assigned)} onchange={(e) => assignTo(c.id, (e.target as HTMLInputElement).value)} /></label><span class="small muted">activity <Money cents={c.activity} neutral /></span></div>
 					{#if c.target}<div class="small muted only-sm">{rule(c.target)}{#if c.target.needed > 0} · needs {formatCents(c.target.needed)}{/if}</div>{/if}</td>
 				<td class="hide-sm target">{#if c.target}<div class="small">{rule(c.target)}</div><div class="bar"><i style="width:{Math.round(c.target.progress * 100)}%"></i></div>{#if c.target.needed > 0}<div class="small muted">needs <Money cents={c.target.needed} /></div>{:else}<div class="small muted">on target</div>{/if}{:else}<span class="muted">—</span>{/if}</td>
 				<td class="num hide-sm"><Money cents={c.carried} /></td>
-				<td class="num"><input class="num" value={dollars(c.assigned)} onchange={(e) => assignTo(c.id, (e.target as HTMLInputElement).value)} /></td>
-				<td class="num"><Money cents={c.activity} /></td>
-				<td class="num"><Money cents={c.available} signed /></td>
+				<td class="num hide-sm"><input class="num" value={dollars(c.assigned)} onchange={(e) => assignTo(c.id, (e.target as HTMLInputElement).value)} /></td>
+				<td class="num hide-sm"><Money cents={c.activity} neutral /></td>
+				<td class="num hide-sm"><Money cents={c.available} signed /></td>
 				<td class="row-actions">{#if c.target && c.target.needed > 0}<button class="small" onclick={() => fund(c.id)}>Fund</button>{/if} <button class="small" onclick={() => (move = { from: c.id, to: null, amount: '' })}>Move</button></td>
 			</tr>
 		{/each}

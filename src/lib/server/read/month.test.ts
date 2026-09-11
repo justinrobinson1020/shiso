@@ -22,7 +22,7 @@ describe('monthView', () => {
 		markOccurrencePaid(f.db, rent.id);
 
 		const v = monthView(f.db, { month: '2026-09', todayIso: '2026-09-08', cadence: 'semi_monthly' });
-		expect(v.label).toBe('September 2026'); expect(v.prev).toBe('2026-08'); expect(v.next).toBe('2026-10');
+		expect(v.label).toBe('September 2026'); expect(v.prev).toBe('2026-08'); expect(v.next).toBe('2026-10'); expect(v.prevLabel).toBe('August'); expect(v.nextLabel).toBe('October');
 		expect(v.cash.total).toBe(350000);
 		expect(v.cash.accounts.map((a) => a.name)).toEqual(['Checking', 'Savings']);
 		expect(v.income.expected).toBe(550000); expect(v.income.received).toBe(0); expect(v.income.remaining).toBe(550000);

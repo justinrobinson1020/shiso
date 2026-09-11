@@ -11,5 +11,5 @@ export const load: PageServerLoad = ({ url }) => {
 	const kind = (KINDS as string[]).includes(p.get('kind') ?? '') ? (p.get('kind') as RangeKind) : 'period';
 	const range = resolveRange(getDb(), { kind, anchor: date(p.get('anchor')) ?? today, end: date(p.get('end')), cadence: config.cadence });
 	const filter = { accountId: int(p.get('account')), groupId: int(p.get('group')), merchant: p.get('merchant') || null, includeExcluded: p.get('all') === '1', compare: p.get('compare') === '1' };
-	return { view: spendingView(getDb(), { range, filter, cadence: config.cadence }), today };
+	return { view: spendingView(getDb(), { range, filter, cadence: config.cadence, todayIso: today }), today };
 };

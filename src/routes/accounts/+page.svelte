@@ -5,6 +5,7 @@
 	import TermsEditor, { type Terms } from './TermsEditor.svelte';
 	import { post, upload } from '$lib/ui/api';
 	import { decimalToCents } from '$lib/money';
+	import { shortDate } from '$lib/dates';
 	let { data } = $props();
 	const v = $derived(data.view);
 	let error = $state(''); let busy = $state<string | null>(null);
@@ -54,7 +55,7 @@
 		<div class="toolbar">
 			<strong>{c.institutionName}</strong><span class="muted small">{c.provider}</span><span class="status {c.status}">{c.status}</span>
 			<span class="small muted">last success {fmtTime(c.lastSuccessAt)}</span>
-			{#if c.lastRun}<span class="small muted">last run {c.lastRun.status} · +{c.lastRun.added} ~{c.lastRun.modified} −{c.lastRun.removed}{#if c.lastRun.error} · {c.lastRun.error}{/if}</span>{/if}
+			{#if c.lastRun}<span class="small muted">last run {c.lastRun.status} · {c.lastRun.added} added · {c.lastRun.modified} changed · {c.lastRun.removed} removed{#if c.lastRun.error} · {c.lastRun.error}{/if}</span>{/if}
 			{#if c.provider !== 'manual'}<button disabled={busy != null} onclick={() => run(`sync-${c.id}`, () => post(`/api/sync/${c.id}`, {}))}>Sync</button>{/if}
 			{#if c.status === 'needs_relink' && c.provider === 'plaid'}<button class="primary" disabled={busy != null} onclick={() => plaidLink(c.id)}>Relink</button>{/if}
 			{#if c.status === 'disabled'}<button disabled={busy != null} onclick={() => run('en', () => post(`/api/connections/${c.id}/status`, { status: 'active' }))}>Enable</button>{:else if c.provider !== 'manual'}<button disabled={busy != null} onclick={() => run('dis', () => post(`/api/connections/${c.id}/status`, { status: 'disabled' }))}>Disable</button>{/if}
@@ -65,16 +66,16 @@
 			<tbody>
 			{#each c.accounts as a (a.id)}
 				<tr id="account-{a.id}">
-					<td>{a.name}{#if a.mask} <span class="muted small">····{a.mask}</span>{/if}{#if a.closedAt} <span class="status">closed {a.closedAt}</span>{/if}{#if !a.onBudget} <span class="muted small">off-budget</span>{/if}
-						<div class="small muted only-sm">{a.type} · ledger <Money cents={a.drift.ledgerBalance} />{#if a.isDebt && a.terms} · APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ?? '—'}{/if}</div></td>
+					<td>{a.name}{#if a.mask} <span class="muted small">····{a.mask}</span>{/if}{#if a.closedAt} <span class="status">closed {shortDate(a.closedAt)}</span>{/if}{#if !a.onBudget} <span class="status">off-budget</span>{/if}
+						<div class="small muted only-sm">{a.type} · ledger <Money cents={a.drift.ledgerBalance} neutral={a.isDebt} />{#if a.isDebt && a.terms} · APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ? shortDate(a.terms.nextDueDate) : '—'}{/if}</div></td>
 					<td class="hide-sm">{a.type}</td>
-					<td class="num">{#if a.balance}<Money cents={a.balance.current} /><div class="small muted">{a.balance.asOf} · {a.balance.source}</div>{:else}<span class="muted">—</span>{/if}</td>
-					<td class="num hide-sm"><Money cents={a.drift.ledgerBalance} /></td>
+					<td class="num">{#if a.balance}<Money cents={a.balance.current} neutral={a.isDebt} /><div class="small muted nowrap">{shortDate(a.balance.asOf)} · {a.balance.source}</div>{:else}<span class="muted">—</span>{/if}</td>
+					<td class="num hide-sm"><Money cents={a.drift.ledgerBalance} neutral={a.isDebt} /></td>
 					<td class="num">{#if a.drift.drift != null && a.drift.drift !== 0}<Money cents={a.drift.drift} signed />
 							<button class="small" disabled={busy != null} onclick={() => run(`adj-${a.id}`, () => post(`/api/accounts/${a.id}/adjust`, { amount: a.drift.drift, date: data.today }))}>adjust</button>
 							<div class="small muted">{a.drift.convention === 'exclude_pending' ? 'excluding pending' : 'including pending'} · <button class="small" disabled={busy != null} onclick={() => run('conv', () => post(`/api/accounts/${a.id}/convention`, { convention: a.drift.convention === 'exclude_pending' ? 'include_pending' : 'exclude_pending' }))}>switch</button></div>
 						{:else if a.drift.drift === 0}<span class="status paid">reconciled</span>{:else}<span class="muted">no balance</span>{/if}</td>
-					<td class="hide-sm">{#if a.isDebt}{#if a.terms}<span class="small">APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ?? '—'} <span class="muted">({a.terms.source})</span></span>{:else}<span class="muted small">no terms</span>{/if}
+					<td class="hide-sm terms">{#if a.isDebt}{#if a.terms}<span class="small">APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ? shortDate(a.terms.nextDueDate) : '—'} <span class="muted">({a.terms.source})</span></span>{:else}<span class="muted small">no terms</span>{/if}
 							<button class="small" onclick={() => (termsFor = { id: a.id, name: a.name, terms: a.terms })}>edit</button>{/if}</td>
 					<td class="row-actions">
 						{#if a.isDebt}<button class="small only-sm" onclick={() => (termsFor = { id: a.id, name: a.name, terms: a.terms })}>terms</button>{/if}
@@ -87,7 +88,7 @@
 			</tbody>
 		</table>
 	</div>
-{:else}<p class="muted">No connections yet. Add Plaid, SimpleFIN, or a manual account.</p>{/each}
+{:else}<p class="muted">No connections yet. Connect a bank with Plaid, paste a SimpleFIN token, or add a manual account and enter balances by hand.</p>{/each}
 
 {#if termsFor}<TermsEditor account={termsFor} terms={termsFor.terms} today={data.today} onclose={() => (termsFor = null)} onsave={async (body) => { const id = termsFor!.id; termsFor = null; await run('terms', () => post(`/api/accounts/${id}/terms`, body)); }} />{/if}
 

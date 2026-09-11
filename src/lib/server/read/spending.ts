@@ -21,7 +21,7 @@ export type SpendingView = {
 	byCategory: { categoryId: number; name: string; groupName: string; amount: number; share: number; prevAmount: number | null }[]; // amount desc
 	byMerchant: { payee: string; count: number; total: number; prevTotal: number | null }[]; // top 25 by total desc
 	overTime: {
-		buckets: { key: string; label: string; start: string; end: string; total: number; prevTotal: number | null; byCategory: Record<string, number> }[];
+		buckets: { key: string; label: string; start: string; end: string; total: number; prevTotal: number | null; byCategory: Record<string, number>; future: boolean }[];
 		categories: { id: number; name: string }[];
 	};
 	accounts: { id: number; name: string }[];
@@ -131,7 +131,7 @@ export function historyMonths(end: string): string[] {
 	return Array.from({ length: 12 }, (_, i) => addMonths(startOfMonth(end), i - 11).slice(0, 7));
 }
 
-export function spendingView(db: DbOrTx, q: { range: Range; filter: SpendingFilter; cadence: Cadence }): SpendingView {
+export function spendingView(db: DbOrTx, q: { range: Range; filter: SpendingFilter; cadence: Cadence; todayIso?: string }): SpendingView {
 	const months = historyMonths(q.range.end);
 	// One query over the twelve-month window; the range's own rows are the slice inside it.
 	const wide = splitRows(db, `${months[0]}-01`, q.range.end, q.filter);
@@ -147,6 +147,8 @@ export function spendingView(db: DbOrTx, q: { range: Range; filter: SpendingFilt
 	};
 
 	const total = cur.reduce((s, r) => s - r.amount, 0);
+	// Shares are of gross spending, so a refund-heavy range cannot push a category past 100 %.
+	const gross = cur.reduce((s, r) => s + Math.max(0, -r.amount), 0);
 	const prevTotal = prev ? prev.reduce((s, r) => s - r.amount, 0) : null;
 
 	const byCat = sumBy(cur, (r) => r.categoryId);
@@ -158,7 +160,7 @@ export function spendingView(db: DbOrTx, q: { range: Range; filter: SpendingFilt
 			name: catMeta.get(id)!.name,
 			groupName: catMeta.get(id)!.groupName,
 			amount,
-			share: total ? Math.round((amount / total) * 10000) / 10000 : 0,
+			share: gross ? Math.round((amount / gross) * 10000) / 10000 : 0,
 			prevAmount: prevByCat ? (prevByCat.get(id) ?? 0) : null
 		}))
 		.sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
@@ -192,7 +194,7 @@ export function spendingView(db: DbOrTx, q: { range: Range; filter: SpendingFilt
 		}
 		const pb = pbs[i];
 		const prevT = prev && pb ? prev.filter((r) => inB(pb, r.postedDate)).reduce((s, r) => s - r.amount, 0) : null;
-		return { ...b, total: rows.reduce((s, r) => s - r.amount, 0), prevTotal: prevT, byCategory: byC };
+		return { ...b, total: rows.reduce((s, r) => s - r.amount, 0), prevTotal: prevT, byCategory: byC, future: q.todayIso != null && compareIso(b.start, q.todayIso) > 0 };
 	});
 	const otherUsed = overTime.some((b) => 'other' in b.byCategory);
 

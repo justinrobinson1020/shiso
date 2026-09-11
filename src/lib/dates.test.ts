@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { isoDate, addDays, endOfMonth, compareIso, isoDateInZone, todayIso } from './dates';
+import { isoDate, addDays, endOfMonth, compareIso, isoDateInZone, todayIso, shortDate, monthLabel } from './dates';
 
 describe('dates', () => {
+	it('shortens dates for display, keeping the year only when it differs from today', () => {
+		expect(shortDate('2026-09-10', '2026-09-11')).toBe('Sep 10');
+		expect(shortDate('2025-12-01', '2026-09-11')).toBe('Dec 1, 2025');
+		expect(shortDate('not a date', '2026-09-11')).toBe('not a date');
+		expect(monthLabel('2026-09')).toBe('September 2026');
+	});
 	it('formats UTC dates', () => {
 		expect(isoDate(new Date(Date.UTC(2026, 8, 4)))).toBe('2026-09-04');
 	});

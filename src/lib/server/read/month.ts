@@ -12,7 +12,7 @@ const OPEN = ['pending', 'overdue'] as const;
 export type BillRow = { id: number; name: string; dueDate: string; expected: number; paid: number; extra: number; status: string };
 
 export type MonthView = {
-	month: string; label: string; prev: string; next: string; today: string;
+	month: string; label: string; prev: string; prevLabel: string; next: string; nextLabel: string; today: string;
 	cash: { accounts: { id: number; name: string; type: string; current: number; asOf: string | null }[]; total: number };
 	income: { expected: number; received: number; remaining: number; occurrences: { id: number; name: string; dueDate: string; expected: number; received: number; status: string }[] };
 	/** Bills paid from cash that are not card or loan payments. */
@@ -55,7 +55,8 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 	const billsPending = sum(billOcc.filter((o) => open(o.status)), (o) => o.expected);
 	const cardsPending = sum(cardOcc.filter((o) => open(o.status)), (o) => o.expected);
 	return {
-		month: opts.month, label: `${MONTHS[+opts.month.slice(5, 7) - 1]} ${opts.month.slice(0, 4)}`, prev: shiftMonth(opts.month, -1), next: shiftMonth(opts.month, 1), today: opts.todayIso,
+		month: opts.month, label: `${MONTHS[+opts.month.slice(5, 7) - 1]} ${opts.month.slice(0, 4)}`, today: opts.todayIso,
+		prev: shiftMonth(opts.month, -1), prevLabel: MONTHS[+shiftMonth(opts.month, -1).slice(5, 7) - 1], next: shiftMonth(opts.month, 1), nextLabel: MONTHS[+shiftMonth(opts.month, 1).slice(5, 7) - 1],
 		cash: { accounts: cashAccounts, total: cashTotal },
 		income: { expected: sum(live, (o) => o.expected), received: sum(live, (o) => o.received), remaining: incomeRemaining, occurrences: incomeOcc },
 		bills: { paid: sum(billOcc, (o) => o.paid), pending: billsPending, occurrences: billOcc },

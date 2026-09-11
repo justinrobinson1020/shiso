@@ -5,6 +5,7 @@
 	import PromoEditor, { type PromoDraft } from './PromoEditor.svelte';
 	import { post } from '$lib/ui/api';
 	import { decimalToCents } from '$lib/money';
+	import { shortDate } from '$lib/dates';
 	let { data } = $props();
 	const v = $derived(data.view);
 	let error = $state(''); let busy = $state<string | null>(null);
@@ -44,22 +45,22 @@
 		{#each v.debts as d (d.id)}
 			<tr>
 				<td>{d.name} <span class="muted small">{d.type}</span>
-					<div class="small muted only-sm">min {#if d.minimum == null}—{:else}<Money cents={d.minimum} />{/if} · due {d.nextDue ?? '—'}{#if d.accruing !== d.owed} · accruing <Money cents={d.accruing} />{/if}</div></td>
-				<td class="num"><Money cents={d.owed} />{#if d.asOf}<div class="small muted">{d.asOf}</div>{:else}<div class="small muted">no balance</div>{/if}</td>
+					<div class="small muted only-sm">min {#if d.minimum == null}—{:else}<Money cents={d.minimum} />{/if} · due {d.nextDue ? shortDate(d.nextDue) : '—'}{#if d.accruing !== d.owed} · accruing <Money cents={d.accruing} />{/if}</div></td>
+				<td class="num"><Money cents={d.owed} />{#if d.asOf}<div class="small muted nowrap">as of {shortDate(d.asOf)}</div>{:else}<div class="small muted">no balance</div>{/if}</td>
 				<td class="num hide-sm"><Money cents={d.accruing} /></td>
 				<td class="num">{pct(d.aprBps)}{#if d.promoAprBps != null}<div class="small muted">promo {pct(d.promoAprBps)}</div>{/if}</td>
 				<td class="num">{#if d.aprBps == null}<span class="muted" title="no APR on file">—</span>{:else}<Money cents={d.interest.monthly} /><div class="small muted hide-sm"><Money cents={d.interest.daily} /> / day · <Money cents={d.interest.yearly} /> / yr</div>{/if}</td>
 				<td class="num hide-sm">{#if d.minimum == null}<span class="muted">—</span>{:else}<Money cents={d.minimum} />{/if}</td>
-				<td class="hide-sm">{d.nextDue ?? '—'}</td>
+				<td class="hide-sm date">{d.nextDue ? shortDate(d.nextDue) : '—'}</td>
 				<td class="num hide-sm">{#if d.annualFee}<Money cents={d.annualFee} />{:else}<span class="muted">—</span>{/if}</td>
-				<td class="hide-sm">{#if d.openedOn}{d.openedOn} <span class="muted small">{age(d.ageMonths)}</span>{:else}<span class="muted">—</span>{/if}</td>
+				<td class="hide-sm date">{#if d.openedOn}{shortDate(d.openedOn)} <span class="muted small">{age(d.ageMonths)}</span>{:else}<span class="muted">—</span>{/if}</td>
 				<td class="row-actions"><button class="small" onclick={() => (termsFor = termsFor === d.id ? null : d.id)}>{termsFor === d.id ? 'hide' : 'terms'}</button></td>
 			</tr>
 			{#if termsFor === d.id}
 				<tr><td colspan="10" class="expanded">
 					{#if d.terms.length === 0}<p class="muted small">No terms recorded. Add them on <a href="/accounts#account-{d.id}">Accounts</a>.</p>{:else}
 					<table class="history"><thead><tr><th>As of</th><th class="num">APR</th><th class="num">Promo APR</th><th class="num">Minimum</th><th>Due</th><th class="num">Statement</th><th class="num">Fee</th><th>Source</th></tr></thead>
-					<tbody>{#each d.terms as t}<tr><td>{t.asOf}</td><td class="num">{pct(t.aprBps)}</td><td class="num">{pct(t.promoAprBps)}</td><td class="num">{#if t.minPayment != null}<Money cents={t.minPayment} />{:else}—{/if}</td><td>{t.nextDueDate ?? '—'}</td><td class="num">{#if t.lastStatementBalance != null}<Money cents={t.lastStatementBalance} />{:else}—{/if}</td><td class="num">{#if t.annualFee != null}<Money cents={t.annualFee} />{:else}—{/if}</td><td>{t.source}</td></tr>{/each}</tbody></table>{/if}
+					<tbody>{#each d.terms as t}<tr><td class="date">{shortDate(t.asOf)}</td><td class="num">{pct(t.aprBps)}</td><td class="num">{pct(t.promoAprBps)}</td><td class="num">{#if t.minPayment != null}<Money cents={t.minPayment} />{:else}—{/if}</td><td class="date">{t.nextDueDate ? shortDate(t.nextDueDate) : '—'}</td><td class="num">{#if t.lastStatementBalance != null}<Money cents={t.lastStatementBalance} />{:else}—{/if}</td><td class="num">{#if t.annualFee != null}<Money cents={t.annualFee} />{:else}—{/if}</td><td>{t.source}</td></tr>{/each}</tbody></table>{/if}
 				</td></tr>
 			{/if}
 		{/each}
@@ -69,7 +70,7 @@
 
 	<h2>Plan · {v.period.label}</h2>
 	<table class="block plan">
-		<thead><tr><th>Account</th><th class="num">Minimum</th><th class="num">Extra</th><th class="num hide-sm">Planned</th><th class="num hide-sm">Envelope</th><th class="num">Shortfall</th><th></th></tr></thead>
+		<thead><tr><th>Account</th><th class="num">Minimum</th><th class="num">Additional</th><th class="num hide-sm">Planned</th><th class="num hide-sm">Envelope</th><th class="num">Shortfall</th><th></th></tr></thead>
 		<tbody>
 		{#each v.debts as d (d.id)}
 			<tr>
@@ -96,7 +97,7 @@
 		{#each v.strategies as s (s.strategy)}
 			<tr class:active={s.strategy === strategy} onclick={() => (strategy = s.strategy)}>
 				<td><input type="radio" name="strategy" value={s.strategy} bind:group={strategy} aria-label={s.label} /></td>
-				<td>{s.label}{#if s.strategy === 'plan'}<div class="small muted">this period's extras, every period</div>{:else if s.strategy !== 'minimums'}<div class="small muted">extras pooled: <Money cents={v.totals.extra * v.periodsPerMonth} /> / mo</div>{/if}</td>
+				<td>{s.label}{#if s.strategy === 'plan'}<div class="small muted">this period's extras, every period</div>{:else if s.strategy !== 'minimums'}<div class="small muted">additional pooled: <Money cents={v.totals.extra * v.periodsPerMonth} /> / mo</div>{/if}</td>
 				<td>{#if s.capped}<span class="error">never</span>{:else}{month(s.debtFreeMonth)}{/if}</td>
 				<td class="num">{#if s.capped}<span class="muted" title="a debt's payment does not cover its interest">—</span>{:else}<Money cents={s.totalInterest} />{/if}</td>
 				<td class="num hide-sm">{#if s.interestSaved == null}<span class="muted">—</span>{:else}<Money cents={s.interestSaved} signed />{/if}</td>
@@ -121,7 +122,7 @@
 			<tr>
 				<td>{p.accountName}</td><td>{p.description}<div class="small muted only-sm">of <Money cents={p.original} /> · {pct(p.aprBps)}</div></td>
 				<td class="num hide-sm"><Money cents={p.original} /></td><td class="num"><Money cents={p.remaining} /></td><td class="num hide-sm">{pct(p.aprBps)}</td>
-				<td>{p.expiresOn} <span class="muted small">{p.monthsLeft} mo</span></td>
+				<td class="date">{shortDate(p.expiresOn)} <span class="muted small">{p.monthsLeft} mo</span></td>
 				<td class="num"><span class:error={p.underTarget} title={p.underTarget ? `planned ${dollars(p.plannedMonthly)} / mo is below the target` : ''}><Money cents={p.monthlyTarget} /></span>{#if p.underTarget}<div class="small error">planned <Money cents={p.plannedMonthly} /> / mo</div>{/if}</td>
 				<td class="row-actions"><button class="small" onclick={() => openPromo(p)}>edit</button> <button class="small" disabled={busy != null} onclick={() => run(`pc-${p.id}`, () => post(`/api/debt/promos/${p.id}/close`))}>close</button></td>
 			</tr>

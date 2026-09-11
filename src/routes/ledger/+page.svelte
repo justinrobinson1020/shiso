@@ -6,6 +6,7 @@
 	import SplitEditor from './SplitEditor.svelte';
 	import { post } from '$lib/ui/api';
 	import { decimalToCents } from '$lib/money';
+	import { shortDate } from '$lib/dates';
 	let { data } = $props();
 	const v = $derived(data.view); const tree = $derived(data.tree);
 	let error = $state('');
@@ -56,22 +57,22 @@
 	<tbody>
 	{#each v.rows as row (row.id)}
 		<tr>
-			<td>{row.postedDate}{#if row.pending} <span class="muted small">pending</span>{/if}</td>
+			<td class="date" title={row.postedDate}>{shortDate(row.postedDate)}{#if row.pending}<div class="muted small">pending</div>{/if}</td>
 			<td class="hide-sm">{row.accountName}</td>
 			<td><input class="inline" value={row.payee} title={row.payeeRaw} onchange={(e) => renamePayee(row, (e.target as HTMLInputElement).value)} />
-				<div class="only-sm"><Money cents={row.amount} /></div>
+				<div class="only-sm"><Money cents={row.amount} signed neutral /></div>
 				<div class="small muted only-sm">{row.accountName} · {periodLabel(row.periodId)}</div>
 				<input class="inline only-sm" placeholder="Memo" value={row.memo ?? ''} onchange={(e) => patch(row.id, { memo: (e.target as HTMLInputElement).value || null })} /></td>
 			<td>{#if row.transferPeerId != null}<span class="muted">Transfer · {row.transferPeerAccountName}</span> <button class="small" onclick={() => run(() => post(`/api/transactions/${row.id}/unlink`))}>unlink</button>
 				{:else if row.splits.length === 1}<select value={row.splits[0].categoryId} onchange={(e) => patch(row.id, { splits: [{ categoryId: Number((e.target as HTMLSelectElement).value), amount: row.amount }] })}>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories.filter((c) => !c.hidden || c.id === row.splits[0].categoryId) as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select> <button class="small" onclick={() => (splitting = row)}>split</button>
 				{:else}<button class="small" onclick={() => (splitting = row)}>{row.splits.length} splits: {row.splits.map((s) => s.categoryName).join(', ')}</button>{/if}</td>
 			<td class="hide-sm"><input class="inline" value={row.memo ?? ''} onchange={(e) => patch(row.id, { memo: (e.target as HTMLInputElement).value || null })} /></td>
-			<td class="num hide-sm"><Money cents={row.amount} /></td>
+			<td class="num hide-sm"><Money cents={row.amount} signed neutral /></td>
 			<td class="hide-sm"><select value={row.periodId} onchange={(e) => patch(row.id, { periodId: Number((e.target as HTMLSelectElement).value) })}>{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}</select></td>
 			<td>{#if row.needsReview}<span class="status overdue" title={row.reviewReason ?? ''}>{row.reviewReason}</span> <button class="small" onclick={() => run(() => post(`/api/transactions/${row.id}/review`))}>clear</button>{/if}
 				{#if row.source === 'manual' || row.source === 'import'}<button class="small danger" onclick={() => run(() => post(`/api/transactions/${row.id}/delete`))}>delete</button>{/if}</td>
 		</tr>
-	{:else}<tr><td colspan="8" class="muted">No transactions match.</td></tr>{/each}
+	{:else}<tr><td colspan="8" class="muted">No transactions match these filters. Clear a filter, or sync an account from Accounts.</td></tr>{/each}
 	</tbody>
 </table>
 <div class="toolbar">

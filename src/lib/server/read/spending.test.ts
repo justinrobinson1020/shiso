@@ -39,7 +39,9 @@ describe('spendingView', () => {
 		expect(v.trends.total).toMatchObject({ current: 12500, baseline: 3000 });
 		expect(v.outliers).toEqual([]);
 		const year = resolveRange(f.db, { kind: 'year', anchor: '2026-09-08', cadence: 'semi_monthly' });
-		expect(spendingView(f.db, { range: year, filter: {}, cadence: 'semi_monthly' }).overTime.buckets.map((b) => b.key)).toEqual(['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09','2026-10','2026-11','2026-12']);
+		const yearView = spendingView(f.db, { range: year, filter: {}, cadence: 'semi_monthly', todayIso: '2026-09-08' });
+		expect(yearView.overTime.buckets.map((b) => b.key)).toEqual(['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09','2026-10','2026-11','2026-12']);
+		expect(yearView.overTime.buckets.map((b) => b.future)).toEqual([false, false, false, false, false, false, false, false, false, true, true, true]);
 	});
 });
 

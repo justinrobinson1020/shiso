@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import Money from '$lib/ui/Money.svelte';
+	import { shortDate } from '$lib/dates';
 	let { data } = $props();
 	const v = $derived(data.view);
 	let newOnly = $state(true);
@@ -28,12 +29,12 @@
 	<tbody>
 	{#each rows as r (r.payee)}
 		<tr>
-			<td><a href={ledgerLink(r.payee)}>{r.payee}</a><div class="small muted only-sm">{r.cadence} · last {r.last} · {r.count} charges</div><div class="small muted hide-sm">{r.count} charges, {r.matched} of {r.intervals} intervals on cadence</div></td>
+			<td><a href={ledgerLink(r.payee)}>{r.payee}</a><div class="small muted only-sm">{r.cadence} · last {shortDate(r.last)} · {r.count} charges</div><div class="small muted hide-sm">{r.count} charges, {r.matched} of {r.intervals} intervals on cadence</div></td>
 			<td class="hide-sm">{r.cadence}</td>
 			<td class="num"><Money cents={r.typical} /></td>
 			<td class="num"><Money cents={r.monthlyCost} /></td>
-			<td class="hide-sm">{r.last}</td>
-			<td>{r.next}</td>
+			<td class="hide-sm date">{shortDate(r.last)}</td>
+			<td class="date">{shortDate(r.next)}</td>
 			<td>{#if r.overdue}<span class="status overdue">overdue</span>{/if} {#if r.covered}<span class="status paid">bill</span>{:else}<span class="status pending">new</span>{/if}</td>
 		</tr>
 	{:else}
