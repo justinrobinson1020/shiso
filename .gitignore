@@ -30,3 +30,6 @@ data/
 
 # Release tarballs
 dist/
+
+# Real bank statements for the history backfill; never committed
+account-history/

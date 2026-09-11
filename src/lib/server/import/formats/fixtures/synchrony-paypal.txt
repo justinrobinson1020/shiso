@@ -1,0 +1,23 @@
+Statement Closing Date: 10/27/25                                       View your account online at paypal.com
+Days in Billing Period: 31
+Account Number: xxxx xxxx xxxx 8182
+ACCOUNT SUMMARY
+Previous Balance                                                                  $1,681.27
+- Payments & Credits                                                                $789.37
++ Purchases & Adjustments                                                         $3,083.39
++ Fees                                                                                $2.00
+= New Balance                                                                     $3,977.29
+PAYMENTS & CREDITS
+Tran Date                Posting Date   Reference Number                 Description                                     Amount
+10/21/25                 10/21/25       P928300970122QF2N                Online Payment Thank You                      -$789.37
+                                                                         Alpharetta Ga
+PURCHASES & ADJUSTMENTS
+Tran Date                Posting Date   Reference Number          Type           Description                            Amount
+10/01/25                 10/03/25       P9283008KEHM6QAA9         Deferred       CHANGWANGWE            No Interest If Paid In Full     $398.99
+10/08/25                 10/08/25       P9283008SEHM6B0MN         Deferred       TICKETMASTER           No Interest If Paid In Full   $2,684.40
+FEES
+Tran Date                Posting Date   Description                                                                     Amount
+10/27/25                 10/27/25       Minimum Interest Charge                                                           $2.00
+2025 Totals Year-To-Date
+Purchases                                     N/A                   29.99% (v)                        $0.00
+PAYPAL CREDIT/SYNCB
