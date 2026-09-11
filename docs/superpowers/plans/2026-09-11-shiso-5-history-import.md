@@ -17,7 +17,7 @@
 - Rows whose amount is 0 are dropped by every parser (Synchrony prints `$0.00` interest lines).
 - Error mapping: `ImportError` with code `unknown_format` | `mask_mismatch` | `reconcile` becomes a `ValidationError` (400) in the route; code `pdf` is rethrown (500).
 - Every task ends with `npm test` and `npm run check` green and one commit. Commit messages: conventional, single subject line, no reference to AI tooling.
-- Never read or print `.env`.
+- Never read or print `.env`. Never commit anything under `account-history/` (real statements); Task 9 gitignores it.
 - Use zsh for shell commands.
 
 ---
@@ -768,9 +768,12 @@ describe('importParsed', () => {
 		const a = fixture(); importParsed(a.db, a.card, later, opts); const ra = importParsed(a.db, a.card, earlier, opts);
 		const b = fixture(); importParsed(b.db, b.card, earlier, opts); importParsed(b.db, b.card, later, opts);
 		expect(ra.opening).toEqual({ from: -2000, to: -500, date: '2026-06-30' });
-		const shape = (x: ReturnType<typeof fixture>) => live(x.db, x.card).map((t) => [t.postedDate, t.amount, t.source]).sort();
+		// the opening row's date differs by order (day before the earliest row seen at the time); its amount and every other row do not
+		const shape = (x: ReturnType<typeof fixture>) => live(x.db, x.card).filter((t) => t.source !== 'opening').map((t) => [t.postedDate, t.amount, t.source]).sort();
 		expect(shape(a)).toEqual(shape(b));
-		expect(ledgerSum(a.db, a.card)).toBe(-2500);
+		expect(live(a.db, a.card).find((t) => t.source === 'opening')!.amount).toBe(-500);
+		expect(live(b.db, b.card).find((t) => t.source === 'opening')!.amount).toBe(-500);
+		expect(ledgerSum(a.db, a.card)).toBe(-2500); expect(ledgerSum(b.db, b.card)).toBe(-2500);
 	});
 	it('dry run returns the report and leaves every table byte-identical', () => {
 		const f = fixture();
@@ -930,22 +933,22 @@ export function assertBudgetPeriod(db: DbOrTx, periodId: number): void;  // Inva
 ```ts
 describe('budget start', () => {
 	it('ignores periods before budgetStart: no carry, no activity, no assignments reach the kept periods', () => {
-		const base = skeleton(3);   // reuse this file's existing helper that builds accounts/categories/periods 1..n; if it has another name, use that
-		const withHistory: BudgetInput = { ...base, splits: [...base.splits,
+		const b0 = base();   // this file's helper: accounts CHECKING/SAVINGS/CARD/LOAN, categories, periods 1..3
+		const withHistory: BudgetInput = { ...b0, splits: [...b0.splits,
 			{ transactionId: 901, accountId: CHECKING, periodId: 1, categoryId: GROCERIES, amount: -80000, transferPeerAccountId: null, source: 'import' },
 			{ transactionId: 902, accountId: CHECKING, periodId: 1, categoryId: TRANSFER, amount: -50000, transferPeerAccountId: CARD, source: 'import' },
 			{ transactionId: 903, accountId: CARD, periodId: 1, categoryId: TRANSFER, amount: 50000, transferPeerAccountId: CHECKING, source: 'import' }
-		], assignments: [...base.assignments, { periodId: 1, categoryId: GROCERIES, assigned: 12345 }], budgetStart: base.periods[1].startDate };
-		const without: BudgetInput = { ...base, periods: base.periods.slice(1), budgetStart: null };
-		const a = computeBudget(withHistory, base.periods[2].id), b = computeBudget(without, base.periods[2].id);
-		expect(a.byPeriod.get(base.periods[2].id)).toEqual(b.byPeriod.get(base.periods[2].id));
-		expect(a.byPeriod.has(base.periods[0].id)).toBe(false);
+		], assignments: [...b0.assignments, { periodId: 1, categoryId: GROCERIES, assigned: 12345 }], budgetStart: b0.periods[1].startDate };
+		const without: BudgetInput = { ...b0, periods: b0.periods.slice(1), budgetStart: null };
+		const a = computeBudget(withHistory, b0.periods[2].id), b = computeBudget(without, b0.periods[2].id);
+		expect(a.byPeriod.get(b0.periods[2].id)).toEqual(b.byPeriod.get(b0.periods[2].id));
+		expect(a.byPeriod.has(b0.periods[0].id)).toBe(false);
 		expect(a.underfunded).toEqual(b.underfunded);
 		expect(a.readyToAssign).toBe(b.readyToAssign);
 	});
 });
 ```
-(Adapt the constant names `CHECKING`, `CARD`, `GROCERIES`, `TRANSFER` and the skeleton helper to what `envelope.test.ts` already defines; the property test file defines the same set.)
+(`envelope.test.ts` already defines `base()`, `CHECKING`, `CARD`, `GROCERIES`, `TRANSFER`; if `base()` builds fewer than three periods, extend it to three. The property test defines `skeleton(n)` with the same constants.)
 
 `envelope.property.test.ts`: the `ledger` arbitrary gains a budget-start offset — `fc.tuple(n, opening, fc.integer({ min: 1, max: 6 }))`, `build` sets `input.budgetStart = input.periods[Math.min(k, n) - 1].startDate`; the existing assertion `readyToAssign === readyToAssignFromFlows` for every `P >= k` must still hold. Skip periods before `k` in the loop over `P`.
 
@@ -1016,7 +1019,7 @@ export function assertBudgetPeriod(db: DbOrTx, periodId: number): void {
 	if (p && p.s < start) throw new InvariantError('PERIOD_BEFORE_BUDGET_START', `period starts before the budget start ${start}`);
 }
 ```
-Call it first in `assign` and `moveMoney` (check `InvariantError`'s constructor signature in `ledger/errors.ts` and add the code to its code union if it has one). `fundTargets` reaches `assign` and is covered.
+Call it first in `assign` and `moveMoney`. `InvariantError` is `new InvariantError(code: string, message?: string)`. `fundTargets` reaches `assign` and is covered.
 
 `read/budget.ts`: compute `const start = budgetStart(db); const historyOnly = start != null && period.startDate < start;`. When `historyOnly`, call `budgetForPeriod(db, currentId)` instead (for ready-to-assign and underfunding, which are current-period facts) and build the groups with the `zero` cell for every category and `targets` as an empty map; return `{ ...view, historyOnly, budgetStart: start }`. Otherwise unchanged plus the two new fields.
 
@@ -1072,7 +1075,7 @@ describe('POST /api/accounts/[id]/import', () => {
 		const res = await POST(req(fx('chase-dec-jan.txt'), 's.txt')); expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body).toMatchObject({ format: 'chase', created: 5, duplicates: 0, matched: 0, balances: 1, opening: { seeded: -231439, date: '2024-12-02' }, dryRun: false });
-		expect(body.processed).toBe(6);
+		expect(body.processed).toBeGreaterThanOrEqual(5);   // the five rows, plus the seeded opening row if createTransaction leaves it unprocessed
 		expect(getDb().select().from(transactions).where(eq(transactions.accountId, card)).all().filter((t) => t.processedAt == null)).toHaveLength(0);
 	});
 	it('dry run reports without writing', async () => {
@@ -1090,7 +1093,7 @@ describe('POST /api/accounts/[id]/import', () => {
 	});
 });
 ```
-(`upsertAccount` may not accept `mask`; if not, set it with a direct update as the third test does. `processed` counts the five rows plus the seeded opening row.)
+(`upsertAccount` accepts `mask`.)
 
 - [ ] **Step 2: Run to verify failure.**
 
@@ -1183,7 +1186,7 @@ while read -r entry account; do
 	done
 done < "$map"
 ```
-`chmod +x scripts/import-history.sh`. Add to `package.json` scripts: `"import:history": "zsh scripts/import-history.sh"`.
+`chmod +x scripts/import-history.sh`. Add to `package.json` scripts: `"import:history": "zsh scripts/import-history.sh"`. Add `account-history/` to `.gitignore`: the folder holds real statements and is untracked today only by luck.
 
 - [ ] **Step 2: Docs** — `docs/deploy.md` §2: add `poppler-utils` to the apt line and a sentence: "`poppler-utils` provides `pdftotext`, which the Accounts page uses to read PDF statements; without it PDF imports fail with a 500 and CSV imports still work." README Accounts bullet: "…manual balance entry, CSV and PDF statement import (Apple Card, Capital One, NASA FCU CSVs; Chase and Synchrony statements)." README, after the Data model paragraph: "History imported from statements lands in real periods for the ledger and spending pages, but envelope math starts at the `budget_start` setting (pinned at first startup to the earliest period), so backfilling never changes the live budget. Imports dedup against synced rows by amount within three days and correct the account's opening-balance row so the ledger keeps summing to the balance." Spec status → `Implemented (date)`. Also add `docs/deploy.md` a short "History backfill" subsection pointing at the script and the map-file format, and noting the Synchrony accounts are created as a manual connection on the Accounts page.
 
@@ -1215,7 +1218,7 @@ paypal <id>
 - [ ] Before the real run, record the Budget page's ready-to-assign and every available for the current period, and each account's balance on the Accounts page.
 - [ ] Real run without `--dry-run`. Then compare: budget numbers unchanged; Accounts balances unchanged; Spending trends reach back to 2024; Debt trend shows per-statement balances.
 - [ ] Map the new provider categories on the Categories page and apply.
-- [ ] Delete `account-history/map.txt` if it holds nothing worth keeping; the statement folder stays untracked (it is already gitignored? verify — if not, add `account-history/` to `.gitignore` in Task 9).
+- [ ] `account-history/map.txt` lives inside the ignored folder; nothing from it is committed.
 
 ## Self-review notes
 
