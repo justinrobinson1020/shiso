@@ -51,7 +51,11 @@ npm run check    # svelte-check
   inline payee/category editing, splits, period reassignment, and the
   review queue.
 - **Spending** (`/spending`) — breakdowns by category and merchant, and
-  spending over time, with a shared range picker and compare-to-previous.
+  spending over time, with a shared range picker and compare-to-previous;
+  twelve-month trends per category against a usual month; unusual charges
+  scored against the user's own history; and a recurring-charges page
+  (`/spending/recurring`) that finds payees charging on a schedule and flags
+  the ones with no bill yet.
 - **Accounts** (`/accounts`) — connections and sync status, relink, manual
   sync, balance drift and adjustment, debt terms, manual balance entry, CSV
   import.

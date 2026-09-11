@@ -1,7 +1,7 @@
 # shiso — Phase 3: Spending analytics
 
 **Date:** 2026-09-11
-**Status:** Approved design, pending implementation plan
+**Status:** Implemented (2026-09-11)
 **Scope:** Trends, outliers against the user's own history, and recurring-charge discovery, on the Spending page (Phase 1 spec §8: "Phase 3 adds trends, outliers, and recurring detection here"). Section references are to the Phase 1 spec unless marked §P3.
 
 ## 1. Purpose
