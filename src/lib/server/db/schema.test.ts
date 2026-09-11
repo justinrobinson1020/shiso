@@ -9,11 +9,12 @@ const EXPECTED_TABLES = [
 	'transactions', 'transaction_splits', 'bill_occurrence_transactions', 'payee_rules',
 	'category_groups', 'categories', 'periods', 'budget_assignments',
 	'bills', 'bill_occurrences', 'income_sources', 'income_occurrences',
-	'sync_runs', 'settings'
+	'sync_runs', 'settings',
+	'planned_extras', 'promo_balances'
 ];
 
 describe('schema', () => {
-	it('migrates a fresh database to every phase 1 table', () => {
+	it('migrates a fresh database to every table', () => {
 		const sqlite = new Database(':memory:');
 		const db = drizzle({ client: sqlite, schema });
 		migrate(db, { migrationsFolder: 'drizzle' });

@@ -255,6 +255,27 @@ export const incomeOccurrences = sqliteTable('income_occurrences', {
 	...timestamps
 }, (t) => [uniqueIndex('income_occurrences_source_due').on(t.incomeSourceId, t.dueDate)]);
 
+// ---- Phase 2 debt (P2 §3) -----------------------------------------------
+export const plannedExtras = sqliteTable('planned_extras', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	accountId: integer('account_id').notNull().references(() => accounts.id),
+	periodId: integer('period_id').notNull().references(() => periods.id),
+	extraAmount: integer('extra_amount').notNull(),
+	...timestamps
+}, (t) => [uniqueIndex('planned_extras_account_period').on(t.accountId, t.periodId)]);
+
+export const promoBalances = sqliteTable('promo_balances', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	accountId: integer('account_id').notNull().references(() => accounts.id),
+	description: text('description').notNull(),
+	originalAmount: integer('original_amount').notNull(),
+	remainingAmount: integer('remaining_amount').notNull(),
+	aprBps: integer('apr_bps').notNull().default(0),
+	expiresOn: text('expires_on').notNull(),
+	closedAt: text('closed_at'),
+	...timestamps
+}, (t) => [index('promo_balances_account').on(t.accountId)]);
+
 // ---- 4.5 operations ----------------------------------------------------
 export const syncRuns = sqliteTable('sync_runs', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
