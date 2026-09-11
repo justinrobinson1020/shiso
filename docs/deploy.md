@@ -30,15 +30,39 @@ Without them the first `install.sh` run fails inside `npm ci`.
 `poppler-utils` provides `pdftotext`, which the Accounts page uses to read
 PDF statements; without it PDF imports fail with a 500 and CSV imports still work.
 
+`deploy/shiso.service` sets `BODY_SIZE_LIMIT=25M`. adapter-node's default body
+limit is 512 KB, which rejects most statement PDFs before the app ever sees
+them (they run to several MB). The import route caps uploads at 20 MB on its
+own, so the process limit has to stay above that: the route should be what
+rejects an oversized file, with a 400 and a message, not the server with a 413.
+
 ### History backfill
 
 After the app is running, import account history with:
 
 ```bash
-SHISO_URL=https://shiso.home.local npm run import:history /path/to/statements map.txt
+SHISO_URL=https://shiso.home.local npm run import:history -- /path/to/statements map.txt --dry-run
+SHISO_URL=https://shiso.home.local npm run import:history -- /path/to/statements map.txt --commit
 ```
 
+The mode argument is required, and through `npm run` it needs npm's own `--`
+separator first — npm swallows a bare `--dry-run` and never passes it on, which
+would silently turn a rehearsal into a live run. Calling
+`scripts/import-history.sh <dir> <map.txt> --dry-run` directly needs no separator.
+
 The map file is a newline-delimited list of `<file-or-folder relative to the statement directory> <accountId>` entries; blank lines and lines starting with `#` are ignored. A folder entry imports all files in it in directory order. Synchrony accounts must first be created manually on the Accounts page as a manual connection before importing their statements.
+
+Each file prints one tab-separated `status  path  report` line, and a statement
+whose report carries a nonzero `previousDelta` or `closingDelta` also prints a
+`gap:` line on stderr for each. `previousDelta` is the ledger before the
+statement's opening date measured against the balance the statement claims:
+normal while earlier months are still missing, and 0 once the account's history
+is complete. `closingDelta` is the same measurement through the statement's
+closing date against its new balance. The two move together — what matters is
+the difference between them, which is what the statement's own window got wrong
+(a row matched against a synced transaction it is not, or one that should have
+matched and did not). A file whose two deltas differ is worth looking at before
+the next run; a pair that agrees is just history still missing.
 
 ## 3. First release
 

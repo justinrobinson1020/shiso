@@ -17,6 +17,10 @@ Environment=PORT=3000
 # (10.10.50.x) is the trust boundary, so this listens on all interfaces
 # rather than loopback. See docs/deploy.md.
 Environment=HOST=0.0.0.0
+# adapter-node rejects request bodies over 512 KB by default, which is under a
+# third of the statement PDFs. The import route caps uploads at 20 MB itself;
+# this has to sit above that cap so the route is the thing that says no.
+Environment=BODY_SIZE_LIMIT=25M
 ExecStart=/usr/bin/node /opt/shiso/current/build
 Restart=on-failure
 RestartSec=30
