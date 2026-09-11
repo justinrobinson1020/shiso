@@ -1,8 +1,10 @@
-import { and, asc, eq, gte, isNull, lte, notInArray, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull, lte, notInArray, sql, type SQL } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { accounts, categories, categoryGroups, transactions, transactionSplits, type CategoryKind } from '../db/schema';
 import { periodBoundsFor, nextPeriodStart, type Cadence } from '../budget/periods';
 import { addDays, endOfMonth, startOfMonth, compareIso } from '$lib/dates';
+import { trendTable, type Trends } from '../spending/trends';
+import { findOutliers, type Outlier } from '../spending/outliers';
 
 export type RangeKind = 'period' | 'month' | 'quarter' | 'year' | 'custom';
 export type Range = { kind: RangeKind; start: string; end: string; label: string; prevStart: string; prevEnd: string; prevLabel: string };
@@ -24,6 +26,10 @@ export type SpendingView = {
 	};
 	accounts: { id: number; name: string }[];
 	groups: { id: number; name: string }[];
+	/** P3 §3.1: twelve months ending with the range's end month. */
+	trends: Trends;
+	/** P3 §3.2: charges in the range that are out of line with the twelve months before it. */
+	outliers: Outlier[];
 };
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -74,9 +80,9 @@ export function resolveRange(db: DbOrTx, q: { kind: RangeKind; anchor: string; e
 	}
 }
 
-type SplitRow = { accountId: number; postedDate: string; payee: string; categoryId: number; categoryName: string; groupId: number; groupName: string; amount: number };
+export type SplitRow = { transactionId: number; accountId: number; postedDate: string; payee: string; categoryId: number; categoryName: string; groupId: number; groupName: string; amount: number };
 
-function splitRows(db: DbOrTx, start: string, end: string, f: SpendingFilter): SplitRow[] {
+export function splitRows(db: DbOrTx, start: string, end: string, f: SpendingFilter): SplitRow[] {
 	const conds: SQL[] = [isNull(transactions.deletedAt), isNull(transactions.transferPeerId), gte(transactions.postedDate, start), lte(transactions.postedDate, end)];
 	if (!f.includeExcluded) conds.push(notInArray(categories.kind, [...EXCLUDED_KINDS]));
 	if (f.accountId != null) conds.push(eq(transactions.accountId, f.accountId));
@@ -84,6 +90,7 @@ function splitRows(db: DbOrTx, start: string, end: string, f: SpendingFilter): S
 	if (f.merchant) conds.push(eq(transactions.payee, f.merchant));
 	return db
 		.select({
+			transactionId: transactions.id,
 			accountId: transactions.accountId,
 			postedDate: transactions.postedDate,
 			payee: transactions.payee,
@@ -119,8 +126,18 @@ function buckets(range: { start: string; end: string }, cadence: Cadence): { key
 	return out;
 }
 
+/** The twelve calendar months ending with the month containing `end`, ascending YYYY-MM. */
+export function historyMonths(end: string): string[] {
+	return Array.from({ length: 12 }, (_, i) => addMonths(startOfMonth(end), i - 11).slice(0, 7));
+}
+
 export function spendingView(db: DbOrTx, q: { range: Range; filter: SpendingFilter; cadence: Cadence }): SpendingView {
-	const cur = splitRows(db, q.range.start, q.range.end, q.filter);
+	const months = historyMonths(q.range.end);
+	// One query over the twelve-month window; the range's own rows are the slice inside it.
+	const wide = splitRows(db, `${months[0]}-01`, q.range.end, q.filter);
+	const inRange = (d: string) => compareIso(d, q.range.start) >= 0;
+	const cur = wide.filter((r) => inRange(r.postedDate));
+	const before = wide.filter((r) => !inRange(r.postedDate));
 	const prev = q.filter.compare ? splitRows(db, q.range.prevStart, q.range.prevEnd, q.filter) : null;
 
 	const sumBy = <K>(rows: SplitRow[], key: (r: SplitRow) => K) => {
@@ -179,7 +196,21 @@ export function spendingView(db: DbOrTx, q: { range: Range; filter: SpendingFilt
 	});
 	const otherUsed = overTime.some((b) => 'other' in b.byCategory);
 
+	const firstLedger = db.select({ d: sql<string | null>`min(${transactions.postedDate})` }).from(transactions).where(isNull(transactions.deletedAt)).get()?.d ?? null;
+	const trends = trendTable({
+		months,
+		monthly: wide.map((r) => ({ month: r.postedDate.slice(0, 7), categoryId: r.categoryId, categoryName: r.categoryName, amount: -r.amount })),
+		current: byCategory.map((c) => ({ categoryId: c.categoryId, categoryName: c.name, amount: c.amount })),
+		rangeDays: daysBetween(q.range.start, q.range.end) + 1,
+		scaleToMonth: q.range.kind !== 'month',
+		firstLedgerMonth: firstLedger ? firstLedger.slice(0, 7) : null
+	});
+	const charge = (r: SplitRow) => ({ id: r.transactionId, date: r.postedDate, payee: r.payee, categoryId: r.categoryId, categoryName: r.categoryName, amount: -r.amount });
+	const outliers = findOutliers(cur.map(charge), before.map(charge));
+
 	return {
+		trends,
+		outliers,
 		range: q.range,
 		filter: q.filter,
 		total,
