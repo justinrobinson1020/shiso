@@ -16,16 +16,24 @@ export const POST = handle(async ({ request, params }) => {
 	if (file.size > MAX_BYTES) throw new ValidationError('file is larger than 20 MB');
 	const dryRun = form!.get('dryRun') === '1';
 	const config = getConfig(); const db = getDb(); const today = todayIso(config.timeZone);
-	let report;
+	let parsed;
 	try {
-		const parsed = await detectAndParse(new Uint8Array(await file.arrayBuffer()));
-		report = importParsed(db, id, parsed, { cadence: config.cadence, todayIso: today, dryRun });
+		parsed = await detectAndParse(new Uint8Array(await file.arrayBuffer()));
 	} catch (err) {
-		// Malformed input (unknown format, a mask mismatch, a failed reconciliation, or a parser's own
-		// plain Error on unparseable statement content) is the caller's problem, not ours: 400. A 'pdf'
-		// ImportError means pdftotext itself is broken on this host, which is our problem: 500.
+		// Unknown format, or a parser's own plain Error on unparseable statement content (e.g. a Chase
+		// file missing its Opening/Closing Date), is the caller's problem: 400. A 'pdf' ImportError means
+		// pdftotext itself is broken on this host, which is ours: let it fall through to the 500 default.
 		if (err instanceof ImportError) { if (err.code !== 'pdf') throw new ValidationError(err.message); throw err; }
 		if (err instanceof Error) throw new ValidationError(err.message);
+		throw err;
+	}
+	let report;
+	try {
+		report = importParsed(db, id, parsed, { cadence: config.cadence, todayIso: today, dryRun });
+	} catch (err) {
+		// A mask mismatch or a failed reconciliation is also the caller's problem: 400. Anything else
+		// (e.g. "account not found") is not import-specific and should hit handle()'s usual mapping.
+		if (err instanceof ImportError) throw new ValidationError(err.message);
 		throw err;
 	}
 	if (dryRun) return report;
