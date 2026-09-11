@@ -4,11 +4,12 @@
 	import Dialog from '$lib/ui/Dialog.svelte';
 	import TermsEditor, { type Terms } from './TermsEditor.svelte';
 	import { post, upload } from '$lib/ui/api';
-	import { decimalToCents } from '$lib/money';
+	import { decimalToCents, formatCents } from '$lib/money';
 	import { shortDate } from '$lib/dates';
 	let { data } = $props();
 	const v = $derived(data.view);
 	let error = $state(''); let busy = $state<string | null>(null);
+	let preview = $state(false);
 	let termsFor = $state<{ id: number; name: string; terms: Terms } | null>(null);
 	let balanceFor = $state<{ id: number; current: string; asOf: string } | null>(null);
 	let editFor = $state<{ id: number; name: string; type: string; onBudget: boolean; closed: boolean; closedAt: string | null } | null>(null);
@@ -30,10 +31,19 @@
 			} }).open();
 		} catch (e) { error = (e as Error).message; }
 	}
-	async function importCsv(accountId: number, input: HTMLInputElement) {
+	type Report = { format: string; statement: { opensOn: string; closesOn: string } | null; created: number; duplicates: number; matched: number; balances: number; opening: { from: number; to: number; date: string } | { seeded: number; date: string } | null; dryRun: boolean };
+	const FORMAT = { apple: 'Apple Card CSV', capital_one: 'Capital One CSV', nasa_fcu: 'NASA FCU CSV', chase: 'Chase statement', synchrony: 'Synchrony statement' } as Record<string, string>;
+	function reportLine(r: Report): string {
+		const head = r.statement ? `${FORMAT[r.format]} ${shortDate(r.statement.opensOn)} to ${shortDate(r.statement.closesOn)}` : FORMAT[r.format] ?? r.format;
+		const parts = [`${r.created} new`, `${r.duplicates} duplicates`, `${r.matched} matched`];
+		if (r.balances) parts.push(r.balances === 1 ? 'balance written' : `${r.balances} balances written`);
+		if (r.opening) parts.push('seeded' in r.opening ? `opening seeded at ${formatCents(r.opening.seeded)} on ${shortDate(r.opening.date)}` : `opening ${formatCents(r.opening.from)} to ${formatCents(r.opening.to)} on ${shortDate(r.opening.date)}`);
+		return `${r.dryRun ? 'Preview: ' : ''}${head} · ${parts.join(', ')}`;
+	}
+	async function importFile(accountId: number, input: HTMLInputElement) {
 		const file = input.files?.[0]; if (!file) return;
-		const fd = new FormData(); fd.set('file', file);
-		await run(`import-${accountId}`, async () => { const r = await upload<{ created: number; duplicates: number }>(`/api/accounts/${accountId}/import`, fd); error = `Imported ${r.created} new, ${r.duplicates} duplicates`; });
+		const fd = new FormData(); fd.set('file', file); if (preview) fd.set('dryRun', '1');
+		await run(`import-${accountId}`, async () => { error = reportLine(await upload<Report>(`/api/accounts/${accountId}/import`, fd)); });
 		input.value = '';
 	}
 </script>
@@ -47,6 +57,7 @@
 	{#if v.plaidConfigured}<input placeholder="Institution name (optional)" bind:value={plaidName} /><button onclick={() => plaidLink()}>+ Plaid</button>{:else}<span class="muted small">Plaid not configured</span>{/if}
 	<button onclick={() => (simplefin = { setupToken: '', institutionName: '' })}>+ SimpleFIN</button>
 	<button onclick={() => (addManual = { institutionName: '', accounts: [{ name: '', type: 'checking' }] })}>+ Manual</button>
+	<label class="small"><input type="checkbox" bind:checked={preview} /> preview imports</label>
 </div>
 {#if error}<p class="error">{error}</p>{/if}
 
@@ -81,7 +92,7 @@
 						{#if a.isDebt}<button class="small only-sm" onclick={() => (termsFor = { id: a.id, name: a.name, terms: a.terms })}>terms</button>{/if}
 						<button class="small" onclick={() => (balanceFor = { id: a.id, current: a.balance ? (a.balance.current / 100).toFixed(2) : '', asOf: data.today })}>balance</button>
 						<button class="small" onclick={() => (editFor = { id: a.id, name: a.name, type: a.type, onBudget: a.onBudget, closed: a.closedAt != null, closedAt: a.closedAt })}>edit</button>
-						<label class="small">csv <input type="file" accept=".csv,text/csv" hidden onchange={(e) => importCsv(a.id, e.currentTarget)} /></label>
+						<label class="small">import <input type="file" accept=".csv,.pdf,text/csv,application/pdf" hidden onchange={(e) => importFile(a.id, e.currentTarget)} /></label>
 					</td>
 				</tr>
 			{/each}
