@@ -9,6 +9,7 @@ import { debtMinimum, plannedExtrasForPeriod, openPromos } from '../debt/plan';
 import { accruing, interestEstimates, monthsLeft } from '../debt/interest';
 import { project, type Strategy, type Projection } from '../debt/projection';
 import { debtTrend, type TrendRow } from '../debt/trend';
+import { budgetStart } from '../settings';
 
 export type DebtRow = {
 	id: number; name: string; type: string; owed: number; asOf: string | null; accruing: number;
@@ -28,6 +29,9 @@ export type PromoRow = {
 export type DebtView = {
 	today: string; startMonth: string; periodsPerMonth: number;
 	period: { id: number; label: string; isCurrent: boolean }; periods: { id: number; label: string }[];
+	/** §P5: the period starts before budget_start; envelope numbers come from the current period and the plan is read-only. */
+	historyOnly: boolean;
+	budgetStart: string | null;
 	readyToAssign: number;
 	debts: DebtRow[];
 	totals: { owed: number; accruing: number; interest: { daily: number; monthly: number; yearly: number }; minimum: number; extra: number; planned: number; shortfall: number };
@@ -45,8 +49,12 @@ export function debtView(db: DbOrTx, opts: { periodId: number | null; todayIso: 
 	if (!period) throw new Error(`period ${periodId} not found`);
 	const all = db.select({ id: periods.id, label: periods.label }).from(periods).orderBy(asc(periods.startDate)).all();
 	const periodsPerMonth = opts.cadence === 'semi_monthly' ? 2 : 1;
-	const budget = budgetForPeriod(db, periodId);
-	const cells = budget.byPeriod.get(periodId);
+	const start = budgetStart(db);
+	const historyOnly = start != null && period.startDate < start;
+	// §P5: a history period has no envelopes, so envelope-derived numbers come from the current period.
+	const computedFor = historyOnly ? currentId : periodId;
+	const budget = budgetForPeriod(db, computedFor);
+	const cells = budget.byPeriod.get(computedFor);
 	const extras = plannedExtrasForPeriod(db, periodId);
 	const promos = openPromos(db);
 
@@ -103,6 +111,7 @@ export function debtView(db: DbOrTx, opts: { periodId: number | null; todayIso: 
 	return {
 		today: opts.todayIso, startMonth, periodsPerMonth,
 		period: { id: period.id, label: period.label, isCurrent: period.id === currentId }, periods: all,
+		historyOnly, budgetStart: start,
 		readyToAssign: budget.readyToAssign, debts, totals, strategies, promos: promoRows, trend: debtTrend(db, { throughIso: opts.todayIso })
 	};
 }

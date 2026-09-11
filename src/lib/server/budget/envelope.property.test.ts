@@ -61,14 +61,16 @@ const event: fc.Arbitrary<Event> = fc.oneof(
 );
 
 const ledger = fc
-	.tuple(fc.integer({ min: 1, max: 6 }), fc.integer({ min: 0, max: 800000 }))
-	.chain(([n, opening]) =>
+	.tuple(fc.integer({ min: 1, max: 6 }), fc.integer({ min: 0, max: 800000 }), fc.integer({ min: 1, max: 6 }))
+	.chain(([n, opening, k]) =>
 		fc.array(fc.array(event, { minLength: 0, maxLength: 12 }), { minLength: n, maxLength: n })
-			.map((perPeriod) => build(n, opening, perPeriod))
+			.map((perPeriod) => build(n, opening, perPeriod, k))
 	);
 
-function build(n: number, opening: number, perPeriod: Event[][]): BudgetInput {
+/** `k` is the 1-based index of the first period the budget covers; everything before it is imported history. */
+function build(n: number, opening: number, perPeriod: Event[][], k: number): BudgetInput {
 	const input = skeleton(n);
+	input.budgetStart = input.periods[Math.min(k, n) - 1].startDate;
 	let tx = 1;
 	const push = (s: Omit<EnvSplit, 'transactionId'>) => input.splits.push({ transactionId: tx++, ...s });
 	push({ accountId: CHECKING, periodId: 1, categoryId: RECON, amount: opening, transferPeerAccountId: null, source: 'opening' });
@@ -108,10 +110,11 @@ function balancesThrough(input: BudgetInput, P: number): BudgetInput['balances']
 }
 
 describe('§7.5 conservation', () => {
-	it('ready-to-assign from balances equals ready-to-assign from flows for every period of any reconciled ledger', () => {
+	it('ready-to-assign from balances equals ready-to-assign from flows for every budget period of any reconciled ledger', () => {
 		fc.assert(
 			fc.property(ledger, (input) => {
 				for (const p of input.periods) {
+					if (p.startDate < input.budgetStart!) continue;   // history only: not a valid current period
 					const r = computeBudget({ ...input, balances: balancesThrough(input, p.id) }, p.id);
 					expect(r.readyToAssign).toBe(r.readyToAssignFromFlows);
 				}

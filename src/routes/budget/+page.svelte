@@ -4,6 +4,7 @@
 	import Dialog from '$lib/ui/Dialog.svelte';
 	import { post } from '$lib/ui/api';
 	import { decimalToCents, formatCents } from '$lib/money';
+	import { shortDate } from '$lib/dates';
 	let { data } = $props();
 	const v = $derived(data.view);
 	let error = $state(''); let showHidden = $state(false);
@@ -36,6 +37,9 @@
 	<label class="small"><input type="checkbox" bind:checked={showHidden} /> show hidden</label>
 	<a href="/budget/categories?period={v.period.id}" class="small">Manage categories</a>
 </div>
+{#if v.historyOnly}
+	<p class="muted">Before the budget started on {shortDate(v.budgetStart!)}. History only: the ledger and spending pages cover this period, the envelopes do not.</p>
+{:else}
 <div class="lead"><div class="label">Ready to assign</div><div class="value"><Money cents={v.readyToAssign} signed /></div></div>
 {#if error}<p class="error">{error}</p>{/if}
 {#if v.underfunded.length}
@@ -66,6 +70,7 @@
 	{/each}
 	</tbody>
 </table>
+{/if}
 
 {#if move}
 <Dialog open={true} title="Move money" onclose={() => (move = null)}>

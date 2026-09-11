@@ -3,7 +3,7 @@ import type { DbOrTx } from '../db';
 import { accounts, bills, plannedExtras, promoBalances } from '../db/schema';
 import { latestTerms } from '../sync/connections';
 import { paymentCategoryForAccount } from '../ledger/categories';
-import { assign, assignmentsForPeriod } from '../ledger/assignments';
+import { assign, assignmentsForPeriod, assertBudgetPeriod } from '../ledger/assignments';
 import { budgetForPeriod } from '../budget/load';
 import { InvariantError } from '../ledger/errors';
 import { nowIso } from '$lib/dates';
@@ -41,6 +41,7 @@ export function plannedExtrasForPeriod(db: DbOrTx, periodId: number): Map<number
 
 /** P2 §4.2: raise the payment envelope's assignment by the shortfall between the planned payment and what it holds. Idempotent. */
 export function fundShortfall(db: DbOrTx, input: { periodId: number; accountId: number }): { categoryId: number; shortfall: number; assigned: number } {
+	assertBudgetPeriod(db, input.periodId);   // before budgetForPeriod: a history period has no envelopes to compute
 	assertDebtAccount(db, input.accountId);
 	const categoryId = paymentCategoryForAccount(db, input.accountId);
 	if (categoryId == null) throw new InvariantError('NO_PAYMENT_CATEGORY');

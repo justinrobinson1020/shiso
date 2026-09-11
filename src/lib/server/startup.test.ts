@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startup, resetForTests } from './startup';
-import { currentPeriodId } from './budget/periods';
+import { currentPeriodId, ensurePeriods } from './budget/periods';
+import { getSetting, BUDGET_START_KEY } from './settings';
 import { getDb, getSqlite } from './db/instance';
 import { periods, categories } from './db/schema';
 import { asc, eq } from 'drizzle-orm';
@@ -60,5 +61,14 @@ describe('startup', () => {
 		startup(cfg(dir), '2026-09-04');
 		expect(first.open).toBe(false);
 		expect(getSqlite().open).toBe(true);
+	});
+	it('pins budget_start to the earliest period on first run and never moves it', () => {
+		startup(cfg(dir), '2026-09-04');
+		expect(getSetting(getDb(), BUDGET_START_KEY, null)).toBe('2026-09-01');
+		ensurePeriods(getDb(), 'semi_monthly', '2024-09-01', '2024-09-30');   // history arrives later
+		resetForTests();
+		startup(cfg(dir), '2026-09-20');
+		expect(getDb().select().from(periods).orderBy(asc(periods.startDate)).get()?.startDate).toBe('2024-09-01');
+		expect(getSetting(getDb(), BUDGET_START_KEY, null)).toBe('2026-09-01');
 	});
 });

@@ -233,3 +233,20 @@ describe('§7 hand-built scenarios', () => {
 		expect(r.readyToAssignFromFlows).toBe(80000);
 	});
 });
+
+describe('budget start', () => {
+	it('ignores periods before budgetStart: no carry, no activity, no assignments reach the kept periods', () => {
+		const b0 = base();
+		const withHistory: BudgetInput = { ...b0, splits: [...b0.splits,
+			{ transactionId: 901, accountId: CHECKING, periodId: P1, categoryId: GROCERIES, amount: -80000, transferPeerAccountId: null, source: 'import' },
+			{ transactionId: 902, accountId: CHECKING, periodId: P1, categoryId: TRANSFER, amount: -50000, transferPeerAccountId: CARD, source: 'import' },
+			{ transactionId: 903, accountId: CARD, periodId: P1, categoryId: TRANSFER, amount: 50000, transferPeerAccountId: CHECKING, source: 'import' }
+		], assignments: [...b0.assignments, { periodId: P1, categoryId: GROCERIES, assigned: 12345 }], budgetStart: b0.periods[1].startDate };
+		const without: BudgetInput = { ...b0, periods: b0.periods.slice(1), budgetStart: null };
+		const a = computeBudget(withHistory, P3), b = computeBudget(without, P3);
+		expect(a.byPeriod.get(P3)).toEqual(b.byPeriod.get(P3));
+		expect(a.byPeriod.has(P1)).toBe(false);
+		expect(a.underfunded).toEqual(b.underfunded);
+		expect(a.readyToAssign).toBe(b.readyToAssign);
+	});
+});

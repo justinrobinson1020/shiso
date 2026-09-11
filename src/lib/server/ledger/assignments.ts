@@ -1,9 +1,18 @@
 import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
-import { budgetAssignments, categories } from '../db/schema';
+import { budgetAssignments, categories, periods } from '../db/schema';
 import { InvariantError } from './errors';
 import { nowIso } from '$lib/dates';
 import { NO_ENVELOPE_KINDS } from '../budget/envelope';
+import { budgetStart } from '../settings';
+
+/** §P5: periods before budget_start are history only and take no assignments. */
+export function assertBudgetPeriod(db: DbOrTx, periodId: number): void {
+	const start = budgetStart(db);
+	if (start == null) return;
+	const p = db.select({ s: periods.startDate }).from(periods).where(eq(periods.id, periodId)).get();
+	if (p && p.s < start) throw new InvariantError('PERIOD_BEFORE_BUDGET_START');
+}
 
 function assertHasEnvelope(db: DbOrTx, categoryId: number): void {
 	const c = db.select({ kind: categories.kind }).from(categories).where(eq(categories.id, categoryId)).get();
@@ -26,11 +35,13 @@ function upsert(db: DbOrTx, periodId: number, categoryId: number, delta: number,
 }
 
 export function assign(db: DbOrTx, periodId: number, categoryId: number, assigned: number): void {
+	assertBudgetPeriod(db, periodId);
 	assertHasEnvelope(db, categoryId);
 	upsert(db, periodId, categoryId, assigned, true);
 }
 
 export function moveMoney(db: DbOrTx, periodId: number, fromCategoryId: number, toCategoryId: number, amount: number): void {
+	assertBudgetPeriod(db, periodId);
 	if (fromCategoryId === toCategoryId) throw new InvariantError('MOVE_SAME_CATEGORY');
 	if (!(amount > 0)) throw new InvariantError('MOVE_AMOUNT_NOT_POSITIVE');
 	assertHasEnvelope(db, fromCategoryId);

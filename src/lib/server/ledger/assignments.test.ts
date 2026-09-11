@@ -3,6 +3,11 @@ import { openMemoryDatabase, type Db } from '../db';
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId } from './categories';
 import { ensurePeriods, periodIdForDate } from '../budget/periods';
 import { assign, moveMoney, assignmentsForPeriod } from './assignments';
+import { InvariantError } from './errors';
+import { fixture } from '../test/fixture';
+import { setSetting, BUDGET_START_KEY } from '../settings';
+import { fundTargets, setTarget } from '../budget/targets';
+import { fundShortfall } from '../debt/plan';
 
 let db: Db; let p: number; let a: number; let b: number;
 beforeEach(() => {
@@ -43,5 +48,23 @@ describe('moveMoney', () => {
 	it('rejects moving money from a category to itself and leaves no row behind', () => {
 		expect(() => moveMoney(db, p, a, a, 100)).toThrowError(/MOVE_SAME_CATEGORY/);
 		expect(assignmentsForPeriod(db, p)).toEqual([]);
+	});
+});
+
+describe('budget start', () => {
+	it('refuses assignments in a period before budget_start', () => {
+		const f = fixture(); setSetting(f.db, BUDGET_START_KEY, '2026-08-01');
+		const july = periodIdForDate(f.db, '2026-07-05');
+		expect(() => assign(f.db, july, f.groceries, 100)).toThrow(InvariantError);
+		expect(() => moveMoney(f.db, july, f.groceries, f.rent, 100)).toThrow(/PERIOD_BEFORE_BUDGET_START/);
+		assign(f.db, periodIdForDate(f.db, '2026-08-01'), f.groceries, 100);   // the start period itself is a budget period
+	});
+	it('refuses the writers that compute envelopes before assigning with the same code, not a crash', () => {
+		const f = fixture(); setSetting(f.db, BUDGET_START_KEY, '2026-08-01');
+		const july = periodIdForDate(f.db, '2026-07-05');
+		setTarget(f.db, f.groceries, { kind: 'monthly', amount: 40000, targetDate: null });
+		expect(() => fundTargets(f.db, { periodId: july, cadence: 'semi_monthly' })).toThrow(/PERIOD_BEFORE_BUDGET_START/);
+		expect(() => fundShortfall(f.db, { periodId: july, accountId: f.card })).toThrow(/PERIOD_BEFORE_BUDGET_START/);
+		expect(assignmentsForPeriod(f.db, july)).toEqual([]);
 	});
 });

@@ -3,6 +3,7 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { accounts, accountBalances, budgetAssignments, categories, periods, transactions, transactionSplits } from '../db/schema';
 import { computeBudget, type BudgetInput, type BudgetResult } from './envelope';
+import { budgetStart } from '../settings';
 
 export function loadBudgetInput(db: DbOrTx): BudgetInput {
 	const accountRows = db
@@ -61,7 +62,8 @@ export function loadBudgetInput(db: DbOrTx): BudgetInput {
 		periods: periodRows,
 		splits: splitRows.map((s) => ({ ...s, transferPeerAccountId: s.transferPeerAccountId ?? null })),
 		assignments: assignmentRows,
-		balances
+		balances,
+		budgetStart: budgetStart(db)
 	};
 }
 

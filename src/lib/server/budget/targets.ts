@@ -2,7 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { categories, categoryTargets, periods, type TargetKind } from '../db/schema';
 import { InvariantError } from '../ledger/errors';
-import { assign, assignmentsForPeriod } from '../ledger/assignments';
+import { assign, assignmentsForPeriod, assertBudgetPeriod } from '../ledger/assignments';
 import { budgetForPeriod } from './load';
 import { NO_ENVELOPE_KINDS } from './envelope';
 import { periodBoundsFor, nextPeriodStart, type Cadence } from './periods';
@@ -77,6 +77,7 @@ export function targetStatuses(db: DbOrTx, periodId: number, cadence: Cadence): 
 
 /** P4 §2: assign each need on top of the current assignment. One category when given, else every category with a positive need. Idempotent. */
 export function fundTargets(db: DbOrTx, opts: { periodId: number; cadence: Cadence; categoryId?: number | null }): { funded: { categoryId: number; amount: number }[] } {
+	assertBudgetPeriod(db, opts.periodId);   // before targetStatuses: a history period has no envelopes to compute
 	const statuses = targetStatuses(db, opts.periodId, opts.cadence);
 	const current = new Map(assignmentsForPeriod(db, opts.periodId).map((a) => [a.categoryId, a.assigned]));
 	const funded: { categoryId: number; amount: number }[] = [];

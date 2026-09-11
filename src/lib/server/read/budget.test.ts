@@ -6,6 +6,7 @@ import { appendBalance } from '../sync/connections';
 import { periodIdForDate } from '../budget/periods';
 import { budgetView } from './budget';
 import { setTarget } from '../budget/targets';
+import { setSetting, BUDGET_START_KEY } from '../settings';
 
 describe('budgetView', () => {
 	it('lays out groups with envelope numbers, RTA, and the card strip', () => {
@@ -41,5 +42,16 @@ describe('budgetView targets (P4)', () => {
 		expect(cats.find((c) => c.id === f.rent)!.target).toMatchObject({ kind: 'by_date', periodsLeft: 4, needed: 25000 });
 		expect(cats.find((c) => c.id === f.cardPay)!.target).toBeNull();
 		expect(v.targetsNeeded).toBe(40000);
+	});
+});
+
+describe('budgetView budget start (P5)', () => {
+	it('marks a period before budget_start as history only', () => {
+		const f = fixture(); setSetting(f.db, BUDGET_START_KEY, '2026-08-01');
+		setTarget(f.db, f.groceries, { kind: 'monthly', amount: 40000, targetDate: null });
+		const v = budgetView(f.db, { periodId: periodIdForDate(f.db, '2026-07-05'), todayIso: f.today, cadence: 'semi_monthly' });
+		expect(v.historyOnly).toBe(true); expect(v.budgetStart).toBe('2026-08-01'); expect(v.groups.every((g) => g.categories.every((c) => c.available === 0 && c.assigned === 0))).toBe(true);
+		expect(v.groups.every((g) => g.categories.every((c) => c.target === null))).toBe(true); expect(v.targetsNeeded).toBe(0);
+		expect(budgetView(f.db, { periodId: null, todayIso: f.today, cadence: 'semi_monthly' }).historyOnly).toBe(false);
 	});
 });

@@ -6,6 +6,7 @@ import { setDb, closeDb } from './db/instance';
 import { seedDefaultCategories } from './ledger/categories';
 import { ensurePeriods, periodBoundsFor, nextPeriodStart, periodRange } from './budget/periods';
 import { transactions, accountBalances, periods } from './db/schema';
+import { budgetStart, setSetting, BUDGET_START_KEY } from './settings';
 
 export type StartupReport = { snapshot: string | null; periodsCreated: number; pendingMigrations: number };
 
@@ -24,6 +25,10 @@ export function startup(config: Config, todayIso: string): StartupReport {
 	const current = periodBoundsFor(config.cadence, todayIso);
 	const next = periodBoundsFor(config.cadence, nextPeriodStart(config.cadence, current.endDate));
 	ensurePeriods(db, config.cadence, earliest, next.endDate);
+	if (budgetStart(db) == null) {
+		const pin = firstPeriod ?? periodRange(db)?.first ?? null;   // the earliest period that existed before this startup, else the one just created
+		if (pin) setSetting(db, BUDGET_START_KEY, pin);
+	}
 	const after = db.select({ n: sql<number>`count(*)` }).from(periods).get()?.n ?? 0;
 
 	return { snapshot: handle.snapshot, periodsCreated: after - before, pendingMigrations: pendingMigrations(sqlite, config.migrationsDir).length };

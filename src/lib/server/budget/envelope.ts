@@ -12,6 +12,8 @@ export type EnvBalance = { accountId: number; current: number };
 export type BudgetInput = {
 	accounts: EnvAccount[]; categories: EnvCategory[]; periods: EnvPeriod[];
 	splits: EnvSplit[]; assignments: EnvAssignment[]; balances: EnvBalance[];
+	/** §P5: periods starting before this date are history only: their splits and assignments stay out of the envelope math. */
+	budgetStart?: string | null;
 };
 export type CategoryPeriod = {
 	carried: number; assigned: number; activity: number; available: number;
@@ -59,7 +61,9 @@ function apportion(total: number, weights: Map<number, number>): Map<number, num
 }
 
 export function computeBudget(input: BudgetInput, currentPeriodId: number): BudgetResult {
-	const periods = [...input.periods].sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+	const start = input.budgetStart ?? null;
+	const periods = input.periods.filter((p) => start == null || p.startDate >= start).sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+	const kept = new Set(periods.map((p) => p.id));
 	const periodIndex = new Map(periods.map((p, i) => [p.id, i]));
 	if (!periodIndex.has(currentPeriodId)) throw new Error(`period ${currentPeriodId} not in input`);
 	const currentIdx = periodIndex.get(currentPeriodId)!;
@@ -81,12 +85,15 @@ export function computeBudget(input: BudgetInput, currentPeriodId: number): Budg
 	const transfersInByPX = new Map<string, number>();  // period:card → Σ balance transfers this card funded (P2 §4.5), positive
 	const cashInflowsByP = new Map<number, number>();   // period → opening + adjustment + income on cash accounts
 	const cardOwedAll = new Map<number, number>();      // card → −Σ amounts (balance owed) from splits
+	let startingCash = 0;                               // §P5: Σ cash-account splits in history periods, the cash the budget opens with
 	for (const s of input.splits) {
-		if (onBudgetIds.has(s.accountId)) bump(splitsByPC, key2(s.periodId, s.categoryId), s.amount);
-		if (cardIds.has(s.accountId)) {
-			bump(cardSplitsByPCX, key3(s.periodId, s.categoryId, s.accountId), s.amount);
-			cardOwedAll.set(s.accountId, (cardOwedAll.get(s.accountId) ?? 0) - s.amount);
+		if (cardIds.has(s.accountId)) cardOwedAll.set(s.accountId, (cardOwedAll.get(s.accountId) ?? 0) - s.amount);
+		if (!kept.has(s.periodId)) {
+			if (cashIds.has(s.accountId)) startingCash += s.amount;
+			continue;
 		}
+		if (onBudgetIds.has(s.accountId)) bump(splitsByPC, key2(s.periodId, s.categoryId), s.amount);
+		if (cardIds.has(s.accountId)) bump(cardSplitsByPCX, key3(s.periodId, s.categoryId, s.accountId), s.amount);
 		if (cashIds.has(s.accountId) && s.transferPeerAccountId != null && cardIds.has(s.transferPeerAccountId)) {
 			bump(paymentsByPX, key2(s.periodId, s.transferPeerAccountId), -s.amount);
 		}
@@ -104,6 +111,7 @@ export function computeBudget(input: BudgetInput, currentPeriodId: number): Budg
 	const assignedByPC = new Map<string, number>();
 	const assignedByP = new Map<number, number>();
 	for (const a of input.assignments) {
+		if (!kept.has(a.periodId)) continue;
 		bump(assignedByPC, key2(a.periodId, a.categoryId), a.assigned);
 		assignedByP.set(a.periodId, (assignedByP.get(a.periodId) ?? 0) + a.assigned);
 	}
@@ -182,7 +190,7 @@ export function computeBudget(input: BudgetInput, currentPeriodId: number): Budg
 		assignedThrough += assignedByP.get(p.id) ?? 0;
 		cashOsThrough += cashOverspendByP.get(p.id) ?? 0;
 	}
-	const readyToAssignFromFlows = inflows - assignedThrough - cashOsThrough - negativeCardEnvelopes - futureAssigned;
+	const readyToAssignFromFlows = startingCash + inflows - assignedThrough - cashOsThrough - negativeCardEnvelopes - futureAssigned;
 
 	// ---- §7.4 card underfunding ---------------------------------------------
 	const underfunded = new Map<number, number>();

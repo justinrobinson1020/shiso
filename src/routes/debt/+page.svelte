@@ -69,6 +69,7 @@
 	</table>
 
 	<h2>Plan · {v.period.label}</h2>
+	{#if v.historyOnly}<p class="muted">Before the budget started on {shortDate(v.budgetStart!)}. History only: the ledger and spending pages cover this period, the envelopes do not.</p>{/if}
 	<table class="block plan">
 		<thead><tr><th>Account</th><th class="num">Minimum</th><th class="num">Additional</th><th class="num hide-sm">Planned</th><th class="num hide-sm">Envelope</th><th class="num">Shortfall</th><th></th></tr></thead>
 		<tbody>
@@ -76,11 +77,11 @@
 			<tr>
 				<td>{d.name}{#if d.categoryId == null}<span class="muted small hide-sm" title="no debt_payment category is linked to this account"> · no envelope</span><div class="small muted only-sm">no envelope</div>{:else}<div class="small muted only-sm">envelope <Money cents={d.available ?? 0} signed /></div>{/if}</td>
 				<td class="num">{#if d.minimum == null}<span class="muted" title="no terms minimum and no linked bill">none</span>{:else}<Money cents={d.minimum} />{/if}</td>
-				<td class="num"><input class="num" value={dollars(d.extra)} disabled={busy != null} onchange={(e) => saveExtra(d.id, (e.target as HTMLInputElement).value)} /></td>
+				<td class="num">{#if v.historyOnly}<Money cents={d.extra} />{:else}<input class="num" value={dollars(d.extra)} disabled={busy != null} onchange={(e) => saveExtra(d.id, (e.target as HTMLInputElement).value)} />{/if}</td>
 				<td class="num hide-sm"><Money cents={d.planned} /></td>
 				<td class="num hide-sm">{#if d.available == null}<span class="muted">—</span>{:else}<Money cents={d.available} signed />{/if}</td>
 				<td class="num">{#if d.categoryId == null}<span class="muted">—</span>{:else if d.shortfall > 0}<Money cents={d.shortfall} />{:else}<span class="status paid">funded</span>{/if}</td>
-				<td class="row-actions">{#if d.shortfall > 0}<button class="small" disabled={busy != null} onclick={() => run(`f-${d.id}`, () => post('/api/debt/fund', { periodId: v.period.id, accountId: d.id }))}>Fund</button>{/if}</td>
+				<td class="row-actions">{#if d.shortfall > 0 && !v.historyOnly}<button class="small" disabled={busy != null} onclick={() => run(`f-${d.id}`, () => post('/api/debt/fund', { periodId: v.period.id, accountId: d.id }))}>Fund</button>{/if}</td>
 			</tr>
 		{/each}
 		</tbody>

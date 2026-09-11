@@ -6,6 +6,7 @@ import { createBill } from '../bills/bills';
 import { periodIdForDate } from '../budget/periods';
 import { setPlannedExtra, createPromo } from '../debt/plan';
 import { debtView } from './debt';
+import { setSetting, BUDGET_START_KEY } from '../settings';
 
 describe('debtView', () => {
 	it('assembles debts, plan, strategies, promos and trend for the period', () => {
@@ -48,5 +49,15 @@ describe('debtView', () => {
 		const f = fixture(); updateAccount(f.db, f.card, { closedAt: '2026-09-01' });
 		const v = debtView(f.db, { periodId: null, todayIso: '2026-09-08', cadence: 'semi_monthly' });
 		expect(v.debts).toEqual([]); expect(v.strategies[0].debtFreeMonth).toBe('2026-09'); expect(v.promos).toEqual([]);
+	});
+	it('shows a period before budget_start as history only, with envelope numbers from the current period (P5)', () => {
+		const f = fixture(); setSetting(f.db, BUDGET_START_KEY, '2026-08-01');
+		const current = debtView(f.db, { periodId: null, todayIso: f.today, cadence: 'semi_monthly' });
+		expect(current.historyOnly).toBe(false); expect(current.budgetStart).toBe('2026-08-01');
+		const v = debtView(f.db, { periodId: periodIdForDate(f.db, '2026-07-05'), todayIso: f.today, cadence: 'semi_monthly' });
+		expect(v.historyOnly).toBe(true); expect(v.budgetStart).toBe('2026-08-01');
+		expect(v.period.id).toBe(periodIdForDate(f.db, '2026-07-05'));
+		expect(v.readyToAssign).toBe(current.readyToAssign);
+		expect(v.debts.map((d) => d.available)).toEqual(current.debts.map((d) => d.available));
 	});
 });
