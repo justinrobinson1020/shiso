@@ -18,8 +18,8 @@ export type DebtRow = {
 	terms: { asOf: string; source: string; aprBps: number | null; promoAprBps: number | null; minPayment: number | null; nextDueDate: string | null; lastStatementBalance: number | null; annualFee: number | null }[];
 };
 export type StrategyRow = {
-	strategy: Strategy; label: string; debtFreeMonth: string | null; totalInterest: number; interestSaved: number; capped: boolean;
-	firstTarget: string | null; payoffs: { id: number; name: string; payoffMonth: string | null }[]; series: Projection['series'];
+	strategy: Strategy; label: string; debtFreeMonth: string | null; totalInterest: number; interestSaved: number | null; capped: boolean;
+	firstTarget: string | null; payoffs: { id: number; name: string; payoffMonth: string | null; stalled: boolean }[]; series: Projection['series'];
 };
 export type PromoRow = {
 	id: number; accountId: number; accountName: string; description: string; original: number; remaining: number; aprBps: number;
@@ -85,11 +85,11 @@ export function debtView(db: DbOrTx, opts: { periodId: number | null; todayIso: 
 	const pool = totals.extra * periodsPerMonth;
 	const nameOf = new Map(debts.map((d) => [d.id, d.name]));
 	const runs = (['plan', 'minimums', 'avalanche', 'snowball'] as Strategy[]).map((s) => project(inputs, s, { startMonth, pool }));
-	const baseline = runs[1].totalInterest;
+	const baseline = runs[1].capped ? null : runs[1].totalInterest;   // no honest saving against a baseline that never finishes
 	const strategies: StrategyRow[] = runs.map((r) => ({
-		strategy: r.strategy, label: LABELS[r.strategy], debtFreeMonth: r.debtFreeMonth, totalInterest: r.totalInterest, interestSaved: baseline - r.totalInterest, capped: r.capped,
+		strategy: r.strategy, label: LABELS[r.strategy], debtFreeMonth: r.debtFreeMonth, totalInterest: r.totalInterest, interestSaved: baseline == null || r.capped ? null : baseline - r.totalInterest, capped: r.capped,
 		firstTarget: r.firstTarget == null ? null : (nameOf.get(r.firstTarget) ?? null),
-		payoffs: r.debts.map((d) => ({ id: d.id, name: nameOf.get(d.id) ?? String(d.id), payoffMonth: d.payoffMonth })), series: r.series
+		payoffs: r.debts.map((d) => ({ id: d.id, name: nameOf.get(d.id) ?? String(d.id), payoffMonth: d.payoffMonth, stalled: d.stalled })), series: r.series
 	}));
 
 	const promoRows: PromoRow[] = promos.flatMap((p) => {

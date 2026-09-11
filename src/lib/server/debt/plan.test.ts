@@ -30,6 +30,8 @@ describe('debtMinimum', () => {
 		expect(debtMinimum(f.db, f.card)).toBe(3500);
 		appendTermsIfChanged(f.db, f.card, { asOf: '2026-09-01', minPayment: 4200, source: 'manual' });
 		expect(debtMinimum(f.db, f.card)).toBe(4200);
+		appendTermsIfChanged(f.db, f.card, { asOf: '2026-09-02', minPayment: 0, source: 'manual' });
+		expect(debtMinimum(f.db, f.card)).toBe(3500);
 	});
 });
 

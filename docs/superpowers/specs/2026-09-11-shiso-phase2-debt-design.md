@@ -87,7 +87,9 @@ Month step, for each debt in isolation:
 3. Payment = `min(minimum + extra, owed)`. The first `minimum` reduces promo balances (oldest expiry first), then accruing; the remainder reduces accruing, then promo.
 4. The debt is paid off when `owed` reaches zero; record the month.
 
-Stop when every debt is paid off or after 600 months. Output per strategy: per-debt payoff month or null, total interest paid, debt-free month or null, and a monthly series of total owed for the chart. A debt with no minimum and no extra never pays off and is reported as such; its interest is counted through the cap.
+A debt whose payment for the month does not exceed that month's interest is **held flat**: no interest accrues, nothing is paid, and it is marked stalled. Under avalanche and snowball a stalled debt is re-examined every month, because a paid-off debt's minimum can grow the pool enough to reach it. The walk stops when every open debt is stalled, when every debt is paid off, or after 600 months. Output per strategy: per-debt payoff month or null (with a stalled flag), total interest paid, debt-free month or null, and a monthly series of total owed for the chart. A debt with no minimum and no extra therefore stalls in its first month. "Interest saved versus Minimums" is only reported when both the strategy and the Minimums baseline finish.
+
+A provider minimum of zero is treated as unknown (Plaid reports zero for a card with no statement due), so the linked bill's expected amount is used instead.
 
 The projection runs on every page load; with a dozen debts and 600 months it is a few thousand arithmetic steps.
 

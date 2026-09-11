@@ -7,7 +7,7 @@
 	import { page } from '$app/state';
 	let { data, children } = $props();
 	const links = [
-		{ href: '/', label: 'Month' }, { href: '/budget', label: 'Budget' }, { href: '/ledger', label: 'Ledger' },
+		{ href: '/', label: 'Month' }, { href: '/budget', label: 'Budget' }, { href: '/debt', label: 'Debt' }, { href: '/ledger', label: 'Ledger' },
 		{ href: '/spending', label: 'Spending' }, { href: '/accounts', label: 'Accounts' }, { href: '/bills', label: 'Bills' }
 	];
 	const active = (href: string) => (href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href));

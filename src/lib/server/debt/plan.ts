@@ -20,7 +20,7 @@ function assertDebtAccount(db: DbOrTx, accountId: number): void {
 /** P2 §2: latest terms minimum, else the linked active bill's expected amount, else null (unknown). */
 export function debtMinimum(db: DbOrTx, accountId: number): number | null {
 	const t = latestTerms(db, accountId);
-	if (t?.minPayment != null) return t.minPayment;
+	if (t?.minPayment != null && t.minPayment > 0) return t.minPayment;   // a provider's zero means "none reported", not "nothing due"
 	const b = db.select({ expected: bills.expectedAmount }).from(bills).where(and(eq(bills.linkedDebtAccountId, accountId), eq(bills.active, true))).orderBy(asc(bills.id)).get();
 	return b?.expected ?? null;
 }

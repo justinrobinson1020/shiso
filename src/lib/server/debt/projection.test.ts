@@ -32,25 +32,28 @@ describe('project (P2 §4.3)', () => {
 		expect(snow.debtFreeMonth! < plan.debtFreeMonth!).toBe(true);
 	});
 	it('folds an expired promo into the accruing balance', () => {
-		const d = debt({ id: 1, owed: 100000, aprBps: 2400, minimum: 1000, promos: [{ remaining: 100000, aprBps: 0, expiresOn: '2026-10-15' }] });
+		const d = debt({ id: 1, owed: 100000, aprBps: 2400, minimum: 3000, promos: [{ remaining: 100000, aprBps: 0, expiresOn: '2026-10-15' }] });
 		const r = project([d], 'plan', { startMonth: START, maxMonths: 3 });
-		// Sep: no interest (all promo), pay 1000 → 99000. Oct: same → 98000. Nov: fold; interest 98000×0.24/12 = 1960.
-		expect(r.series.map((s) => s.owed)).toEqual([100000, 99000, 98000, 98960]);
-		expect(r.debts[0].interest).toBe(1960); expect(r.capped).toBe(true);
+		// Sep: no interest (all promo), pay 3000 → 97000. Oct: same → 94000. Nov: fold; interest 94000×0.24/12 = 1880; pay 3000 → 92880.
+		expect(r.series.map((s) => s.owed)).toEqual([100000, 97000, 94000, 92880]);
+		expect(r.debts[0].interest).toBe(1880); expect(r.capped).toBe(true);
 	});
 	it('applies the minimum to promo first and the extra to accruing first', () => {
 		const d = debt({ id: 1, owed: 100000, aprBps: 0, minimum: 1000, extra: 5000, promos: [{ remaining: 40000, aprBps: 0, expiresOn: '2030-01-01' }] });
 		const r = project([d], 'plan', { startMonth: START, maxMonths: 1 });
 		expect(r.series[1].owed).toBe(94000); expect(r.debts[0].promoRemainingAfterFirstMonth).toBe(39000);
 	});
-	it('never pays off a debt with no minimum and no extra, and stops at the cap', () => {
+	it('holds a debt with no minimum and no extra flat and stops at once', () => {
 		const r = project([debt({ id: 1, owed: 100000, aprBps: 2400, minimum: null })], 'plan', { startMonth: START, maxMonths: 12 });
-		expect(r.debts[0].payoffMonth).toBeNull(); expect(r.debtFreeMonth).toBeNull(); expect(r.capped).toBe(true); expect(r.series).toHaveLength(13);
-		expect(r.debts[0].interest).toBeGreaterThan(0);
+		expect(r.debts[0]).toMatchObject({ payoffMonth: null, stalled: true, interest: 0 }); expect(r.debtFreeMonth).toBeNull(); expect(r.capped).toBe(true);
+		expect(r.series).toEqual([{ month: START, owed: 100000 }]);
 	});
-	it('reports a debt whose payment is below its interest as never paid off', () => {
-		const r = project([debt({ id: 1, owed: 1000000, aprBps: 3000, minimum: 1000 })], 'minimums', { startMonth: START });
-		expect(r.capped).toBe(true); expect(r.debts[0].payoffMonth).toBeNull(); expect(r.series).toHaveLength(601);
+	it('holds a debt whose payment does not cover its interest flat, and lets a growing pool reach it later', () => {
+		const stuck = debt({ id: 1, owed: 1000000, aprBps: 3000, minimum: 1000 });
+		const m = project([stuck], 'minimums', { startMonth: START });
+		expect(m.capped).toBe(true); expect(m.debts[0]).toMatchObject({ payoffMonth: null, stalled: true, interest: 0 }); expect(m.series).toHaveLength(1);
+		const a = project([stuck, debt({ id: 2, owed: 10000, aprBps: 1000, minimum: 50000 })], 'avalanche', { startMonth: START });
+		expect(a.debts[1].payoffMonth).toBe(START); expect(a.debts[0].payoffMonth).not.toBeNull(); expect(a.capped).toBe(false);
 	});
 	it('ignores debts with nothing owed', () => {
 		const r = project([debt({ id: 1, owed: 0, minimum: 1000 }), debt({ id: 2, owed: 5000, minimum: 5000 })], 'plan', { startMonth: START });
