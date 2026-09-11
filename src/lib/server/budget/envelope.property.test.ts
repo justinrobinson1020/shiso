@@ -41,6 +41,7 @@ type Event =
 	| { t: 'purchase'; account: number; category: number; amount: number }
 	| { t: 'refund'; account: number; category: number; amount: number }
 	| { t: 'payment'; card: number; amount: number }
+	| { t: 'balance_transfer'; from: number; to: number; amount: number }
 	| { t: 'loan'; amount: number }
 	| { t: 'save'; amount: number }
 	| { t: 'assign'; category: number; amount: number }
@@ -52,6 +53,7 @@ const event: fc.Arbitrary<Event> = fc.oneof(
 	fc.record({ t: fc.constant('purchase' as const), account: fc.constantFrom(CHECKING, CARD, CARD2), category: fc.constantFrom(...SPENDING), amount: cents(30000) }),
 	fc.record({ t: fc.constant('refund' as const), account: fc.constantFrom(CHECKING, CARD, CARD2), category: fc.constantFrom(...SPENDING), amount: cents(5000) }),
 	fc.record({ t: fc.constant('payment' as const), card: fc.constantFrom(CARD, CARD2), amount: cents(50000) }),
+	fc.record({ t: fc.constant('balance_transfer' as const), from: fc.constantFrom(CARD, CARD2), to: fc.constantFrom(CARD, CARD2), amount: cents(50000) }).filter((e) => e.from !== e.to),
 	fc.record({ t: fc.constant('loan' as const), amount: cents(90000) }),
 	fc.record({ t: fc.constant('save' as const), amount: cents(60000) }),
 	fc.record({ t: fc.constant('assign' as const), category: fc.constantFrom(...ENVELOPES), amount: fc.integer({ min: -20000, max: 60000 }) }),
@@ -80,6 +82,10 @@ function build(n: number, opening: number, perPeriod: Event[][]): BudgetInput {
 				case 'payment':
 					push({ accountId: CHECKING, periodId: p, categoryId: TRANSFER, amount: -e.amount, transferPeerAccountId: e.card, source: 'sync' });
 					push({ accountId: e.card, periodId: p, categoryId: TRANSFER, amount: e.amount, transferPeerAccountId: CHECKING, source: 'sync' });
+					break;
+				case 'balance_transfer':
+					push({ accountId: e.from, periodId: p, categoryId: TRANSFER, amount: -e.amount, transferPeerAccountId: e.to, source: 'sync' });
+					push({ accountId: e.to, periodId: p, categoryId: TRANSFER, amount: e.amount, transferPeerAccountId: e.from, source: 'sync' });
 					break;
 				case 'loan': push({ accountId: CHECKING, periodId: p, categoryId: LOAN_ENV, amount: -e.amount, transferPeerAccountId: LOAN, source: 'sync' }); break;
 				case 'save':

@@ -77,7 +77,8 @@ export function computeBudget(input: BudgetInput, currentPeriodId: number): Budg
 	// ---- index the ledger ------------------------------------------------
 	const splitsByPC = new Map<string, number>();       // period:category → Σ amount on on-budget accounts
 	const cardSplitsByPCX = new Map<string, number>();  // period:category:card → Σ amount on that card
-	const paymentsByPX = new Map<string, number>();     // period:card → Σ payments from cash to card (positive)
+	const paymentsByPX = new Map<string, number>();     // period:card → Σ payments to the card, from cash or from another card (positive)
+	const transfersInByPX = new Map<string, number>();  // period:card → Σ balance transfers this card funded (P2 §4.5), positive
 	const cashInflowsByP = new Map<number, number>();   // period → opening + adjustment + income on cash accounts
 	const cardOwedAll = new Map<number, number>();      // card → −Σ amounts (balance owed) from splits
 	for (const s of input.splits) {
@@ -88,6 +89,11 @@ export function computeBudget(input: BudgetInput, currentPeriodId: number): Budg
 		}
 		if (cashIds.has(s.accountId) && s.transferPeerAccountId != null && cardIds.has(s.transferPeerAccountId)) {
 			bump(paymentsByPX, key2(s.periodId, s.transferPeerAccountId), -s.amount);
+		}
+		// P2 §4.5: card A (negative side) pays card B. B's envelope sees a payment; A's envelope gets the money that was earmarked for B.
+		if (cardIds.has(s.accountId) && s.transferPeerAccountId != null && cardIds.has(s.transferPeerAccountId) && s.amount < 0) {
+			bump(paymentsByPX, key2(s.periodId, s.transferPeerAccountId), -s.amount);
+			bump(transfersInByPX, key2(s.periodId, s.accountId), -s.amount);
 		}
 		if (cashIds.has(s.accountId)) {
 			if (s.source === 'opening' || s.source === 'adjustment' || kindById.get(s.categoryId) === 'income') {
@@ -143,7 +149,7 @@ export function computeBudget(input: BudgetInput, currentPeriodId: number): Budg
 			const assigned = assignedByPC.get(key2(p.id, c.id)) ?? 0;
 			let moneyIn = 0;
 			for (const sc of spendingLike) moneyIn -= cardSplitsByPCX.get(key3(p.id, sc.id, x)) ?? 0;
-			const activity = moneyIn - (creditOsOnCard.get(x) ?? 0) - (paymentsByPX.get(key2(p.id, x)) ?? 0);
+			const activity = moneyIn + (transfersInByPX.get(key2(p.id, x)) ?? 0) - (creditOsOnCard.get(x) ?? 0) - (paymentsByPX.get(key2(p.id, x)) ?? 0);
 			const available = carry + assigned + activity;
 			row.set(c.id, { carried: carry, assigned, activity, available, creditOverspend: 0, cashOverspend: 0 });
 			carried.set(c.id, available);

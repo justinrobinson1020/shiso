@@ -213,4 +213,23 @@ describe('§7 hand-built scenarios', () => {
 		expect(r.readyToAssign).toBe(95001);
 		expect(r.readyToAssignFromFlows).toBe(95001);
 	});
+	it('a card-to-card balance transfer moves the receiving card\'s envelope money to the paying card (P2 §4.5)', () => {
+		const CARD2 = 5, CARD2_ENV = 33;
+		const input = base();
+		input.accounts.push({ id: CARD2, type: 'credit', onBudget: true });
+		input.categories.push({ id: CARD2_ENV, kind: 'debt_payment', accountId: CARD2 });
+		input.splits.push(opening(CHECKING, P1, 100000));
+		input.assignments.push({ periodId: P1, categoryId: GROCERIES, assigned: 20000 });
+		input.splits.push(split({ accountId: CARD, periodId: P1, categoryId: GROCERIES, amount: -20000 }));   // CARD owes 200, its envelope holds 200
+		input.splits.push(...transfer(CARD2, CARD, P1, 15000));                                              // CARD2 pays 150 of it
+		const r = computeBudget(reconcile(input), P1);
+		expect(avail(r, P1, CARD_ENV)).toBe(5000);
+		expect(avail(r, P1, CARD2_ENV)).toBe(15000);
+		expect(r.cardBalanceOwed.get(CARD)).toBe(5000);
+		expect(r.cardBalanceOwed.get(CARD2)).toBe(15000);
+		expect(r.underfunded.get(CARD)).toBe(0);
+		expect(r.underfunded.get(CARD2)).toBe(0);
+		expect(r.readyToAssign).toBe(80000);
+		expect(r.readyToAssignFromFlows).toBe(80000);
+	});
 });
