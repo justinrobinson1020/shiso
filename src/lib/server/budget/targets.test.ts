@@ -26,10 +26,12 @@ describe('targetStatus (P4 §4)', () => {
 describe('periodsThrough', () => {
 	it('counts the current period through the one containing the date', () => {
 		const f = fixture(); const p = periodIdForDate(f.db, '2026-09-08');
-		expect(periodsThrough(f.db, p, '2026-09-10')).toBe(1);
-		expect(periodsThrough(f.db, p, '2026-09-20')).toBe(2);
-		expect(periodsThrough(f.db, p, '2026-10-31')).toBe(4);
-		expect(periodsThrough(f.db, p, '2026-01-01')).toBe(1);
+		expect(periodsThrough(f.db, p, '2026-09-10', 'semi_monthly')).toBe(1);
+		expect(periodsThrough(f.db, p, '2026-09-20', 'semi_monthly')).toBe(2);
+		expect(periodsThrough(f.db, p, '2026-10-31', 'semi_monthly')).toBe(4);
+		expect(periodsThrough(f.db, p, '2027-03-15', 'semi_monthly')).toBe(13);   // beyond the periods table
+		expect(periodsThrough(f.db, p, '2026-12-31', 'monthly')).toBe(4);
+		expect(periodsThrough(f.db, p, '2026-01-01', 'semi_monthly')).toBe(1);
 	});
 });
 

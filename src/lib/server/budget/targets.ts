@@ -1,11 +1,11 @@
-import { and, asc, eq, gte, lte } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { categories, categoryTargets, periods, type TargetKind } from '../db/schema';
 import { InvariantError } from '../ledger/errors';
 import { assign, assignmentsForPeriod } from '../ledger/assignments';
 import { budgetForPeriod } from './load';
 import { NO_ENVELOPE_KINDS } from './envelope';
-import type { Cadence } from './periods';
+import { periodBoundsFor, nextPeriodStart, type Cadence } from './periods';
 import { nowIso } from '$lib/dates';
 
 /** P4 §4: what a target asks of one period. */
@@ -31,12 +31,13 @@ export function targetStatus(t: Target, cell: { assigned: number; available: num
 	}
 }
 
-/** Periods from `periodId` through the one containing `date`, inclusive; 1 when the date is in or before the period. */
-export function periodsThrough(db: DbOrTx, periodId: number, date: string): number {
+/** Periods from `periodId` through the one containing `date`, inclusive; 1 when the date is in or before the period. Walks the cadence, not the table, which only extends one period ahead. */
+export function periodsThrough(db: DbOrTx, periodId: number, date: string, cadence: Cadence): number {
 	const p = db.select().from(periods).where(eq(periods.id, periodId)).get();
 	if (!p) throw new Error(`period ${periodId} not found`);
-	if (date <= p.endDate) return 1;
-	return 1 + db.select({ id: periods.id }).from(periods).where(and(gte(periods.startDate, p.endDate), lte(periods.startDate, date))).all().length;
+	let n = 1, cur = periodBoundsFor(cadence, p.startDate);
+	while (date > cur.endDate) { cur = periodBoundsFor(cadence, nextPeriodStart(cadence, cur.endDate)); n++; }
+	return n;
 }
 
 export const periodsPerMonth = (cadence: Cadence) => (cadence === 'semi_monthly' ? 2 : 1);
@@ -69,7 +70,7 @@ export function targetStatuses(db: DbOrTx, periodId: number, cadence: Cadence): 
 	const out = new Map<number, TargetStatus>();
 	for (const [categoryId, t] of listTargets(db)) {
 		const cell = cells.get(categoryId) ?? { assigned: 0, available: 0 };
-		out.set(categoryId, targetStatus(t, cell, { periodsPerMonth: ppm, periodsThroughDate: t.targetDate ? periodsThrough(db, periodId, t.targetDate) : 1 }));
+		out.set(categoryId, targetStatus(t, cell, { periodsPerMonth: ppm, periodsThroughDate: t.targetDate ? periodsThrough(db, periodId, t.targetDate, cadence) : 1 }));
 	}
 	return out;
 }

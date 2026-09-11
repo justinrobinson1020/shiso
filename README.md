@@ -40,7 +40,9 @@ npm run check    # svelte-check
   pending, planned card payments, cash left at month end.
 - **Budget** (`/budget`, `/budget/categories`) — envelope grid for the
   selected period (assigned, activity, available), ready-to-assign, card
-  underfunding, and category management.
+  underfunding, and category management. Each category can carry a target
+  (per month, keep available, or reach an amount by a date); the grid shows
+  what each envelope still needs this period with one-click funding.
 - **Debt** (`/debt`) — every open card and loan with owed, accruing, APR,
   interest estimates, minimum and due date, with terms history; a per-period
   plan of extra payments with one-click funding of the payment envelope;

@@ -1,7 +1,7 @@
 # shiso — Phase 4: Budgeting depth (targets and goals)
 
 **Date:** 2026-09-11
-**Status:** Approved design, pending implementation plan
+**Status:** Implemented (2026-09-11)
 **Scope:** Category targets (a rule for what each envelope should hold or receive), goal progress, and one-click funding on the Budget page. Section references are to the Phase 1 spec unless marked §P4.
 
 ## 1. Purpose
