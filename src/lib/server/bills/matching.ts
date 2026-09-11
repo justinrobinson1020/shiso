@@ -8,7 +8,7 @@ import { addDays, nowIso, parseIso } from '$lib/dates';
 const touch = () => ({ updatedAt: nowIso() });
 const dayDiff = (a: string, b: string) => Math.abs((parseIso(a).getTime() - parseIso(b).getTime()) / 86_400_000);
 
-function patternMatches(pattern: string | null, payee: string, payeeRaw: string): boolean {
+export function patternMatches(pattern: string | null, payee: string, payeeRaw: string): boolean {
 	if (!pattern) return true;
 	try { const re = new RegExp(pattern, 'i'); return re.test(payee) || re.test(payeeRaw); }
 	catch { const p = pattern.toLowerCase(); return payee.toLowerCase().includes(p) || payeeRaw.toLowerCase().includes(p); }
