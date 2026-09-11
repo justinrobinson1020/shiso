@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { post } from '$lib/ui/api';
+	import { decimalToCents } from '$lib/money';
 	let { data } = $props();
 	const t = $derived(data.tree);
 	let error = $state(''); let newGroup = $state('');
@@ -11,6 +12,19 @@
 		const d = draft[groupId]; await run(() => post('/api/categories', { groupId, name: d.name, kind: d.kind, accountId: d.kind === 'debt_payment' ? d.accountId : null })); delete draft[groupId];
 	}
 	const patch = (id: number, body: unknown) => run(() => post(`/api/categories/${id}`, body));
+
+	// Targets (P4): one draft per category, saved by the button; a blank amount clears.
+	type TargetDraft = { kind: string; amount: string; targetDate: string };
+	let targets = $state<Record<number, TargetDraft>>({});
+	const targetDraft = (c: { id: number; target: { kind: string; amount: number; targetDate: string | null } | null }): TargetDraft =>
+		targets[c.id] ?? { kind: c.target?.kind ?? 'monthly', amount: c.target ? (c.target.amount / 100).toFixed(2) : '', targetDate: c.target?.targetDate ?? '' };
+	function editTarget(c: { id: number; target: { kind: string; amount: number; targetDate: string | null } | null }, patchDraft: Partial<TargetDraft>) { targets[c.id] = { ...targetDraft(c), ...patchDraft }; }
+	async function saveTarget(id: number) {
+		const d = targets[id]; if (!d) return;
+		if (d.amount.trim() === '') { await run(() => post(`/api/budget/targets/${id}/clear`)); delete targets[id]; return; }
+		await run(() => post('/api/budget/targets', { categoryId: id, kind: d.kind, amount: decimalToCents(d.amount), targetDate: d.kind === 'by_date' ? d.targetDate || null : null }));
+		delete targets[id];
+	}
 
 	let pcmDraft = $state<Record<string, number>>({});
 	let pcmMessage = $state('');
@@ -35,7 +49,7 @@
 {#each t.groups as g}
 	<h2>{g.name} <button class="small" onclick={() => startNew(g.id)}>+ category</button></h2>
 	<table>
-		<thead><tr><th>Name</th><th>Kind</th><th>Linked account</th><th>Group</th><th>Hidden</th></tr></thead>
+		<thead><tr><th>Name</th><th>Kind</th><th>Linked account</th><th>Group</th><th>Hidden</th><th>Target</th></tr></thead>
 		<tbody>
 		{#each g.categories as c (c.id)}
 			<tr>
@@ -46,6 +60,13 @@
 					<select value={c.accountId} onchange={(e) => patch(c.id, { accountId: Number((e.target as HTMLSelectElement).value) })}>{#each t.debtAccounts as a}<option value={a.id}>{a.name}</option>{/each}</select>{:else}<span class="muted">—</span>{/if}</td>
 				<td><select value={c.groupId ?? g.id} onchange={(e) => patch(c.id, { groupId: Number((e.target as HTMLSelectElement).value) })}>{#each t.groups as og}<option value={og.id}>{og.name}</option>{/each}</select></td>
 				<td><input type="checkbox" checked={c.hidden} onchange={(e) => patch(c.id, { hidden: (e.target as HTMLInputElement).checked })} /></td>
+				<td class="target-editor">{#if !['income', 'transfer', 'reconciliation'].includes(c.kind)}
+					{@const d = targetDraft(c)}
+					<select value={d.kind} onchange={(e) => editTarget(c, { kind: (e.target as HTMLSelectElement).value })}><option value="monthly">per month</option><option value="refill">keep available</option><option value="by_date">by date</option></select>
+					<input class="num w5" placeholder="0.00" value={d.amount} onchange={(e) => editTarget(c, { amount: (e.target as HTMLInputElement).value })} />
+					{#if d.kind === 'by_date'}<input type="date" value={d.targetDate} onchange={(e) => editTarget(c, { targetDate: (e.target as HTMLInputElement).value })} />{/if}
+					{#if targets[c.id]}<button class="small primary" onclick={() => saveTarget(c.id)}>Save</button>{:else if c.target}<span class="status paid">set</span>{/if}
+				{:else}<span class="muted">—</span>{/if}</td>
 			</tr>
 		{/each}
 		{#if draft[g.id]}

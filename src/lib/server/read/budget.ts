@@ -4,6 +4,7 @@ import { accounts, categories, categoryGroups, periods } from '../db/schema';
 import { budgetForPeriod } from '../budget/load';
 import { NO_ENVELOPE_KINDS } from '../budget/envelope';
 import { currentPeriodId, type Cadence } from '../budget/periods';
+import { targetStatuses, type TargetStatus } from '../budget/targets';
 
 export type BudgetView = {
 	period: { id: number; label: string; startDate: string; endDate: string; isCurrent: boolean };
@@ -24,9 +25,13 @@ export type BudgetView = {
 			available: number;
 			creditOverspend: number;
 			cashOverspend: number;
+			/** P4: the category's target and what it still needs this period; null without a target. */
+			target: TargetStatus | null;
 		}[];
 	}[];
 	underfunded: { accountId: number; accountName: string; owed: number; available: number; underfunded: number }[];
+	/** Σ needed over targets on visible categories this period. */
+	targetsNeeded: number;
 };
 
 export function budgetView(db: DbOrTx, opts: { periodId: number | null; todayIso: string; cadence: Cadence }): BudgetView {
@@ -38,6 +43,7 @@ export function budgetView(db: DbOrTx, opts: { periodId: number | null; todayIso
 	const result = budgetForPeriod(db, periodId);
 	const cells = result.byPeriod.get(periodId) ?? new Map();
 	const zero = { carried: 0, assigned: 0, activity: 0, available: 0, creditOverspend: 0, cashOverspend: 0 };
+	const targets = targetStatuses(db, periodId, opts.cadence);
 	const groupRows = db.select().from(categoryGroups).orderBy(asc(categoryGroups.sort), asc(categoryGroups.id)).all();
 	const catRows = db.select().from(categories).orderBy(asc(categories.sort), asc(categories.id)).all();
 	const groups = groupRows
@@ -52,7 +58,8 @@ export function budgetView(db: DbOrTx, opts: { periodId: number | null; todayIso
 					kind: c.kind,
 					accountId: c.accountId,
 					hidden: c.hidden,
-					...(cells.get(c.id) ?? zero)
+					...(cells.get(c.id) ?? zero),
+					target: targets.get(c.id) ?? null
 				}))
 		}))
 		.filter((g) => g.categories.length > 0);
@@ -68,6 +75,7 @@ export function budgetView(db: DbOrTx, opts: { periodId: number | null; todayIso
 		periods: all,
 		readyToAssign: result.readyToAssign,
 		groups,
-		underfunded
+		underfunded,
+		targetsNeeded: groups.flatMap((g) => g.categories).filter((c) => !c.hidden).reduce((s, c) => s + (c.target?.needed ?? 0), 0)
 	};
 }

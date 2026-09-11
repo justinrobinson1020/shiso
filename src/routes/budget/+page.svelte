@@ -21,6 +21,10 @@
 		catch (e) { error = (e as Error).message; }
 	}
 	const dollars = (c: number) => (c / 100).toFixed(2);
+	const fund = (categoryId: number | null) => { error = ''; return post('/api/budget/fund-targets', { periodId: v.period.id, categoryId }).then(() => invalidateAll()).catch((e) => (error = (e as Error).message)); };
+	const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+	type Target = NonNullable<(typeof allCats)[number]['target']>;
+	const rule = (t: Target) => t.kind === 'monthly' ? `${formatCents(t.amount)} / mo` : t.kind === 'refill' ? `keep ${formatCents(t.amount)}` : `${formatCents(t.amount)} by ${MONTHS[+t.targetDate!.slice(5, 7) - 1]} ${t.targetDate!.slice(0, 4)}${t.periodsLeft != null ? ` · ${t.periodsLeft} left` : ''}`;
 </script>
 
 <div class="toolbar">
@@ -37,19 +41,24 @@
 {#if v.underfunded.length}
 	<div class="strip">{#each v.underfunded as u}<span>{u.accountName}: owes <Money cents={u.owed} />, envelope <Money cents={u.available} />, <strong>underfunded <Money cents={u.underfunded} /></strong></span>{/each}</div>
 {/if}
-<table>
-	<thead><tr><th>Category</th><th class="num hide-sm">Carried</th><th class="num">Assigned</th><th class="num">Activity</th><th class="num">Available</th><th></th></tr></thead>
+{#if v.targetsNeeded > 0}
+	<div class="strip"><span>Targets need <strong><Money cents={v.targetsNeeded} /></strong> this period</span><button class="small primary" onclick={() => fund(null)}>Fund all</button></div>
+{/if}
+<table class="budget">
+	<thead><tr><th>Category</th><th class="hide-sm">Target</th><th class="num hide-sm">Carried</th><th class="num">Assigned</th><th class="num">Activity</th><th class="num">Available</th><th></th></tr></thead>
 	<tbody>
 	{#each v.groups as g}
-		<tr class="group"><td colspan="6">{g.name}</td></tr>
+		<tr class="group"><td colspan="7">{g.name}</td></tr>
 		{#each g.categories.filter((c) => showHidden || !c.hidden) as c (c.id)}
 			<tr>
-				<td>{c.name}{#if c.hidden} <span class="muted small">hidden</span>{/if}{#if c.creditOverspend > 0} <span class="status overdue" title="credit overspend">{formatCents(c.creditOverspend)} on card</span>{/if}</td>
+				<td>{c.name}{#if c.hidden} <span class="muted small">hidden</span>{/if}{#if c.creditOverspend > 0} <span class="status overdue" title="credit overspend">{formatCents(c.creditOverspend)} on card</span>{/if}
+					{#if c.target}<div class="small muted only-sm">{rule(c.target)}{#if c.target.needed > 0} · needs {formatCents(c.target.needed)}{/if}</div>{/if}</td>
+				<td class="hide-sm target">{#if c.target}<div class="small">{rule(c.target)}</div><div class="bar"><i style="width:{Math.round(c.target.progress * 100)}%"></i></div>{#if c.target.needed > 0}<div class="small muted">needs <Money cents={c.target.needed} /></div>{:else}<div class="small muted">on target</div>{/if}{:else}<span class="muted">—</span>{/if}</td>
 				<td class="num hide-sm"><Money cents={c.carried} /></td>
 				<td class="num"><input class="num" value={dollars(c.assigned)} onchange={(e) => assignTo(c.id, (e.target as HTMLInputElement).value)} /></td>
 				<td class="num"><Money cents={c.activity} /></td>
 				<td class="num"><Money cents={c.available} signed /></td>
-				<td><button onclick={() => (move = { from: c.id, to: null, amount: '' })}>Move</button></td>
+				<td class="row-actions">{#if c.target && c.target.needed > 0}<button class="small" onclick={() => fund(c.id)}>Fund</button>{/if} <button class="small" onclick={() => (move = { from: c.id, to: null, amount: '' })}>Move</button></td>
 			</tr>
 		{/each}
 	{/each}

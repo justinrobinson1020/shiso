@@ -2,6 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { accounts, categories, categoryGroups, CATEGORY_KINDS, type CategoryKind } from '../db/schema';
 import { getProviderCategoryMap, providerCategoryUsage } from '../sync/postprocess';
+import { listTargets, type Target } from '../budget/targets';
 
 export type CategoryTree = {
 	groups: {
@@ -17,6 +18,7 @@ export type CategoryTree = {
 			isSystem: boolean;
 			sort: number;
 			groupId: number;
+			target: Target | null;
 		}[];
 	}[];
 	debtAccounts: { id: number; name: string }[];
@@ -27,6 +29,7 @@ export type CategoryTree = {
 export function categoryTree(db: DbOrTx): CategoryTree {
 	const groups = db.select().from(categoryGroups).orderBy(asc(categoryGroups.sort), asc(categoryGroups.id)).all();
 	const cats = db.select().from(categories).orderBy(asc(categories.sort), asc(categories.id)).all();
+	const targets = listTargets(db);
 	const debtAccounts = db
 		.select({ id: accounts.id, name: accounts.name })
 		.from(accounts)
@@ -48,7 +51,8 @@ export function categoryTree(db: DbOrTx): CategoryTree {
 					hidden: c.hidden,
 					isSystem: c.isSystem,
 					sort: c.sort,
-					groupId: c.groupId
+					groupId: c.groupId,
+					target: targets.get(c.id) ?? null
 				}))
 		})),
 		debtAccounts,

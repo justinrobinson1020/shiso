@@ -31,6 +31,8 @@ table.block tfoot td { font-weight: 600; border-bottom: none; border-top: 1px so
 table.block tfoot tr.grand td { font-size: var(--text-subheading); padding-top: .6rem; }
 table.balances td:first-child .small { margin-left: .35rem; }
 table.trends td.spark { width: 140px; padding-top: .2rem; padding-bottom: .2rem; } table.trends td.spark svg { height: 28px; display: block; }
+td.target { min-width: 9rem; } .bar { height: 4px; background: var(--line); border-radius: 2px; margin: .25rem 0; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--accent); }
+td.target-editor { white-space: nowrap; } td.target-editor > * { margin-right: .3rem; }
 table.strategies tr { cursor: pointer; } table.strategies tr.active td { background: var(--card); }
 table.block + .chart, h2 + .chart { margin-top: .5rem; }
 .lead { margin: 1.25rem 0 1.5rem; }

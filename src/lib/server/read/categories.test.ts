@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { setTarget } from '../budget/targets';
 import { fixture } from '../test/fixture';
 import { createTransaction } from '../ledger/transactions';
 import { setProviderCategoryMap } from '../sync/postprocess';
@@ -29,5 +30,15 @@ describe('providerCategoryMapView', () => {
 			{ key: 'TRAVEL', count: 2 },
 			{ key: 'FOOD_AND_DRINK_GROCERIES', count: 1 }
 		]);
+	});
+});
+
+describe('categoryTree targets (P4)', () => {
+	it('carries the saved target per category', () => {
+		const f = fixture();
+		setTarget(f.db, f.groceries, { kind: 'refill', amount: 25000, targetDate: null });
+		const t = categoryTree(f.db).groups.flatMap((g) => g.categories);
+		expect(t.find((c) => c.id === f.groceries)!.target).toEqual({ kind: 'refill', amount: 25000, targetDate: null });
+		expect(t.find((c) => c.id === f.rent)!.target).toBeNull();
 	});
 });
