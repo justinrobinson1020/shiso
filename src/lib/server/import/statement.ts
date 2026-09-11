@@ -59,9 +59,11 @@ export function importParsed(db: Db, accountId: number, parsed: ParsedFile, opts
 			const next = periodBoundsFor(opts.cadence, nextPeriodStart(opts.cadence, periodBoundsFor(opts.cadence, opts.todayIso).endDate));
 			ensurePeriods(tx, opts.cadence, earliest, next.endDate);
 		}
-		const existing: Candidate[] = tx.select({ id: transactions.id, amount: transactions.amount, postedDate: transactions.postedDate, transactedAt: transactions.transactedAt }).from(transactions).where(and(eq(transactions.accountId, accountId), isNull(transactions.deletedAt))).all();
-		const liveIds = new Set(tx.select({ e: transactions.externalId }).from(transactions).where(and(eq(transactions.accountId, accountId), isNull(transactions.deletedAt))).all().map((r) => r.e));
-		const byAmount = new Map<number, Candidate[]>(); for (const e of existing) byAmount.set(e.amount, [...(byAmount.get(e.amount) ?? []), e]);
+		const existingRows = tx.select({ id: transactions.id, amount: transactions.amount, postedDate: transactions.postedDate, transactedAt: transactions.transactedAt, externalId: transactions.externalId, source: transactions.source }).from(transactions).where(and(eq(transactions.accountId, accountId), isNull(transactions.deletedAt))).all();
+		const existing: Candidate[] = existingRows;
+		const liveByExternalId = new Map<string, number>(existingRows.map((e) => [e.externalId, e.id]));
+		// Opening rows are a synthetic plug, not a real transaction a statement row could be — never a fuzzy-match candidate.
+		const byAmount = new Map<number, Candidate[]>(); for (const e of existingRows) if (e.source !== 'opening') byAmount.set(e.amount, [...(byAmount.get(e.amount) ?? []), e]);
 		const claimed = new Set<number>(); const seen = new Map<string, number>();
 		let created = 0, duplicates = 0, matched = 0; const createdRows: { postedDate: string; amount: number }[] = [];
 		const rows = [...parsed.rows].sort((a, b) => compareIso(a.postedDate, b.postedDate));
@@ -69,12 +71,13 @@ export function importParsed(db: Db, accountId: number, parsed: ParsedFile, opts
 			const desc = r.memo ?? r.payeeRaw;
 			const key = `${r.postedDate}|${r.amount}|${normalizeDescription(desc)}`; const ordinal = seen.get(key) ?? 0; seen.set(key, ordinal + 1);
 			const externalId = r.referenceId ?? contentHash({ accountKey: `csv:${accountId}`, date: r.postedDate, amount: r.amount, description: desc, ordinal });
-			if (liveIds.has(externalId)) { duplicates++; continue; }
+			const dupId = liveByExternalId.get(externalId);
+			if (dupId !== undefined) { duplicates++; claimed.add(dupId); continue; }   // its live twin is spoken for; a different row must not fuzzy-match it
 			const m = closestMatch(byAmount.get(r.amount) ?? [], r, claimed);
 			if (m) { claimed.add(m.id); matched++; continue; }
 			try {
-				createTransaction(tx, { accountId, externalId, postedDate: r.postedDate, transactedAt: r.transactedAt, amount: r.amount, payeeRaw: r.payeeRaw, memo: r.memo, providerCategory: r.providerCategory, source: 'import' });
-				created++; createdRows.push({ postedDate: r.postedDate, amount: r.amount }); liveIds.add(externalId);
+				const id = createTransaction(tx, { accountId, externalId, postedDate: r.postedDate, transactedAt: r.transactedAt, amount: r.amount, payeeRaw: r.payeeRaw, memo: r.memo, providerCategory: r.providerCategory, source: 'import' });
+				created++; createdRows.push({ postedDate: r.postedDate, amount: r.amount }); liveByExternalId.set(externalId, id);
 			} catch (err) { if (err instanceof InvariantError && err.code === 'DUPLICATE_EXTERNAL_ID') duplicates++; else throw err; }   // a soft-deleted row still owns the id
 		}
 		let balances = 0;
@@ -84,11 +87,13 @@ export function importParsed(db: Db, accountId: number, parsed: ParsedFile, opts
 		if (O) {
 			const before = createdRows.filter((c) => compareIso(c.postedDate, O.postedDate) <= 0);
 			if (before.length) {
+				const openingSplits = tx.select({ id: transactionSplits.id }).from(transactionSplits).where(eq(transactionSplits.transactionId, O.id)).all();
+				if (openingSplits.length !== 1) throw new Error('opening row has multiple splits; cannot adjust');
 				const to = O.amount - before.reduce((s, c) => s + c.amount, 0);
 				const date = addDays(before.map((c) => c.postedDate).reduce((m, d) => (compareIso(d, m) < 0 ? d : m)), -1);
 				ensurePeriods(tx, opts.cadence, date, date);
 				tx.update(transactions).set({ amount: to, postedDate: date, periodId: periodIdForDate(tx, date), updatedAt: nowIso() }).where(eq(transactions.id, O.id)).run();
-				tx.update(transactionSplits).set({ amount: to }).where(eq(transactionSplits.transactionId, O.id)).run();
+				tx.update(transactionSplits).set({ amount: to }).where(eq(transactionSplits.id, openingSplits[0].id)).run();
 				opening = { from: O.amount, to, date };
 			}
 		} else if (parsed.statement && !existing.some((e) => compareIso(e.postedDate, parsed.statement!.opensOn) < 0)) {

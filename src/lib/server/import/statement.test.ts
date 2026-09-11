@@ -52,6 +52,23 @@ describe('importParsed', () => {
 		const r = importParsed(f.db, f.card, file([row('2026-08-08', -1898, 'LYFT'), row('2026-08-09', -1898, 'LYFT')]), opts);
 		expect(r).toMatchObject({ created: 2, matched: 0 });
 	});
+	it('claims an exact duplicate\'s live twin so a different row cannot fuzzy-match it', () => {
+		const f = fixture();
+		importParsed(f.db, f.card, file([row('2026-08-03', -1599, 'NETFLIX')]), opts);
+		const r = importParsed(f.db, f.card, file([row('2026-08-03', -1599, 'NETFLIX'), row('2026-08-05', -1599, 'SPOTIFY')]), opts);
+		expect(r).toMatchObject({ duplicates: 1, created: 1, matched: 0 });
+		expect(live(f.db, f.card)).toHaveLength(2);
+	});
+	it('never fuzzy-matches a statement row against the synthetic opening row', () => {
+		const f = fixture();
+		const recon = systemCategoryId(f.db, 'reconciliation');
+		createTransaction(f.db, { accountId: f.card, externalId: 'opening', postedDate: '2026-08-01', amount: -5000, payeeRaw: 'Opening balance', source: 'opening', splits: [{ categoryId: recon, amount: -5000 }] });
+		const r = importParsed(f.db, f.card, file([row('2026-08-02', -5000, 'TV')]), opts);
+		expect(r).toMatchObject({ created: 1, matched: 0 });
+		expect(live(f.db, f.card)).toHaveLength(2);
+		const o = live(f.db, f.card).find((t) => t.source === 'opening')!;
+		expect([o.postedDate, o.amount]).toEqual(['2026-08-01', -5000]);
+	});
 	it('rejects a mask mismatch before writing anything', () => {
 		const f = fixture();
 		f.db.update(accounts).set({ mask: '5692' }).where(eq(accounts.id, f.card)).run();
