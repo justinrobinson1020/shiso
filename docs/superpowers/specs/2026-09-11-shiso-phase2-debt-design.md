@@ -1,7 +1,7 @@
 # shiso — Phase 2: Debt
 
 **Date:** 2026-09-11
-**Status:** Approved design, pending implementation plan
+**Status:** Implemented (2026-09-11)
 **Scope:** Terms history, promo sub-ledger, payoff planner with manual extras and avalanche/snowball suggestions, payoff projections, debt trend. Builds on the Phase 1 spec (`2026-09-04-shiso-phase1-foundation-design.md`); section references below are to that document unless marked §P2.
 
 ## 1. Purpose

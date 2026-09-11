@@ -41,6 +41,12 @@ npm run check    # svelte-check
 - **Budget** (`/budget`, `/budget/categories`) — envelope grid for the
   selected period (assigned, activity, available), ready-to-assign, card
   underfunding, and category management.
+- **Debt** (`/debt`) — every open card and loan with owed, accruing, APR,
+  interest estimates, minimum and due date, with terms history; a per-period
+  plan of extra payments with one-click funding of the payment envelope;
+  payoff projections under the plan, minimums only, avalanche, and snowball;
+  promotional balances with expiry and monthly target; and the debt trend
+  per period (owed, change, paid, interest, income, paid as a share of income).
 - **Ledger** (`/ledger`) — transactions across accounts or one account,
   inline payee/category editing, splits, period reassignment, and the
   review queue.
