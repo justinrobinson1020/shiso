@@ -9,12 +9,18 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const shiftMonth = (month: string, by: number) => { const y = +month.slice(0, 4), m = +month.slice(5, 7) - 1 + by; const d = new Date(Date.UTC(y, m, 1)); return d.toISOString().slice(0, 7); };
 const OPEN = ['pending', 'overdue'] as const;
 
+export type BillRow = { id: number; name: string; dueDate: string; expected: number; paid: number; extra: number; status: string };
+
 export type MonthView = {
 	month: string; label: string; prev: string; next: string; today: string;
 	cash: { accounts: { id: number; name: string; type: string; current: number; asOf: string | null }[]; total: number };
 	income: { expected: number; received: number; remaining: number; occurrences: { id: number; name: string; dueDate: string; expected: number; received: number; status: string }[] };
-	bills: { paid: number; pending: number; occurrences: { id: number; name: string; dueDate: string; expected: number; paid: number; status: string; isDebt: boolean }[] };
-	cardPayments: { planned: number; paid: number; extra: number };
+	/** Bills paid from cash that are not card or loan payments. */
+	bills: { paid: number; pending: number; occurrences: BillRow[] };
+	/** Bills linked to a debt account: the sheet's Credit Cards block. `minimum` is Σ expected; `pending` is Σ expected for open occurrences. */
+	cards: { minimum: number; extra: number; paid: number; pending: number; occurrences: BillRow[] };
+	/** Bills pending plus cards pending: the sheet's Expenses line. */
+	expensesPending: number;
 	cashLeft: number;
 	trend: { asOf: string; current: number }[];
 };
@@ -33,10 +39,11 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 
 	const bl = db.select({ o: billOccurrences, b: bills }).from(billOccurrences).innerJoin(bills, eq(billOccurrences.billId, bills.id))
 		.where(and(gte(billOccurrences.dueDate, start), lte(billOccurrences.dueDate, end))).orderBy(asc(billOccurrences.dueDate)).all();
-	const billOcc = bl.map(({ o, b }) => ({ id: o.id, name: b.name, dueDate: o.dueDate, expected: o.expectedAmount, paid: o.paidAmount, extra: o.extraAmount, status: o.status, isDebt: b.linkedDebtAccountId != null }));
+	const rows = bl.map(({ o, b }) => ({ row: { id: o.id, name: b.name, dueDate: o.dueDate, expected: o.expectedAmount, paid: o.paidAmount, extra: o.extraAmount, status: o.status }, isDebt: b.linkedDebtAccountId != null }));
 	const open = (s: string) => (OPEN as readonly string[]).includes(s);
 	const sum = <T>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + f(x), 0);
-	const debt = billOcc.filter((o) => o.isDebt);
+	const billOcc = rows.filter((r) => !r.isDebt).map((r) => r.row);
+	const cardOcc = rows.filter((r) => r.isDebt).map((r) => r.row);
 
 	const checkingIds = cashRows.filter((a) => a.type === 'checking').map((a) => a.id);
 	const trendRows = checkingIds.length === 0 ? [] : db.select({ asOf: accountBalances.asOf, total: sql<number>`sum(${accountBalances.current})` })
@@ -46,13 +53,15 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 	const cashTotal = sum(cashAccounts, (a) => a.current);
 	const incomeRemaining = sum(live.filter((o) => open(o.status)), (o) => o.expected);
 	const billsPending = sum(billOcc.filter((o) => open(o.status)), (o) => o.expected);
+	const cardsPending = sum(cardOcc.filter((o) => open(o.status)), (o) => o.expected);
 	return {
 		month: opts.month, label: `${MONTHS[+opts.month.slice(5, 7) - 1]} ${opts.month.slice(0, 4)}`, prev: shiftMonth(opts.month, -1), next: shiftMonth(opts.month, 1), today: opts.todayIso,
 		cash: { accounts: cashAccounts, total: cashTotal },
 		income: { expected: sum(live, (o) => o.expected), received: sum(live, (o) => o.received), remaining: incomeRemaining, occurrences: incomeOcc },
-		bills: { paid: sum(billOcc, (o) => o.paid), pending: billsPending, occurrences: billOcc.map(({ extra: _e, ...o }) => o) },
-		cardPayments: { planned: sum(debt.filter((o) => open(o.status)), (o) => o.expected), paid: sum(debt, (o) => o.paid), extra: sum(debt, (o) => o.extra) },
-		cashLeft: cashTotal + incomeRemaining - billsPending,
+		bills: { paid: sum(billOcc, (o) => o.paid), pending: billsPending, occurrences: billOcc },
+		cards: { minimum: sum(cardOcc, (o) => o.expected), extra: sum(cardOcc, (o) => o.extra), paid: sum(cardOcc, (o) => o.paid), pending: cardsPending, occurrences: cardOcc },
+		expensesPending: billsPending + cardsPending,
+		cashLeft: cashTotal + incomeRemaining - billsPending - cardsPending,
 		trend: trendRows.map((r) => ({ asOf: r.asOf, current: r.total }))
 	};
 }

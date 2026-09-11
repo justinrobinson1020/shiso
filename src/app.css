@@ -25,6 +25,11 @@ main { max-width: 1200px; margin: 0 auto; padding: 1rem 1.25rem 3rem; }
 h1, h2 { line-height: 1.2; letter-spacing: -.01em; }
 h1 { font-size: var(--text-heading); font-weight: 600; margin: .5rem 0 1rem; } h2 { font-size: var(--text-subheading); font-weight: 600; margin: 2rem 0 .5rem; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: .6rem; padding: .75rem 1rem; }
+.sheet { display: grid; grid-template-columns: 1fr 1fr; gap: 0 3rem; align-items: start; }
+.sheet .col > h2:first-child { margin-top: 1rem; }
+table.block tfoot td { font-weight: 600; border-bottom: none; border-top: 1px solid var(--muted); }
+table.block tfoot tr.grand td { font-size: var(--text-subheading); padding-top: .6rem; }
+table.balances td:first-child .small { margin-left: .35rem; }
 .lead { margin: 1.25rem 0 1.5rem; }
 .lead .label { color: var(--muted); font-size: var(--text-secondary); }
 .lead .value { font-size: var(--text-display); font-weight: 600; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
@@ -126,6 +131,9 @@ input.w5 { width: 5em; } input.w4 { width: 4em; }
 	.toolbar.range-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
 	.toolbar.range-toolbar > * { width: auto; }
 
+	.sheet { grid-template-columns: 1fr; }
+	table.block tfoot tr.grand td { font-size: var(--text-table); }
+	table.block td:first-child { white-space: normal; }
 	.toolbar.month-nav { flex-direction: row; flex-wrap: nowrap; align-items: center; }
 	.toolbar.month-nav > * { width: auto; }
 	.toolbar.month-nav h1 { flex: 1; text-align: center; }

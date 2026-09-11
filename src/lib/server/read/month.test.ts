@@ -26,8 +26,12 @@ describe('monthView', () => {
 		expect(v.cash.total).toBe(350000);
 		expect(v.cash.accounts.map((a) => a.name)).toEqual(['Checking', 'Savings']);
 		expect(v.income.expected).toBe(550000); expect(v.income.received).toBe(0); expect(v.income.remaining).toBe(550000);
-		expect(v.bills.paid).toBe(227445); expect(v.bills.pending).toBe(3500);
-		expect(v.cardPayments).toEqual({ planned: 3500, paid: 0, extra: 0 });
+		expect(v.bills.paid).toBe(227445); expect(v.bills.pending).toBe(0);
+		expect(v.bills.occurrences.map((o) => o.name)).toEqual(['Rent']);
+		expect(v.cards.occurrences.map((o) => o.name)).toEqual(['Sapphire']);
+		expect(v.cards.occurrences[0].extra).toBe(0);
+		expect(v.cards).toMatchObject({ minimum: 3500, extra: 0, paid: 0, pending: 3500 });
+		expect(v.expensesPending).toBe(3500);
 		expect(v.cashLeft).toBe(350000 + 550000 - 3500);
 		expect(v.trend).toEqual([{ asOf: '2026-09-01', current: 300000 }, { asOf: '2026-09-07', current: 250000 }]);
 	});
