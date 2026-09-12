@@ -172,11 +172,13 @@ export async function createLinkToken(client: PlaidClientLike, opts: { clientNam
 	const req: LinkTokenCreateRequest = { client_name: opts.clientName, user: { client_user_id: opts.userId }, country_codes: [CountryCode.Us], language: 'en' };
 	if (opts.accessToken) req.access_token = opts.accessToken;
 	else {
-		// Liabilities as a required product makes Link refuse any institution without a credit or loan
-		// account ("No liability accounts"), which rules out a savings-only bank. Require it only where
-		// the institution supports it; the sync already tolerates NO_LIABILITY_ACCOUNTS on Items without it.
+		// Liabilities as a required product makes Link refuse a login without a credit or loan account
+		// ("No liability accounts"). required_if_supported_products still requires it whenever the
+		// *institution* supports liabilities, so a savings-only login at a card issuer (Amex) fails the
+		// same way. optional_products is best-effort per Item: Link never refuses for lack of it, and the
+		// sync already tolerates NO_LIABILITY_ACCOUNTS on Items without it.
 		req.products = [Products.Transactions];
-		req.required_if_supported_products = [Products.Liabilities];
+		req.optional_products = [Products.Liabilities];
 		// days_requested only applies when Transactions has not been initialised on the Item, so it is
 		// harmless to always send for new Items and pointless on relink.
 		const transactions: LinkTokenTransactions = { days_requested: 730 };
