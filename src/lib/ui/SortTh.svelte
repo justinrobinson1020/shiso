@@ -4,8 +4,10 @@
 	 * A sortable header cell. With `bind:sort` the page sorts its loaded rows; with `href` the header is a
 	 * link (the Ledger sorts on the server through the URL) and `sort` is read-only.
 	 */
-	let { key, label, kind = 'text', sort = $bindable(null), href, class: cls = '' }: {
-		key: string; label: string; kind?: SortKind; sort?: SortState; href?: (next: NonNullable<SortState>) => string; class?: string;
+	/** Pages that keep one sort per table in a keyed record cannot `bind:` an entry that does not exist yet
+	 *  (Svelte refuses to bind `undefined` into a prop with a default), so they pass `sort` plainly and take `onsort`. */
+	let { key, label, kind = 'text', sort = $bindable(null), href, onsort, class: cls = '' }: {
+		key: string; label: string; kind?: SortKind; sort?: SortState; href?: (next: NonNullable<SortState>) => string; onsort?: (next: NonNullable<SortState>) => void; class?: string;
 	} = $props();
 	const active = $derived(sort?.key === key);
 	const next = $derived(nextSort(sort, key, kind));
@@ -16,7 +18,7 @@
 	{#if href}
 		<a href={href(next)} class:active>{label}<span class="arrow" aria-hidden="true">{active ? (sort!.dir === 'asc' ? '▲' : '▼') : ''}</span></a>
 	{:else}
-		<button type="button" class:active onclick={() => (sort = next)}>{label}<span class="arrow" aria-hidden="true">{active ? (sort!.dir === 'asc' ? '▲' : '▼') : ''}</span></button>
+		<button type="button" class:active onclick={() => { if (onsort) onsort(next); else sort = next; }}>{label}<span class="arrow" aria-hidden="true">{active ? (sort!.dir === 'asc' ? '▲' : '▼') : ''}</span></button>
 	{/if}
 </th>
 

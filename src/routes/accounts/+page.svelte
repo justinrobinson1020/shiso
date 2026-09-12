@@ -77,7 +77,7 @@
 		</div>
 		{#if c.lastError}<p class="error small">{c.lastError}</p>{/if}
 		<table class="stack-sm">
-			<thead><tr><SortTh key="name" label="Account" kind="text" bind:sort={sortAcct[c.id]} /><SortTh key="type" label="Type" kind="text" class="hide-sm" bind:sort={sortAcct[c.id]} /><SortTh key="balance" label="Balance" kind="number" class="num" bind:sort={sortAcct[c.id]} /><SortTh key="ledger" label="Ledger" kind="number" class="num hide-sm" bind:sort={sortAcct[c.id]} /><SortTh key="drift" label="Drift" kind="number" class="num" bind:sort={sortAcct[c.id]} /><SortTh key="terms" label="Terms" kind="number" class="hide-sm" bind:sort={sortAcct[c.id]} /><th></th></tr></thead>
+			<thead><tr><SortTh key="name" label="Account" kind="text" sort={sortAcct[c.id] ?? null} onsort={(n) => (sortAcct[c.id] = n)} /><SortTh key="type" label="Type" kind="text" class="hide-sm" sort={sortAcct[c.id] ?? null} onsort={(n) => (sortAcct[c.id] = n)} /><SortTh key="balance" label="Balance" kind="number" class="num" sort={sortAcct[c.id] ?? null} onsort={(n) => (sortAcct[c.id] = n)} /><SortTh key="ledger" label="Ledger" kind="number" class="num hide-sm" sort={sortAcct[c.id] ?? null} onsort={(n) => (sortAcct[c.id] = n)} /><SortTh key="drift" label="Drift" kind="number" class="num" sort={sortAcct[c.id] ?? null} onsort={(n) => (sortAcct[c.id] = n)} /><SortTh key="terms" label="Terms" kind="number" class="hide-sm" sort={sortAcct[c.id] ?? null} onsort={(n) => (sortAcct[c.id] = n)} /><th></th></tr></thead>
 			<tbody>
 			{#each sortRows(c.accounts, sortAcct[c.id] ?? null, acctPick) as a (a.id)}
 				<tr id="account-{a.id}">

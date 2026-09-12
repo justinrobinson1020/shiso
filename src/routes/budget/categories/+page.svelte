@@ -56,7 +56,7 @@
 {#each t.groups as g}
 	<h2>{g.name} <button class="small" onclick={() => startNew(g.id)}>+ category</button></h2>
 	<table class="stack-sm">
-		<thead><tr><SortTh key="name" label="Name" kind="text" bind:sort={sortCats[g.id]} /><SortTh key="kind" label="Kind" kind="text" bind:sort={sortCats[g.id]} /><SortTh key="account" label="Linked account" kind="text" bind:sort={sortCats[g.id]} /><th>Group</th><SortTh key="hidden" label="Hidden" kind="text" bind:sort={sortCats[g.id]} /><SortTh key="target" label="Target" kind="number" bind:sort={sortCats[g.id]} /></tr></thead>
+		<thead><tr><SortTh key="name" label="Name" kind="text" sort={sortCats[g.id] ?? null} onsort={(n) => (sortCats[g.id] = n)} /><SortTh key="kind" label="Kind" kind="text" sort={sortCats[g.id] ?? null} onsort={(n) => (sortCats[g.id] = n)} /><SortTh key="account" label="Linked account" kind="text" sort={sortCats[g.id] ?? null} onsort={(n) => (sortCats[g.id] = n)} /><th>Group</th><SortTh key="hidden" label="Hidden" kind="text" sort={sortCats[g.id] ?? null} onsort={(n) => (sortCats[g.id] = n)} /><SortTh key="target" label="Target" kind="number" sort={sortCats[g.id] ?? null} onsort={(n) => (sortCats[g.id] = n)} /></tr></thead>
 		<tbody>
 		{#each sortRows(g.categories, sortCats[g.id] ?? null, catPick) as c (c.id)}
 			<tr>
