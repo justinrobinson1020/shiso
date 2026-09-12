@@ -66,8 +66,10 @@ export function upsertAccount(db: DbOrTx, connectionId: number, a: {
 		.where(and(eq(accounts.connectionId, connectionId), eq(accounts.externalId, a.externalId)))
 		.get();
 	if (existing) {
+		// The provider's label seeds `name` at creation only; after that the name belongs to the user (Plaid
+		// calls three different Chase cards "CREDIT CARD"). Official name and mask stay the provider's.
 		db.update(accounts)
-			.set({ name: a.name, officialName: a.officialName ?? null, mask: a.mask ?? null, ...touch() })
+			.set({ officialName: a.officialName ?? null, mask: a.mask ?? null, ...touch() })
 			.where(eq(accounts.id, existing.id))
 			.run();
 		return { id: existing.id, created: false };

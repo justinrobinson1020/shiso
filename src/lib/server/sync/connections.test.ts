@@ -38,14 +38,17 @@ describe('connections', () => {
 });
 
 describe('accounts, balances, terms', () => {
-	it('upserts accounts without touching type or flags after creation', () => {
+	it('upserts accounts without touching name, type, or flags after creation; official name and mask refresh', () => {
 		const c = createConnection(db, { provider: 'plaid', institutionName: 'Chase', appKey: KEY });
-		const a = upsertAccount(db, c, { externalId: 'acc-1', name: 'Sapphire', mask: '1234', type: 'credit' });
+		const a = upsertAccount(db, c, { externalId: 'acc-1', name: 'CREDIT CARD', officialName: 'CREDIT CARD', mask: '1234', type: 'credit' });
 		expect(a.created).toBe(true);
-		const again = upsertAccount(db, c, { externalId: 'acc-1', name: 'Sapphire Preferred', mask: '1234', type: 'checking' });
+		updateAccount(db, a.id, { name: 'Chase Sapphire' });   // the user's name is theirs; the nightly sync must not revert it
+		const again = upsertAccount(db, c, { externalId: 'acc-1', name: 'SAPPHIRE PREFERRED', officialName: 'SAPPHIRE PREFERRED', mask: '5678', type: 'checking' });
 		expect(again).toEqual({ id: a.id, created: false });
 		const row = db.select().from(accounts).where(eq(accounts.id, a.id)).get()!;
-		expect(row.name).toBe('Sapphire Preferred');
+		expect(row.name).toBe('Chase Sapphire');
+		expect(row.officialName).toBe('SAPPHIRE PREFERRED');
+		expect(row.mask).toBe('5678');
 		expect(row.type).toBe('credit');
 		expect(row.onBudget).toBe(true);
 		expect(row.isDebt).toBe(true);
