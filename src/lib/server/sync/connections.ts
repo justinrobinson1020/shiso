@@ -140,15 +140,19 @@ const TERM_FIELDS = ['aprBps', 'promoAprBps', 'minPayment', 'nextDueDate', 'last
 /** §4.1: append-only, insert on change. Manual edits always insert. */
 export function appendTermsIfChanged(db: DbOrTx, accountId: number, t: TermsInput): boolean {
 	const prev = latestTerms(db, accountId);
+	// A provider's null means "not reported", not "cleared": a rate the user entered by hand (or an
+	// earlier sync knew) carries forward, so a nightly sync without liabilities data never blanks it.
+	const merged: TermsInput = { ...t };
 	if (t.source === 'provider' && prev) {
-		const same = TERM_FIELDS.every((f) => (t[f] ?? null) === (prev[f] ?? null));
+		for (const f of TERM_FIELDS) if (merged[f] == null && prev[f] != null) (merged as Record<string, unknown>)[f] = prev[f];
+		const same = TERM_FIELDS.every((f) => (merged[f] ?? null) === (prev[f] ?? null));
 		if (same) return false;
 	}
 	db.insert(accountTerms).values({
-		accountId, asOf: t.asOf, source: t.source,
-		aprBps: t.aprBps ?? null, promoAprBps: t.promoAprBps ?? null, minPayment: t.minPayment ?? null,
-		nextDueDate: t.nextDueDate ?? null, lastStatementBalance: t.lastStatementBalance ?? null,
-		lastStatementDate: t.lastStatementDate ?? null, annualFee: t.annualFee ?? null
+		accountId, asOf: merged.asOf, source: merged.source,
+		aprBps: merged.aprBps ?? null, promoAprBps: merged.promoAprBps ?? null, minPayment: merged.minPayment ?? null,
+		nextDueDate: merged.nextDueDate ?? null, lastStatementBalance: merged.lastStatementBalance ?? null,
+		lastStatementDate: merged.lastStatementDate ?? null, annualFee: merged.annualFee ?? null
 	}).run();
 	return true;
 }

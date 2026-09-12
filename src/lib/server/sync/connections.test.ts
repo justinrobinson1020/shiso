@@ -70,6 +70,18 @@ describe('accounts, balances, terms', () => {
 });
 
 describe('updateAccount', () => {
+	it('a provider terms row never blanks a field it does not report: known values carry over, and nothing is inserted when nothing changed', () => {
+		const c = createConnection(db, { provider: 'plaid', institutionName: 'Capital One', appKey: KEY });
+		const a = upsertAccount(db, c, { externalId: 'q', name: 'Quicksilver', type: 'credit' }).id;
+		appendTermsIfChanged(db, a, { asOf: '2026-09-10', source: 'provider', aprBps: null, minPayment: 7100, nextDueDate: '2026-09-28' });
+		appendTermsIfChanged(db, a, { asOf: '2026-09-12', source: 'manual', aprBps: 2749, annualFee: 3900, minPayment: 7100, nextDueDate: '2026-09-28' });
+		// the nightly sync reports the same minimum and due date and no APR at all
+		expect(appendTermsIfChanged(db, a, { asOf: '2026-09-13', source: 'provider', aprBps: null, minPayment: 7100, nextDueDate: '2026-09-28' })).toBe(false);
+		expect(latestTerms(db, a)).toMatchObject({ asOf: '2026-09-12', aprBps: 2749, annualFee: 3900 });
+		// a real change (new minimum) is recorded, with the APR and fee carried forward rather than blanked
+		expect(appendTermsIfChanged(db, a, { asOf: '2026-09-14', source: 'provider', aprBps: null, minPayment: 7500, nextDueDate: '2026-10-28' })).toBe(true);
+		expect(latestTerms(db, a)).toMatchObject({ asOf: '2026-09-14', source: 'provider', aprBps: 2749, annualFee: 3900, minPayment: 7500, nextDueDate: '2026-10-28' });
+	});
 	it('renames, closes, and recomputes isDebt on a type change', () => {
 		const db = openMemoryDatabase().db; seedDefaultCategories(db);
 		const conn = createConnection(db, { provider: 'manual', institutionName: 'T', appKey: KEY });
