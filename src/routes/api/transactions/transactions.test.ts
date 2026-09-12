@@ -5,7 +5,10 @@ import { join } from 'node:path';
 import { startup, resetForTests } from '$lib/server/startup';
 import { setConfig } from '$lib/server/config';
 import { getDb } from '$lib/server/db/instance';
-import { transactions, transactionSplits, payeeRules, categoryGroups } from '$lib/server/db/schema';
+import { transactions, transactionSplits, payeeRules, categoryGroups, billOccurrences } from '$lib/server/db/schema';
+import { createBill } from '$lib/server/bills/bills';
+import { generateOccurrences } from '$lib/server/bills/schedule';
+import { matchAll } from '$lib/server/bills/matching';
 import { createConnection, upsertAccount } from '$lib/server/sync/connections';
 import { createCategory, uncategorizedId } from '$lib/server/ledger/categories';
 import { createTransaction, getTransaction } from '$lib/server/ledger/transactions';
@@ -54,6 +57,20 @@ describe('transaction routes', () => {
 		expect(getTransaction(db, a).needsReview).toBe(false);
 		expect((await del({ request: req({}), params: { id: String(id) } } as never)).status).toBe(200);
 		expect(getTransaction(db, id).deletedAt).not.toBeNull();
+	});
+	it('deleting a manual payment reopens the bill occurrence it had settled', async () => {
+		const db = getDb(); const { chk } = accountsFor(db);
+		const group = db.select().from(categoryGroups).where(eq(categoryGroups.name, 'Bills')).get()!.id;
+		const rentCat = createCategory(db, { groupId: group, name: 'Rent', kind: 'bill' });
+		const billId = createBill(db, { name: 'Rent', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 225000, toleranceAbs: 100, cadence: 'monthly', dueDay: 1, matchPattern: 'landlord' });
+		generateOccurrences(db, { todayIso: '2026-09-08', cadence: 'semi_monthly', graceDays: 3 });
+		const { id } = await (await create({ request: req({ accountId: chk, postedDate: '2026-09-03', amount: -225000, payee: 'LANDLORD LLC' }) } as never)).json();
+		matchAll(db, { todayIso: '2026-09-08', graceDays: 3 });
+		const occ = () => db.select().from(billOccurrences).where(eq(billOccurrences.billId, billId)).all().sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+		expect(occ().status).toBe('paid'); expect(occ().paidAmount).toBe(225000);
+		expect((await del({ request: req({}), params: { id: String(id) } } as never)).status).toBe(200);
+		expect(getTransaction(db, id).deletedAt).not.toBeNull();
+		expect(occ().status).toBe('pending'); expect(occ().paidAmount).toBe(0);
 	});
 	it('rejects splits that do not sum (409) and deleting a synced row (409)', async () => {
 		const db = getDb(); const { chk } = accountsFor(db);
