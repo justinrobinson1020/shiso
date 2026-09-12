@@ -71,8 +71,12 @@ export function importParsed(db: Db, accountId: number, parsed: ParsedFile, opts
 		}
 		const existingRows = tx.select({ id: transactions.id, amount: transactions.amount, postedDate: transactions.postedDate, transactedAt: transactions.transactedAt, externalId: transactions.externalId, source: transactions.source }).from(transactions).where(and(eq(transactions.accountId, accountId), isNull(transactions.deletedAt))).all();
 		const liveByExternalId = new Map<string, number>(existingRows.map((e) => [e.externalId, e.id]));
-		// Opening rows are a synthetic plug, not a real transaction a statement row could be — never a fuzzy-match candidate.
-		const byAmount = new Map<number, Candidate[]>(); for (const e of existingRows) if (e.source !== 'opening') byAmount.set(e.amount, [...(byAmount.get(e.amount) ?? []), e]);
+		// Fuzzy matching exists only to absorb rows a provider already synced (or the user typed by hand) under a
+		// slightly different date. Rows from earlier imports are identified exactly by reference id or content hash,
+		// and opening/adjustment rows are synthetic plugs — none of those may be candidates, or two distinct purchases
+		// of the same amount on adjacent days collapse into one.
+		const FUZZY_SOURCES = new Set(['sync', 'manual']);
+		const byAmount = new Map<number, Candidate[]>(); for (const e of existingRows) if (FUZZY_SOURCES.has(e.source)) byAmount.set(e.amount, [...(byAmount.get(e.amount) ?? []), e]);
 		const claimed = new Set<number>(); const seen = new Map<string, number>();
 		let created = 0, duplicates = 0, matched = 0; const createdRows: { postedDate: string; amount: number }[] = [];
 		const rows = [...parsed.rows].sort((a, b) => compareIso(a.postedDate, b.postedDate));

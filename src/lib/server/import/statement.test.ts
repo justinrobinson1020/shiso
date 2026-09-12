@@ -51,6 +51,13 @@ describe('importParsed', () => {
 		expect(r).toMatchObject({ created: 1, duplicates: 0, matched: 3 });
 		expect(live(f.db, f.card).filter((t) => t.source === 'import').map((t) => t.postedDate)).toEqual(['2026-08-08']);
 	});
+	it('never fuzzy-matches against an earlier import: two distinct purchases of the same amount on adjacent days both survive', () => {
+		const f = fixture();
+		importParsed(f.db, f.card, file([row('2026-08-31', -1000, 'Merchant A')]), opts);
+		const r = importParsed(f.db, f.card, file([row('2026-09-01', -1000, 'Merchant B')]), opts);
+		expect(r).toMatchObject({ created: 1, matched: 0, duplicates: 0 });
+		expect(live(f.db, f.card).map((t) => t.payeeRaw).sort()).toEqual(['Merchant A', 'Merchant B']);
+	});
 	it('never matches two rows from the same file against each other', () => {
 		const f = fixture();
 		const r = importParsed(f.db, f.card, file([row('2026-08-08', -1898, 'LYFT'), row('2026-08-09', -1898, 'LYFT')]), opts);
