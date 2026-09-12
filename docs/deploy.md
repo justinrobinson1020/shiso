@@ -51,7 +51,9 @@ would silently turn a rehearsal into a live run. Calling
 `scripts/import-history.sh <dir> <map.txt> --dry-run` directly needs no separator.
 The script sends an `Origin` header matching `SHISO_URL` (SvelteKit's CSRF check
 rejects form posts without one) and passes `CURL_OPTS` through to curl, so
-`CURL_OPTS=-k` covers the homelab's self-signed certificate.
+`CURL_OPTS=-k` covers the homelab's self-signed certificate. To post to the container
+directly (`SHISO_URL=http://<CT-IP>:3000`), set `SHISO_ORIGIN` to the app's configured
+`ORIGIN` so the header still matches.
 
 The map file is a newline-delimited list of `<file-or-folder relative to the statement directory> <accountId>` entries; blank lines and lines starting with `#` are ignored. Any further
 columns on a line are extra last-four digits to accept for that account — a

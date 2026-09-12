@@ -17,6 +17,9 @@ case $3 in
 	*) usage ;;
 esac
 : "${SHISO_URL:?set SHISO_URL, e.g. https://shiso.home.local}"
+# The app checks the Origin header against its own ORIGIN setting, so when posting to the container directly
+# (bypassing the proxy) set SHISO_ORIGIN to the public origin the app is configured with.
+origin=${SHISO_ORIGIN:-$SHISO_URL}
 while read -r entry account masks || [[ -n ${entry:-} ]]; do
 	[[ -z "$entry" || "$entry" == \#* ]] && continue
 	# Columns after the account id are extra last-fours to accept (a reissued card prints a new number).
@@ -25,7 +28,7 @@ while read -r entry account masks || [[ -n ${entry:-} ]]; do
 	if [[ -d "$dir/$entry" ]]; then files=("$dir/$entry"/*(N.)); else files=("$dir/$entry"); fi
 	for f in "${files[@]}"; do
 		[[ "$f:t" == .* ]] && continue
-		out=$(curl -sS -H "Origin: $SHISO_URL" ${=CURL_OPTS:-} -w '\n%{http_code}' -F "file=@$f" ${=dry:+-F dryRun=1} "${accept[@]}" "$SHISO_URL/api/accounts/$account/import")
+		out=$(curl -sS -H "Origin: $origin" ${=CURL_OPTS:-} -w '\n%{http_code}' -F "file=@$f" ${=dry:+-F dryRun=1} "${accept[@]}" "$SHISO_URL/api/accounts/$account/import")
 		code=${out##*$'\n'}; body=${out%$'\n'*}
 		printf '%s\t%s\t%s\n' "$code" "$f" "$body"
 		# Nonzero previousDelta means history before this statement is still missing (or doubled); nonzero
