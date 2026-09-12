@@ -46,8 +46,12 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 	const cardOcc = rows.filter((r) => r.isDebt).map((r) => r.row);
 
 	const checkingIds = cashRows.filter((a) => a.type === 'checking').map((a) => a.id);
+	// Balance rows are append-only and a day can hold several per account (a sync plus a manual entry, or two
+	// refreshes). The trend point for a day is the latest snapshot of each account, summed — never every snapshot.
+	const inWindow = and(inArray(accountBalances.accountId, checkingIds), gte(accountBalances.asOf, addDays(opts.todayIso, -90)), lte(accountBalances.asOf, opts.todayIso));
+	const latestPerAccountDay = db.select({ id: sql<number>`max(${accountBalances.id})` }).from(accountBalances).where(inWindow).groupBy(accountBalances.accountId, accountBalances.asOf);
 	const trendRows = checkingIds.length === 0 ? [] : db.select({ asOf: accountBalances.asOf, total: sql<number>`sum(${accountBalances.current})` })
-		.from(accountBalances).where(and(inArray(accountBalances.accountId, checkingIds), gte(accountBalances.asOf, addDays(opts.todayIso, -90)), lte(accountBalances.asOf, opts.todayIso)))
+		.from(accountBalances).where(inArray(accountBalances.id, latestPerAccountDay))
 		.groupBy(accountBalances.asOf).orderBy(asc(accountBalances.asOf)).all();
 
 	const cashTotal = sum(cashAccounts, (a) => a.current);

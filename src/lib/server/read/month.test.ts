@@ -12,6 +12,7 @@ describe('monthView', () => {
 		const f = fixture();
 		appendBalance(f.db, f.checking, { asOf: '2026-09-01', current: 300000, source: 'manual' });
 		appendBalance(f.db, f.checking, { asOf: '2026-09-07', current: 250000, source: 'manual' });
+		appendBalance(f.db, f.checking, { asOf: '2026-09-07', current: 240000, source: 'sync' });   // a second snapshot the same day: the trend takes the latest, never the sum
 		appendBalance(f.db, f.savings, { asOf: '2026-09-07', current: 100000, source: 'manual' });
 		appendBalance(f.db, f.card, { asOf: '2026-09-07', current: -80000, source: 'manual' });
 		createBill(f.db, { name: 'Rent', categoryId: f.rent, payFromAccountId: f.checking, expectedAmount: 227445, cadence: 'monthly', dueDay: 1 });
@@ -23,7 +24,7 @@ describe('monthView', () => {
 
 		const v = monthView(f.db, { month: '2026-09', todayIso: '2026-09-08', cadence: 'semi_monthly' });
 		expect(v.label).toBe('September 2026'); expect(v.prev).toBe('2026-08'); expect(v.next).toBe('2026-10'); expect(v.prevLabel).toBe('August'); expect(v.nextLabel).toBe('October');
-		expect(v.cash.total).toBe(350000);
+		expect(v.cash.total).toBe(340000);
 		expect(v.cash.accounts.map((a) => a.name)).toEqual(['Checking', 'Savings']);
 		expect(v.income.expected).toBe(550000); expect(v.income.received).toBe(0); expect(v.income.remaining).toBe(550000);
 		expect(v.bills.paid).toBe(227445); expect(v.bills.pending).toBe(0);
@@ -32,7 +33,7 @@ describe('monthView', () => {
 		expect(v.cards.occurrences[0].extra).toBe(0);
 		expect(v.cards).toMatchObject({ minimum: 3500, extra: 0, paid: 0, pending: 3500 });
 		expect(v.expensesPending).toBe(3500);
-		expect(v.cashLeft).toBe(350000 + 550000 - 3500);
-		expect(v.trend).toEqual([{ asOf: '2026-09-01', current: 300000 }, { asOf: '2026-09-07', current: 250000 }]);
+		expect(v.cashLeft).toBe(340000 + 550000 - 3500);
+		expect(v.trend).toEqual([{ asOf: '2026-09-01', current: 300000 }, { asOf: '2026-09-07', current: 240000 }]);
 	});
 });
