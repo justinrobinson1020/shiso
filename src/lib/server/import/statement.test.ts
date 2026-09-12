@@ -73,6 +73,12 @@ describe('importParsed', () => {
 		const o = live(f.db, f.card).find((t) => t.source === 'opening')!;
 		expect([o.postedDate, o.amount]).toEqual(['2026-08-01', -5000]);
 	});
+	it('accepts a printed mask listed in acceptMasks (a reissued card)', () => {
+		const f = fixture();
+		f.db.update(accounts).set({ mask: '5692' }).where(eq(accounts.id, f.card)).run();
+		expect(importParsed(f.db, f.card, file([row('2026-08-01', -1, 'x')], { mask: '0140' }), { ...opts, acceptMasks: ['0140'] })).toMatchObject({ created: 1 });
+		expect(() => importParsed(f.db, f.card, file([row('2026-08-02', -1, 'y')], { mask: '1403' }), { ...opts, acceptMasks: ['0140'] })).toThrow(/mask mismatch/);
+	});
 	it('rejects a mask mismatch before writing anything', () => {
 		const f = fixture();
 		f.db.update(accounts).set({ mask: '5692' }).where(eq(accounts.id, f.card)).run();

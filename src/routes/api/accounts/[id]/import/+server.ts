@@ -15,6 +15,8 @@ export const POST = handle(async ({ request, params }) => {
 	if (!(file instanceof File)) throw new ValidationError('file is required');
 	if (file.size > MAX_BYTES) throw new ValidationError('file is larger than 20 MB');
 	const dryRun = form!.get('dryRun') === '1';
+	// Repeatable field: extra last-fours to accept for this account (a reissued card changes the printed number).
+	const acceptMasks = form!.getAll('acceptMask').map(String).filter((m) => /^\d{4}$/.test(m));
 	const config = getConfig(); const db = getDb(); const today = todayIso(config.timeZone);
 	let parsed;
 	try {
@@ -29,7 +31,7 @@ export const POST = handle(async ({ request, params }) => {
 	}
 	let report;
 	try {
-		report = importParsed(db, id, parsed, { cadence: config.cadence, todayIso: today, dryRun });
+		report = importParsed(db, id, parsed, { cadence: config.cadence, todayIso: today, dryRun, acceptMasks });
 	} catch (err) {
 		// A mask mismatch or a failed reconciliation is also the caller's problem: 400. Anything else
 		// (e.g. "account not found") is not import-specific and should hit handle()'s usual mapping.

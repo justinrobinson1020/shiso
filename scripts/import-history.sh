@@ -17,13 +17,15 @@ case $3 in
 	*) usage ;;
 esac
 : "${SHISO_URL:?set SHISO_URL, e.g. https://shiso.home.local}"
-while read -r entry account || [[ -n ${entry:-} ]]; do
+while read -r entry account masks || [[ -n ${entry:-} ]]; do
 	[[ -z "$entry" || "$entry" == \#* ]] && continue
+	# Columns after the account id are extra last-fours to accept (a reissued card prints a new number).
+	accept=(); for m in ${=masks:-}; do accept+=(-F "acceptMask=$m"); done
 	files=()
 	if [[ -d "$dir/$entry" ]]; then files=("$dir/$entry"/*(N.)); else files=("$dir/$entry"); fi
 	for f in "${files[@]}"; do
 		[[ "$f:t" == .* ]] && continue
-		out=$(curl -sS -H "Origin: $SHISO_URL" ${=CURL_OPTS:-} -w '\n%{http_code}' -F "file=@$f" ${=dry:+-F dryRun=1} "$SHISO_URL/api/accounts/$account/import")
+		out=$(curl -sS -H "Origin: $SHISO_URL" ${=CURL_OPTS:-} -w '\n%{http_code}' -F "file=@$f" ${=dry:+-F dryRun=1} "${accept[@]}" "$SHISO_URL/api/accounts/$account/import")
 		code=${out##*$'\n'}; body=${out%$'\n'*}
 		printf '%s\t%s\t%s\n' "$code" "$f" "$body"
 		# Nonzero previousDelta means history before this statement is still missing (or doubled); nonzero

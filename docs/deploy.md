@@ -53,7 +53,11 @@ The script sends an `Origin` header matching `SHISO_URL` (SvelteKit's CSRF check
 rejects form posts without one) and passes `CURL_OPTS` through to curl, so
 `CURL_OPTS=-k` covers the homelab's self-signed certificate.
 
-The map file is a newline-delimited list of `<file-or-folder relative to the statement directory> <accountId>` entries; blank lines and lines starting with `#` are ignored. A folder entry imports all files in it in directory order. Synchrony accounts must first be created manually on the Accounts page as a manual connection before importing their statements.
+The map file is a newline-delimited list of `<file-or-folder relative to the statement directory> <accountId>` entries; blank lines and lines starting with `#` are ignored. Any further
+columns on a line are extra last-four digits to accept for that account — a
+reissued card keeps the account but prints a new number, and the import
+rejects a statement whose printed number matches neither the account's mask nor
+one of these (`chase-sapphire 1 0140`). A folder entry imports all files in it in directory order. Synchrony accounts must first be created manually on the Accounts page as a manual connection before importing their statements.
 
 Each file prints one tab-separated `status  path  report` line, and a statement
 whose report carries a nonzero `previousDelta` or `closingDelta` also prints a

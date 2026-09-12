@@ -32,6 +32,12 @@ describe('POST /api/accounts/[id]/import', () => {
 		expect(body).toMatchObject({ created: 5, dryRun: true, processed: 0 });
 		expect(getDb().select().from(transactions).where(eq(transactions.accountId, card)).all()).toHaveLength(0);
 	});
+	it('accepts a mismatched mask when the form lists it as an accepted mask', async () => {
+		getDb().update(accounts).set({ mask: '5692' }).where(eq(accounts.id, card)).run();
+		const fd = new FormData(); fd.set('file', new File([fx('chase-dec-jan.txt')], 's.txt')); fd.set('dryRun', '1'); fd.append('acceptMask', '1403');
+		const res = await POST({ request: new Request('http://localhost/x', { method: 'POST', body: fd }), params: { id: String(card) } } as never);
+		expect(res.status).toBe(200); expect((await res.json()).created).toBe(5);
+	});
 	it('rejects a mask mismatch, an unreconciled statement, and unknown content with 400', async () => {
 		getDb().update(accounts).set({ mask: '5692' }).where(eq(accounts.id, card)).run();
 		expect((await POST(req(fx('chase-dec-jan.txt'), 's.txt'))).status).toBe(400);

@@ -54,10 +54,11 @@ const hasImportBalance = (db: DbOrTx, accountId: number, asOf: string, current: 
 const latestSyncBalanceDate = (db: DbOrTx, accountId: number): string | null =>
 	db.select({ asOf: accountBalances.asOf }).from(accountBalances).where(and(eq(accountBalances.accountId, accountId), eq(accountBalances.source, 'sync'))).orderBy(desc(accountBalances.asOf)).get()?.asOf ?? null;
 
-export function importParsed(db: Db, accountId: number, parsed: ParsedFile, opts: { cadence: Cadence; todayIso: string; dryRun?: boolean }): ImportReport {
+/** `acceptMasks`: printed last-fours to accept besides the account's own — a reissued card keeps the account but changes the number. */
+export function importParsed(db: Db, accountId: number, parsed: ParsedFile, opts: { cadence: Cadence; todayIso: string; dryRun?: boolean; acceptMasks?: string[] }): ImportReport {
 	const account = db.select({ id: accounts.id, mask: accounts.mask }).from(accounts).where(eq(accounts.id, accountId)).get();
 	if (!account) throw new Error(`account ${accountId} not found`);
-	if (parsed.mask && account.mask && parsed.mask !== account.mask) throw new ImportError('mask_mismatch', `mask mismatch (file ${parsed.mask}, account ${account.mask})`);
+	if (parsed.mask && account.mask && parsed.mask !== account.mask && !(opts.acceptMasks ?? []).includes(parsed.mask)) throw new ImportError('mask_mismatch', `mask mismatch (file ${parsed.mask}, account ${account.mask})`);
 	reconcileStatement(parsed);
 	const base = { format: parsed.format, mask: parsed.mask, statement: parsed.statement, processed: 0, dryRun: !!opts.dryRun };
 	const run = (tx: DbOrTx): ImportReport => {
