@@ -3,7 +3,7 @@
 	import SortTh from '$lib/ui/SortTh.svelte';
 	import { sortRows, type SortState } from '$lib/ui/sort';
 	let sortBills = $state<SortState>(null); let sortCards = $state<SortState>(null); let sortInc = $state<SortState>(null);
-	import Sparkline from '$lib/ui/Sparkline.svelte';
+	import LineChart from '$lib/ui/LineChart.svelte';
 	import { shortDate } from '$lib/dates';
 	let { data } = $props();
 	const v = $derived(data.view);
@@ -57,4 +57,5 @@
 </div>
 
 <h2>Checking balance, last 90 days</h2>
-<Sparkline points={v.trend} />
+<div class="chart-caption"><span>Checking balance, last 90 days</span>{#if v.trend.length}<span class="muted small">{shortDate(v.trend[v.trend.length - 1].asOf)}: <Money cents={v.trend[v.trend.length - 1].current} /></span>{/if}</div>
+<LineChart points={v.trend.map((t) => ({ label: shortDate(t.asOf), value: t.current }))} height={160} ticks={v.trend.map((t) => t.asOf)} />

@@ -7,7 +7,7 @@
 	import { page } from '$app/state';
 	import Money from '$lib/ui/Money.svelte';
 	import RangePicker from '$lib/ui/RangePicker.svelte';
-	import StackedBars from '$lib/ui/StackedBars.svelte';
+	import Donut from '$lib/ui/Donut.svelte';
 	import LineChart from '$lib/ui/LineChart.svelte';
 	import Sparkline from '$lib/ui/Sparkline.svelte';
 	import { shortDate } from '$lib/dates';
@@ -32,8 +32,10 @@
 </div>
 <div class="lead"><div class="label">Total spending · {v.range.label}</div><div class="value"><Money cents={v.total} /></div>{#if v.prevTotal != null}<div class="sub">{v.range.prevLabel}: <Money cents={v.prevTotal} /> ({delta(v.total, v.prevTotal)})</div>{/if}</div>
 
-<h2>Over time</h2>
-<StackedBars buckets={v.overTime.buckets} categories={v.overTime.categories} compare={v.filter.compare ?? false} />
+<h2>Where it went</h2>
+<Donut rows={v.byCategory.map((c) => ({ id: c.categoryId, name: c.name, amount: c.amount }))} total={v.total} label={v.range.label} />
+<h2>Over time <span class="muted small">total per {v.overTime.buckets.length && v.overTime.buckets[0].label.length > 8 ? 'period' : 'month'}</span></h2>
+<LineChart points={v.overTime.buckets.filter((b) => !b.future).map((b) => ({ label: b.label, value: b.total }))} height={120} />
 
 <h2>By category</h2>
 <table><thead><tr><SortTh key="name" label="Category" kind="text" bind:sort={sortCat} /><SortTh key="groupName" label="Group" kind="text" class="hide-sm" bind:sort={sortCat} /><SortTh key="amount" label="Amount" kind="number" class="num" bind:sort={sortCat} /><SortTh key="share" label="Share" kind="number" class="num" bind:sort={sortCat} />{#if v.prevTotal != null}<SortTh key="prevAmount" label="Previous" kind="number" class="num" bind:sort={sortCat} /><SortTh key="delta" label="Δ" kind="number" class="num" bind:sort={sortCat} />{/if}<th></th></tr></thead>

@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { formatCents } from '$lib/money';
 	/** A labelled money line: y from zero to the series max, first and last x labels, hover titles per point. */
-	let { points, height = 200 }: { points: { label: string; value: number }[]; height?: number } = $props();
+	/** `ticks`: the points' ISO dates; a label is drawn where the month changes, replacing the first/last-only labels. */
+	let { points, height = 200, ticks }: { points: { label: string; value: number }[]; height?: number; ticks?: string[] } = $props();
+	const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+	const monthTicks = $derived(!ticks ? [] : ticks.flatMap((d, i) => (i === 0 || d.slice(0, 7) !== ticks[i - 1].slice(0, 7)) ? [{ i, label: `${MONTHS[+d.slice(5, 7) - 1]} ${d.slice(0, 4)}` }] : []));
 	const W = 720, PAD_X = 8, PAD_T = 18, PAD_B = 22;
 	const max = $derived(Math.max(1, ...points.map((p) => p.value)));
 	const min = $derived(Math.min(0, ...points.map((p) => p.value)));
@@ -17,7 +20,11 @@
 		<text x={PAD_X} y={PAD_T - 6} font-size="10" fill="var(--muted)">{formatCents(max)}</text>
 		<path {d} fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke" />
 		{#each points as p, i}<circle cx={x(i)} cy={y(p.value)} r="6" fill="transparent"><title>{p.label}: {formatCents(p.value)}</title></circle>{/each}
-		<text x={PAD_X} y={height - 6} font-size="10" fill="var(--muted)">{points[0].label}</text>
-		<text x={W - PAD_X} y={height - 6} font-size="10" fill="var(--muted)" text-anchor="end">{points[points.length - 1].label}</text>
+		{#if monthTicks.length}
+			{#each monthTicks as t (t.i)}<line x1={x(t.i)} x2={x(t.i)} y1={y(max)} y2={height - PAD_B} stroke="var(--line)" stroke-dasharray="2 4" /><text x={x(t.i) + 3} y={height - 6} font-size="10" fill="var(--muted)">{t.label}</text>{/each}
+		{:else}
+			<text x={PAD_X} y={height - 6} font-size="10" fill="var(--muted)">{points[0].label}</text>
+			<text x={W - PAD_X} y={height - 6} font-size="10" fill="var(--muted)" text-anchor="end">{points[points.length - 1].label}</text>
+		{/if}
 	</svg>
 {:else}<p class="muted small">Chart appears once there are two points.</p>{/if}
