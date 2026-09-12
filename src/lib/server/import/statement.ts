@@ -119,7 +119,9 @@ export function importParsed(db: Db, accountId: number, parsed: ParsedFile, opts
 			// The statement states the balance the day before it opens, so the opening plug is whatever that
 			// balance is not already explained by: previousBalance − (live rows dated before opensOn).
 			const date = addDays(S.opensOn, -1);
-			const amount = S.previousBalance - sum(liveRows().filter((t) => t.source !== 'opening' && compareIso(t.postedDate, S.opensOn) < 0));
+			// Only rows that existed before this call count: a row this statement prints with a transaction date
+			// before its own opening day posted inside this cycle, so it is not part of previousBalance either.
+			const amount = S.previousBalance - sum(existingRows.filter((t) => t.source !== 'opening' && compareIso(t.postedDate, S.opensOn) < 0));
 			if (!O) {
 				try {
 					const id = createTransaction(tx, { accountId, externalId: 'opening', postedDate: date, amount, payeeRaw: 'Opening balance', payee: 'Opening balance', source: 'opening', splits: [{ categoryId: systemCategoryId(tx, 'reconciliation'), amount }] });

@@ -181,6 +181,14 @@ describe('importParsed', () => {
 		// history before the statement is complete, but its window holds one -1898 too many
 		expect(importParsed(f.db, f.card, aug, opts)).toMatchObject({ created: 0, matched: 1, previousDelta: 0, closingDelta: -1898 });
 	});
+	it('seeds the opening from previousBalance alone when the first statement prints a row dated before it opens', () => {
+		const f = fixture();
+		const st = { opensOn: '2026-07-15', closesOn: '2026-08-14', previousBalance: -2000, newBalance: -2600 };
+		const r = importParsed(f.db, f.card, file([row('2026-07-14', -100, 'early'), row('2026-08-01', -500, 'A')], { statement: st }), opts);
+		expect(r.opening).toEqual({ seeded: -2000, date: '2026-07-14' });
+		expect(ledgerSum(f.db, f.card)).toBe(-2600);
+		expect(r.closingDelta).toBe(0); expect(r.previousDelta).toBe(-100);
+	});
 	it('dry run returns the report and leaves every table byte-identical', () => {
 		const f = fixture();
 		const snapshot = () => JSON.stringify([f.db.select().from(transactions).all(), f.db.select().from(transactionSplits).all(), f.db.select().from(accountBalances).all()]);
