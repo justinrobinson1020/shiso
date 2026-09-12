@@ -56,6 +56,5 @@
 	</section>
 </div>
 
-<h2>Checking balance, last 90 days</h2>
-<div class="chart-caption"><span>Checking balance, last 90 days</span>{#if v.trend.length}<span class="muted small">{shortDate(v.trend[v.trend.length - 1].asOf)}: <Money cents={v.trend[v.trend.length - 1].current} /></span>{/if}</div>
+<div class="chart-caption"><h2>Checking balance, last 90 days</h2>{#if v.trend.length}<span class="muted small">{shortDate(v.trend[v.trend.length - 1].asOf)}: <Money cents={v.trend[v.trend.length - 1].current} /></span>{/if}</div>
 <LineChart points={v.trend.map((t) => ({ label: shortDate(t.asOf), value: t.current }))} height={160} ticks={v.trend.map((t) => t.asOf)} />
