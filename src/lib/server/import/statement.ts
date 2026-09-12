@@ -137,13 +137,27 @@ export function importParsed(db: Db, accountId: number, parsed: ParsedFile, opts
 			const settled = liveRows();   // after the opening step, so both deltas read the ledger the caller will see
 			previousDelta = sum(settled.filter((t) => compareIso(t.postedDate, S.opensOn) < 0)) - S.previousBalance;
 			closingDelta = sum(settled.filter((t) => compareIso(t.postedDate, S.closesOn) <= 0)) - S.newBalance;
-		} else if (O) {
-			const before = createdRows.filter((c) => compareIso(c.postedDate, O.postedDate) <= 0);
-			if (before.length) {
-				const to = O.amount - before.reduce((s, c) => s + c.amount, 0);
-				const date = addDays(before.map((c) => c.postedDate).reduce((m, d) => (compareIso(d, m) < 0 ? d : m)), -1);
-				moveOpening(O.id, to, date);
-				opening = { from: O.amount, to, date };
+		} else {
+			// No statement balances (a CSV). Rows dated before the account's first synced row were already folded
+			// into the opening plug when sync began, so the plug absorbs them — across files, since O moves earlier
+			// with each one. Rows dated after it are real gaps in the synced data and stay visible. Without synced
+			// rows the plug's own date is the cutoff.
+			const firstSync = existingRows.filter((e) => e.source === 'sync').map((e) => e.postedDate).sort()[0] ?? null;
+			const absorbed = createdRows.filter((c) => (firstSync ? compareIso(c.postedDate, firstSync) < 0 : O != null && compareIso(c.postedDate, O.postedDate) <= 0));
+			if (absorbed.length) {
+				const total = absorbed.reduce((s, c) => s + c.amount, 0);
+				const earliest = absorbed.map((c) => c.postedDate).reduce((m, d) => (compareIso(d, m) < 0 ? d : m));
+				if (O) {
+					const date = compareIso(O.postedDate, earliest) < 0 ? O.postedDate : addDays(earliest, -1);
+					moveOpening(O.id, O.amount - total, date);
+					opening = { from: O.amount, to: O.amount - total, date };
+				} else {
+					const date = addDays(earliest, -1);
+					ensurePeriods(tx, opts.cadence, date, date);
+					const id = createTransaction(tx, { accountId, externalId: 'opening', postedDate: date, amount: -total, payeeRaw: 'Opening balance', payee: 'Opening balance', source: 'opening', splits: [{ categoryId: systemCategoryId(tx, 'reconciliation'), amount: -total }] });
+					markProcessed(tx, [id]);
+					opening = { seeded: -total, date };
+				}
 			}
 		}
 		const report = { ...base, created, duplicates, matched, balances, opening, previousDelta, closingDelta };

@@ -189,6 +189,23 @@ describe('importParsed', () => {
 		expect(ledgerSum(f.db, f.card)).toBe(-2600);
 		expect(r.closingDelta).toBe(0); expect(r.previousDelta).toBe(-100);
 	});
+	it('seeds an opening for a CSV file when the account has synced rows but no opening row', () => {
+		const f = fixture();
+		createTransaction(f.db, { accountId: f.card, externalId: 'p1', postedDate: '2026-08-14', amount: -300, payeeRaw: 'Synced', source: 'sync' });
+		const r = importParsed(f.db, f.card, file([row('2026-07-20', -400, 'Old'), row('2026-07-25', 100, 'Refund')]), opts);
+		expect(r).toMatchObject({ created: 2, opening: { seeded: 300, date: '2026-07-19' } });
+		expect(ledgerSum(f.db, f.card)).toBe(-300);
+	});
+	it('absorbs a second CSV file\'s pre-sync rows after the first file moved the opening earlier', () => {
+		const f = fixture();
+		const recon = systemCategoryId(f.db, 'reconciliation');
+		createTransaction(f.db, { accountId: f.card, externalId: 'opening', postedDate: '2026-08-15', amount: -700, payeeRaw: 'Opening balance', source: 'opening', splits: [{ categoryId: recon, amount: -700 }] });
+		createTransaction(f.db, { accountId: f.card, externalId: 'p1', postedDate: '2026-08-14', amount: -300, payeeRaw: 'Synced', source: 'sync' });
+		expect(importParsed(f.db, f.card, file([row('2024-09-26', -100, 'older file')]), opts).opening).toEqual({ from: -700, to: -600, date: '2024-09-25' });
+		expect(importParsed(f.db, f.card, file([row('2026-07-20', -400, 'newer file')]), opts).opening).toEqual({ from: -600, to: -200, date: '2024-09-25' });
+		expect(ledgerSum(f.db, f.card)).toBe(-1000);
+		expect(importParsed(f.db, f.card, file([row('2026-08-20', -50, 'after sync began')]), opts).opening).toBeNull();
+	});
 	it('dry run returns the report and leaves every table byte-identical', () => {
 		const f = fixture();
 		const snapshot = () => JSON.stringify([f.db.select().from(transactions).all(), f.db.select().from(transactionSplits).all(), f.db.select().from(accountBalances).all()]);
