@@ -1,6 +1,6 @@
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../db';
-import { accounts, billOccurrenceTransactions, transactions, CASH_TYPES } from '../db/schema';
+import { accounts, billOccurrenceTransactions, transactions, CASH_TYPES, incomeOccurrences } from '../db/schema';
 import { ensurePeriods, periodBoundsFor, nextPeriodStart, type Cadence } from '../budget/periods';
 import {
 	createTransaction, updateTransaction, softDelete, setReplacedBy, restoreTransaction, setSplits, linkTransfer, unlinkTransfer,
@@ -226,6 +226,8 @@ function inheritTransaction(tx: DbOrTx, oldId: number, t: BatchTransaction, acco
 		}
 	}
 	tx.update(billOccurrenceTransactions).set({ transactionId: newId }).where(eq(billOccurrenceTransactions.transactionId, oldId)).run();
+	// An income occurrence references its deposit directly; it moves with the posted row too, so a later removal can unwind it.
+	tx.update(incomeOccurrences).set({ transactionId: newId }).where(eq(incomeOccurrences.transactionId, oldId)).run();
 	softDelete(tx, oldId, 'pending_replaced');
 	setReplacedBy(tx, oldId, newId);
 	if (old.processedAt) markProcessed(tx, [newId]);

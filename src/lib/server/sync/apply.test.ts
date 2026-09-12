@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { openMemoryDatabase, type Db } from '../db';
-import { accounts, accountBalances, accountTerms, bills, billOccurrences, billOccurrenceTransactions, connections, periods, transactions } from '../db/schema';
+import { accounts, accountBalances, accountTerms, bills, billOccurrences, billOccurrenceTransactions, connections, incomeOccurrences, periods, transactions } from '../db/schema';
+import { createIncomeSource } from '../bills/bills';
+import { generateOccurrences } from '../bills/schedule';
+import { matchIncomeOccurrences, unwindRemovedTransactions } from '../bills/matching';
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId, uncategorizedId } from '../ledger/categories';
 import { createTransaction, getTransaction, linkTransfer, setSplits } from '../ledger/transactions';
 import { createConnection } from './connections';
@@ -158,6 +161,27 @@ describe('applyBatch pending reconciliation', () => {
 		expect(posted.payee).toBe('Grocer');
 		expect(posted.memo).toBe('weekly');
 		expect(posted.splits[0].categoryId).toBe(groceries);
+	});
+	it('explicit: an income match follows the posted row and unwinds when the provider later removes it', () => {
+		applyBatch(db, conn, batch({ added: [tx({ externalId: 'p12', amount: 100000, postedDate: '2026-09-04', pending: true, payeeRaw: 'SALARY' })] }), opts);
+		const pendingId = byExt('p12')!.id;
+		createIncomeSource(db, { name: 'Salary', categoryId: systemCategoryId(db, 'income'), depositAccountId: acct('chk').id, expectedAmount: 100000, cadence: 'monthly', dueDay: 5, matchPattern: 'salary' });
+		generateOccurrences(db, { todayIso: TODAY, cadence: 'semi_monthly', graceDays: 3 });
+		expect(matchIncomeOccurrences(db, TODAY)).toEqual({ matched: 1 });
+		const occ = () => db.select().from(incomeOccurrences).all().sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+		expect(occ()).toMatchObject({ status: 'paid', receivedAmount: 100000, transactionId: pendingId });
+
+		applyBatch(db, conn, batch({
+			removed: [{ accountExternalId: 'chk', externalId: 'p12' }],
+			added: [tx({ externalId: 'q12', pendingExternalId: 'p12', amount: 100000, postedDate: '2026-09-06', pending: false, payeeRaw: 'SALARY' })]
+		}), opts);
+		const postedId = byExt('q12')!.id;
+		expect(occ()).toMatchObject({ status: 'paid', transactionId: postedId });   // the match travels with the posted row
+
+		const r = applyBatch(db, conn, batch({ removed: [{ accountExternalId: 'chk', externalId: 'q12' }] }), opts);
+		expect(r.removedTransactionIds).toEqual([postedId]);
+		expect(unwindRemovedTransactions(db, r.removedTransactionIds)).toEqual({ reopened: 1 });   // what the runner does next
+		expect(occ()).toMatchObject({ status: 'pending', receivedAmount: 0, transactionId: null });
 	});
 	it('explicit: a changed amount on a multi-split pending row flags the posted row', () => {
 		applyBatch(db, conn, batch({ added: [tx({ externalId: 'p2', amount: -1000, postedDate: '2026-09-03', pending: true })] }), opts);
