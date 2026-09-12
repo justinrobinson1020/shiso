@@ -1,5 +1,9 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
+	import SortTh from '$lib/ui/SortTh.svelte';
+	import { sortRows, type SortState } from '$lib/ui/sort';
+	let sortBudget = $state<SortState>(null);
+	const budgetPick = (c: (typeof allCats)[number], k: string) => (k === 'target' ? (c.target?.needed ?? null) : (c as unknown as Record<string, string | number | null>)[k]);
 	import Money from '$lib/ui/Money.svelte';
 	import Dialog from '$lib/ui/Dialog.svelte';
 	import { post } from '$lib/ui/api';
@@ -49,11 +53,11 @@
 	<div class="strip"><span>Targets need <strong><Money cents={v.targetsNeeded} /></strong> this period</span><button class="small primary" onclick={() => fund(null)}>Fund all</button></div>
 {/if}
 <table class="budget">
-	<thead><tr><th>Category<span class="only-sm-inline"> · available</span></th><th class="hide-sm">Target</th><th class="num hide-sm">Carried</th><th class="num hide-sm">Assigned</th><th class="num hide-sm">Activity</th><th class="num hide-sm">Available</th><th></th></tr></thead>
+	<thead><tr><SortTh key="name" label="Category" kind="text" bind:sort={sortBudget} /><SortTh key="target" label="Target" kind="number" class="hide-sm" bind:sort={sortBudget} /><SortTh key="carried" label="Carried" kind="number" class="num hide-sm" bind:sort={sortBudget} /><SortTh key="assigned" label="Assigned" kind="number" class="num hide-sm" bind:sort={sortBudget} /><SortTh key="activity" label="Activity" kind="number" class="num hide-sm" bind:sort={sortBudget} /><SortTh key="available" label="Available" kind="number" class="num hide-sm" bind:sort={sortBudget} /><th></th></tr></thead>
 	<tbody>
 	{#each v.groups as g}
 		<tr class="group"><td colspan="7">{g.name}</td></tr>
-		{#each g.categories.filter((c) => showHidden || !c.hidden) as c (c.id)}
+		{#each sortRows(g.categories.filter((c) => showHidden || !c.hidden), sortBudget, budgetPick) as c (c.id)}
 			<tr>
 				<td class="env">
 					<div class="env-head"><span>{c.name}{#if c.hidden} <span class="muted small">hidden</span>{/if}{#if c.creditOverspend > 0} <span class="status overdue" title="credit overspend">{formatCents(c.creditOverspend)} on card</span>{/if}</span><span class="only-sm env-avail"><Money cents={c.available} signed /></span></div>

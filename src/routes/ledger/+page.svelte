@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
+	import SortTh from '$lib/ui/SortTh.svelte';
+	import { sortRows, type SortState } from '$lib/ui/sort';
 	import { page } from '$app/state';
 	import Money from '$lib/ui/Money.svelte';
 	import Dialog from '$lib/ui/Dialog.svelte';
@@ -8,6 +10,8 @@
 	import { decimalToCents } from '$lib/money';
 	import { shortDate } from '$lib/dates';
 	let { data } = $props();
+	const sort = $derived<SortState>(data.sort ?? { key: 'date', dir: 'desc' });
+	const sortHref = (next: { key: string; dir: string }) => { const u = new URL(page.url); u.searchParams.set('sort', next.key); u.searchParams.set('dir', next.dir); u.searchParams.delete('page'); return u.pathname + u.search; };
 	const v = $derived(data.view); const tree = $derived(data.tree);
 	let error = $state('');
 	let splitting = $state<(typeof v.rows)[number] | null>(null);
@@ -53,7 +57,7 @@
 {/if}
 
 <table>
-	<thead><tr><th>Date</th><th class="hide-sm">Account</th><th>Payee</th><th>Category</th><th class="hide-sm">Memo</th><th class="num hide-sm">Amount</th><th class="hide-sm">Period</th><th></th></tr></thead>
+	<thead><tr><SortTh key="date" label="Date" kind="date" sort={sort} href={sortHref} /><SortTh key="account" label="Account" kind="text" class="hide-sm" sort={sort} href={sortHref} /><SortTh key="payee" label="Payee" kind="text" sort={sort} href={sortHref} /><SortTh key="category" label="Category" kind="text" sort={sort} href={sortHref} /><SortTh key="memo" label="Memo" kind="text" class="hide-sm" sort={sort} href={sortHref} /><SortTh key="amount" label="Amount" kind="number" class="num hide-sm" sort={sort} href={sortHref} /><SortTh key="period" label="Period" kind="date" class="hide-sm" sort={sort} href={sortHref} /><th></th></tr></thead>
 	<tbody>
 	{#each v.rows as row (row.id)}
 		<tr>

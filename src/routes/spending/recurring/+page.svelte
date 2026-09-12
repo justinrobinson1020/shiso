@@ -1,5 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import SortTh from '$lib/ui/SortTh.svelte';
+	import { sortRows, type SortState } from '$lib/ui/sort';
+	let sortRec = $state<SortState>(null);
+	const recPick = (r: (typeof v.rows)[number], k: string) => (k === 'status' ? (r.overdue ? 'overdue' : r.covered ? 'covered' : 'new') : (r as unknown as Record<string, string | number | null>)[k]);
 	import { page } from '$app/state';
 	import Money from '$lib/ui/Money.svelte';
 	import { shortDate } from '$lib/dates';
@@ -25,9 +29,9 @@
 </dl>
 
 <table class="block">
-	<thead><tr><th>Payee</th><th class="hide-sm">Cadence</th><th class="num">Typical</th><th class="num">Per month</th><th class="hide-sm">Last</th><th>Next</th><th>Status</th></tr></thead>
+	<thead><tr><SortTh key="payee" label="Payee" kind="text" bind:sort={sortRec} /><SortTh key="cadence" label="Cadence" kind="text" class="hide-sm" bind:sort={sortRec} /><SortTh key="typical" label="Typical" kind="number" class="num" bind:sort={sortRec} /><SortTh key="monthlyCost" label="Per month" kind="number" class="num" bind:sort={sortRec} /><SortTh key="last" label="Last" kind="date" class="hide-sm" bind:sort={sortRec} /><SortTh key="next" label="Next" kind="date" bind:sort={sortRec} /><SortTh key="status" label="Status" kind="text" bind:sort={sortRec} /></tr></thead>
 	<tbody>
-	{#each rows as r (r.payee)}
+	{#each sortRows(rows, sortRec, recPick) as r (r.payee)}
 		<tr>
 			<td><a href={ledgerLink(r.payee)}>{r.payee}</a><div class="small muted only-sm">{r.cadence} · last {shortDate(r.last)} · {r.count} charges</div><div class="small muted hide-sm">{r.count} charges, {r.matched} of {r.intervals} intervals on cadence</div></td>
 			<td class="hide-sm">{r.cadence}</td>

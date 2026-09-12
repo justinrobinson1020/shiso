@@ -1,9 +1,16 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import SortTh from '$lib/ui/SortTh.svelte';
+	import { sortRows, type SortState } from '$lib/ui/sort';
 	import { post } from '$lib/ui/api';
 	import { decimalToCents } from '$lib/money';
 	let { data } = $props();
 	const t = $derived(data.tree);
+	let sortCats = $state<Record<number, SortState>>({}); let sortPcm = $state<SortState>(null);
+	const catName = $derived(new Map(t.groups.flatMap((g) => g.categories.map((c) => [c.id, c.name] as const))));
+	const acctName = $derived(new Map(t.debtAccounts.map((a) => [a.id, a.name] as const)));
+	const catPick = (c: (typeof t.groups)[number]['categories'][number], k: string) => k === 'account' ? (c.accountId == null ? null : (acctName.get(c.accountId) ?? null)) : k === 'target' ? (c.target?.amount ?? null) : (c as unknown as Record<string, string | number | boolean | null>)[k];
+	const pcmPick = (p: { key: string; count: number }, k: string) => (k === 'category' ? (catName.get(pcmValue(p.key) ?? -1) ?? null) : (p as unknown as Record<string, string | number>)[k]);
 	let error = $state(''); let newGroup = $state('');
 	let draft = $state<Record<number, { name: string; kind: string; accountId: number | null }>>({});
 	const run = async (fn: () => Promise<unknown>) => { error = ''; try { await fn(); await invalidateAll(); } catch (e) { error = (e as Error).message; } };
@@ -49,9 +56,9 @@
 {#each t.groups as g}
 	<h2>{g.name} <button class="small" onclick={() => startNew(g.id)}>+ category</button></h2>
 	<table class="stack-sm">
-		<thead><tr><th>Name</th><th>Kind</th><th>Linked account</th><th>Group</th><th>Hidden</th><th>Target</th></tr></thead>
+		<thead><tr><SortTh key="name" label="Name" kind="text" bind:sort={sortCats[g.id]} /><SortTh key="kind" label="Kind" kind="text" bind:sort={sortCats[g.id]} /><SortTh key="account" label="Linked account" kind="text" bind:sort={sortCats[g.id]} /><th>Group</th><SortTh key="hidden" label="Hidden" kind="text" bind:sort={sortCats[g.id]} /><SortTh key="target" label="Target" kind="number" bind:sort={sortCats[g.id]} /></tr></thead>
 		<tbody>
-		{#each g.categories as c (c.id)}
+		{#each sortRows(g.categories, sortCats[g.id] ?? null, catPick) as c (c.id)}
 			<tr>
 				<td><input class="inline" value={c.name} onchange={(e) => patch(c.id, { name: (e.target as HTMLInputElement).value })} /></td>
 				<td>{#if c.isSystem}<span class="muted">{c.kind}</span>{:else}
@@ -86,9 +93,9 @@
 	<p class="small muted">No provider categories seen yet.</p>
 {:else}
 	<table>
-		<thead><tr><th>Provider category</th><th>Count</th><th>Category</th></tr></thead>
+		<thead><tr><SortTh key="key" label="Provider category" kind="text" bind:sort={sortPcm} /><SortTh key="count" label="Count" kind="number" bind:sort={sortPcm} /><SortTh key="category" label="Category" kind="text" bind:sort={sortPcm} /></tr></thead>
 		<tbody>
-		{#each data.pcm.providerCategories as p (p.key)}
+		{#each sortRows(data.pcm.providerCategories, sortPcm, pcmPick) as p (p.key)}
 			<tr>
 				<td>{p.key}</td>
 				<td class="num">{p.count}</td>

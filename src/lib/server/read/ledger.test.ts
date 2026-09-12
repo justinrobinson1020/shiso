@@ -29,6 +29,22 @@ describe('ledgerView', () => {
 		expect(all.accounts.map((a) => a.name)).toEqual(['Checking', 'Savings', 'Sapphire']);
 	});
 
+	it('sorts on the server by any column, with id as the tie-break and the default unchanged', () => {
+		const f = fixture();
+		const a = createTransaction(f.db, { accountId: f.checking, externalId: 'a', postedDate: '2026-09-02', amount: -4500, payeeRaw: 'zeta', payee: 'Zeta', memo: 'b', source: 'sync', splits: [{ categoryId: f.groceries, amount: -4500 }] });
+		const b = createTransaction(f.db, { accountId: f.card, externalId: 'b', postedDate: '2026-09-05', amount: 30000, payeeRaw: 'alpha', payee: 'Alpha', memo: null, source: 'sync', splits: [{ categoryId: f.rent, amount: 30000 }] });
+		const c = createTransaction(f.db, { accountId: f.checking, externalId: 'c', postedDate: '2026-09-05', amount: -100, payeeRaw: 'mid', payee: 'Mid', memo: 'a', source: 'sync' });
+		const ids = (o: Parameters<typeof ledgerView>[1]) => ledgerView(f.db, o).rows.map((r) => r.id);
+		expect(ids({})).toEqual([c, b, a]);                                    // default: date desc, id desc
+		expect(ids({ sort: 'amount', dir: 'asc' })).toEqual([a, c, b]);
+		expect(ids({ sort: 'amount', dir: 'desc' })).toEqual([b, c, a]);
+		expect(ids({ sort: 'payee', dir: 'asc' })).toEqual([b, c, a]);
+		expect(ids({ sort: 'account', dir: 'desc' })).toEqual([b, c, a]);      // Sapphire before Checking; ties by id desc
+		expect(ids({ sort: 'date', dir: 'asc' })).toEqual([a, c, b]);          // ties keep id desc
+		expect(ids({ sort: 'category', dir: 'asc' })).toEqual([a, b, c]);      // Groceries, Rent, Uncategorized
+		expect(ids({ sort: 'memo', dir: 'asc' })).toEqual([c, a, b]);          // nulls last
+		expect(ids({ sort: 'period', dir: 'desc' })).toEqual([c, b, a]);
+	});
 	it('hides soft-deleted rows from total, rows, and search, and counts before pagination', () => {
 		const f = fixture();
 		createTransaction(f.db, { accountId: f.checking, externalId: 'a', postedDate: '2026-09-02', amount: -1000, payeeRaw: 'A', source: 'sync' });

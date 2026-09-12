@@ -1,5 +1,9 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
+	import SortTh from '$lib/ui/SortTh.svelte';
+	import { sortRows, type SortState } from '$lib/ui/sort';
+	let sortDebts = $state<SortState>(null); let sortPlan = $state<SortState>(null); let sortStrat = $state<SortState>(null); let sortPromos = $state<SortState>(null); let sortTrend = $state<SortState>(null);
+	const debtPick = (d: (typeof v.debts)[number], k: string) => (k === 'interestMonthly' ? d.interest.monthly : (d as unknown as Record<string, string | number | null>)[k]);
 	import Money from '$lib/ui/Money.svelte';
 	import LineChart from '$lib/ui/LineChart.svelte';
 	import PromoEditor, { type PromoDraft } from './PromoEditor.svelte';
@@ -40,9 +44,9 @@
 {:else}
 	<h2>Debts</h2>
 	<table class="block debts">
-		<thead><tr><th>Account</th><th class="num">Owed</th><th class="num hide-sm">Accruing</th><th class="num">APR</th><th class="num">Interest / mo</th><th class="num hide-sm">Minimum</th><th class="hide-sm">Due</th><th class="num hide-sm">Fee</th><th class="hide-sm">Opened</th><th></th></tr></thead>
+		<thead><tr><SortTh key="name" label="Account" kind="text" bind:sort={sortDebts} /><SortTh key="owed" label="Owed" kind="number" class="num" bind:sort={sortDebts} /><SortTh key="accruing" label="Accruing" kind="number" class="num hide-sm" bind:sort={sortDebts} /><SortTh key="aprBps" label="APR" kind="number" class="num" bind:sort={sortDebts} /><SortTh key="interestMonthly" label="Interest / mo" kind="number" class="num" bind:sort={sortDebts} /><SortTh key="minimum" label="Minimum" kind="number" class="num hide-sm" bind:sort={sortDebts} /><SortTh key="nextDue" label="Due" kind="date" class="hide-sm" bind:sort={sortDebts} /><SortTh key="annualFee" label="Fee" kind="number" class="num hide-sm" bind:sort={sortDebts} /><SortTh key="openedOn" label="Opened" kind="date" class="hide-sm" bind:sort={sortDebts} /><th></th></tr></thead>
 		<tbody>
-		{#each v.debts as d (d.id)}
+		{#each sortRows(v.debts, sortDebts, debtPick) as d (d.id)}
 			<tr>
 				<td>{d.name} <span class="muted small">{d.type}</span>
 					<div class="small muted only-sm">min {#if d.minimum == null}—{:else}<Money cents={d.minimum} />{/if} · due {d.nextDue ? shortDate(d.nextDue) : '—'}{#if d.accruing !== d.owed} · accruing <Money cents={d.accruing} />{/if}</div></td>
@@ -71,9 +75,9 @@
 	<h2>Plan · {v.period.label}</h2>
 	{#if v.historyOnly}<p class="muted">Before the budget started on {shortDate(v.budgetStart!)}. History only: the ledger and spending pages cover this period, the envelopes do not.</p>{/if}
 	<table class="block plan">
-		<thead><tr><th>Account</th><th class="num">Minimum</th><th class="num">Additional</th><th class="num hide-sm">Planned</th><th class="num hide-sm">Envelope</th><th class="num">Shortfall</th><th></th></tr></thead>
+		<thead><tr><SortTh key="name" label="Account" kind="text" bind:sort={sortPlan} /><SortTh key="minimum" label="Minimum" kind="number" class="num" bind:sort={sortPlan} /><SortTh key="extra" label="Additional" kind="number" class="num" bind:sort={sortPlan} /><SortTh key="planned" label="Planned" kind="number" class="num hide-sm" bind:sort={sortPlan} /><SortTh key="available" label="Envelope" kind="number" class="num hide-sm" bind:sort={sortPlan} /><SortTh key="shortfall" label="Shortfall" kind="number" class="num" bind:sort={sortPlan} /><th></th></tr></thead>
 		<tbody>
-		{#each v.debts as d (d.id)}
+		{#each sortRows(v.debts, sortPlan) as d (d.id)}
 			<tr>
 				<td>{d.name}{#if d.categoryId == null}<span class="muted small hide-sm" title="no debt_payment category is linked to this account"> · no envelope</span><div class="small muted only-sm">no envelope</div>{:else}<div class="small muted only-sm">envelope <Money cents={d.available ?? 0} signed /></div>{/if}</td>
 				<td class="num">{#if d.minimum == null}<span class="muted" title="no terms minimum and no linked bill">none</span>{:else}<Money cents={d.minimum} />{/if}</td>
@@ -93,9 +97,9 @@
 
 	<h2>Payoff</h2>
 	<table class="block strategies">
-		<thead><tr><th></th><th>Strategy</th><th>Debt-free</th><th class="num">Total interest</th><th class="num hide-sm">Saved vs minimums</th><th class="hide-sm">First target</th></tr></thead>
+		<thead><tr><th></th><SortTh key="label" label="Strategy" kind="text" bind:sort={sortStrat} /><SortTh key="debtFreeMonth" label="Debt-free" kind="date" bind:sort={sortStrat} /><SortTh key="totalInterest" label="Total interest" kind="number" class="num" bind:sort={sortStrat} /><SortTh key="interestSaved" label="Saved vs minimums" kind="number" class="num hide-sm" bind:sort={sortStrat} /><SortTh key="firstTarget" label="First target" kind="text" class="hide-sm" bind:sort={sortStrat} /></tr></thead>
 		<tbody>
-		{#each v.strategies as s (s.strategy)}
+		{#each sortRows(v.strategies, sortStrat) as s (s.strategy)}
 			<tr class:active={s.strategy === strategy} onclick={() => (strategy = s.strategy)}>
 				<td><input type="radio" name="strategy" value={s.strategy} bind:group={strategy} aria-label={s.label} /></td>
 				<td>{s.label}{#if s.strategy === 'plan'}<div class="small muted">this period's extras, every period</div>{:else if s.strategy !== 'minimums'}<div class="small muted">additional pooled: <Money cents={v.totals.extra * v.periodsPerMonth} /> / mo</div>{/if}</td>
@@ -117,9 +121,9 @@
 	<h2>Promo balances</h2>
 	{#if v.promos.length}
 	<table class="block">
-		<thead><tr><th>Account</th><th>Description</th><th class="num hide-sm">Original</th><th class="num">Remaining</th><th class="num hide-sm">Promo APR</th><th>Expires</th><th class="num">Monthly target</th><th></th></tr></thead>
+		<thead><tr><SortTh key="accountName" label="Account" kind="text" bind:sort={sortPromos} /><SortTh key="description" label="Description" kind="text" bind:sort={sortPromos} /><SortTh key="original" label="Original" kind="number" class="num hide-sm" bind:sort={sortPromos} /><SortTh key="remaining" label="Remaining" kind="number" class="num" bind:sort={sortPromos} /><SortTh key="aprBps" label="Promo APR" kind="number" class="num hide-sm" bind:sort={sortPromos} /><SortTh key="expiresOn" label="Expires" kind="date" bind:sort={sortPromos} /><SortTh key="monthlyTarget" label="Monthly target" kind="number" class="num" bind:sort={sortPromos} /><th></th></tr></thead>
 		<tbody>
-		{#each v.promos as p (p.id)}
+		{#each sortRows(v.promos, sortPromos) as p (p.id)}
 			<tr>
 				<td>{p.accountName}</td><td>{p.description}<div class="small muted only-sm">of <Money cents={p.original} /> · {pct(p.aprBps)}</div></td>
 				<td class="num hide-sm"><Money cents={p.original} /></td><td class="num"><Money cents={p.remaining} /></td><td class="num hide-sm">{pct(p.aprBps)}</td>
@@ -137,9 +141,9 @@
 	<LineChart points={v.trend.map((r) => ({ label: r.label, value: r.total }))} />
 	{#if v.trend.length}
 	<table class="block">
-		<thead><tr><th>Period</th><th class="num">Owed</th><th class="num">Change</th><th class="num">Paid</th><th class="num hide-sm">Interest</th><th class="num hide-sm">Income</th><th class="num">Paid / income</th></tr></thead>
+		<thead><tr><SortTh key="startDate" label="Period" kind="date" bind:sort={sortTrend} /><SortTh key="total" label="Owed" kind="number" class="num" bind:sort={sortTrend} /><SortTh key="change" label="Change" kind="number" class="num" bind:sort={sortTrend} /><SortTh key="paid" label="Paid" kind="number" class="num" bind:sort={sortTrend} /><SortTh key="interest" label="Interest" kind="number" class="num hide-sm" bind:sort={sortTrend} /><SortTh key="income" label="Income" kind="number" class="num hide-sm" bind:sort={sortTrend} /><SortTh key="paidShare" label="Paid / income" kind="number" class="num" bind:sort={sortTrend} /></tr></thead>
 		<tbody>
-		{#each [...v.trend].reverse() as r (r.periodId)}
+		{#each sortRows([...v.trend].reverse(), sortTrend) as r (r.periodId)}
 			<tr><td>{r.label}</td><td class="num"><Money cents={r.total} /></td><td class="num">{#if r.change == null}<span class="muted">—</span>{:else}<Money cents={r.change} signed />{/if}</td>
 				<td class="num">{#if r.paid == null}<span class="muted">—</span>{:else}<Money cents={r.paid} />{/if}</td>
 				<td class="num hide-sm">{#if r.interest == null}<span class="muted">—</span>{:else}<Money cents={r.interest} />{/if}</td>

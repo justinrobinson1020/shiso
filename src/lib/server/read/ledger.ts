@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/sqlite-core';
+import { alias, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { DbOrTx } from '../db';
 import { accounts, categories, periods, transactions, transactionSplits } from '../db/schema';
 import { driftReport } from '../reconcile';
@@ -14,7 +14,11 @@ export type LedgerFilter = {
 	q?: string | null;
 	limit?: number;
 	offset?: number;
+	sort?: LedgerSortKey | null;
+	dir?: 'asc' | 'desc' | null;
 };
+export const LEDGER_SORT_KEYS = ['date', 'account', 'payee', 'category', 'memo', 'amount', 'period'] as const;
+export type LedgerSortKey = (typeof LEDGER_SORT_KEYS)[number];
 
 export type LedgerRow = {
 	id: number;
@@ -46,6 +50,18 @@ export type LedgerView = {
 	drift: { accountId: number; accountName: string; drift: number }[];
 };
 
+/** Server-side sort, because the ledger is paginated: sorting a page client-side would only order that page. Nulls last either way; id desc breaks ties. */
+function orderFor(key: LedgerSortKey, dir: 'asc' | 'desc'): SQL[] {
+	const d = dir === 'asc' ? asc : desc;
+	const firstCategory = sql`(select c.name from ${transactionSplits} s join ${categories} c on c.id = s.category_id where s.transaction_id = ${transactions.id} order by s.id limit 1)`;
+	const col: Record<LedgerSortKey, SQL | AnySQLiteColumn> = {
+		date: transactions.postedDate, account: sql`lower(${accounts.name})`, payee: sql`lower(${transactions.payee})`, category: sql`lower(${firstCategory})`,
+		memo: sql`lower(${transactions.memo})`, amount: transactions.amount, period: periods.startDate
+	};
+	const nullsLast = key === 'memo' ? [sql`(${transactions.memo} is null)`] : [];
+	return [...nullsLast, d(col[key]), desc(transactions.id)];
+}
+
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 export function ledgerView(db: DbOrTx, f: LedgerFilter): LedgerView {
@@ -64,7 +80,7 @@ export function ledgerView(db: DbOrTx, f: LedgerFilter): LedgerView {
 	const rows = db.select({ t: transactions, accountName: accounts.name, periodLabel: periods.label, peerAccountName: peerAcct.name })
 		.from(transactions).innerJoin(accounts, eq(transactions.accountId, accounts.id)).innerJoin(periods, eq(transactions.periodId, periods.id))
 		.leftJoin(peer, eq(transactions.transferPeerId, peer.id)).leftJoin(peerAcct, eq(peer.accountId, peerAcct.id))
-		.where(where).orderBy(desc(transactions.postedDate), desc(transactions.id)).limit(limit).offset(offset).all();
+		.where(where).orderBy(...orderFor(f.sort ?? 'date', f.dir ?? (f.sort ? 'asc' : 'desc'))).limit(limit).offset(offset).all();
 	const ids = rows.map((r) => r.t.id);
 	const splits = ids.length === 0 ? [] : db.select({ s: transactionSplits, categoryName: categories.name }).from(transactionSplits)
 		.innerJoin(categories, eq(transactionSplits.categoryId, categories.id)).where(inArray(transactionSplits.transactionId, ids)).orderBy(asc(transactionSplits.id)).all();

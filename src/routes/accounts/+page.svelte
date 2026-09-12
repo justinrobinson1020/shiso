@@ -1,5 +1,9 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import SortTh from '$lib/ui/SortTh.svelte';
+	import { sortRows, type SortState } from '$lib/ui/sort';
+	let sortAcct = $state<Record<number, SortState>>({});
+	const acctPick = (a: (typeof v.connections)[number]['accounts'][number], k: string) => k === 'balance' ? (a.balance?.current ?? null) : k === 'ledger' ? a.drift.ledgerBalance : k === 'drift' ? a.drift.drift : k === 'terms' ? (a.terms?.aprBps ?? null) : (a as unknown as Record<string, string | number | null>)[k];
 	import Money from '$lib/ui/Money.svelte';
 	import Dialog from '$lib/ui/Dialog.svelte';
 	import TermsEditor, { type Terms } from './TermsEditor.svelte';
@@ -73,9 +77,9 @@
 		</div>
 		{#if c.lastError}<p class="error small">{c.lastError}</p>{/if}
 		<table class="stack-sm">
-			<thead><tr><th>Account</th><th class="hide-sm">Type</th><th class="num">Balance</th><th class="num hide-sm">Ledger</th><th class="num">Drift</th><th class="hide-sm">Terms</th><th></th></tr></thead>
+			<thead><tr><SortTh key="name" label="Account" kind="text" bind:sort={sortAcct[c.id]} /><SortTh key="type" label="Type" kind="text" class="hide-sm" bind:sort={sortAcct[c.id]} /><SortTh key="balance" label="Balance" kind="number" class="num" bind:sort={sortAcct[c.id]} /><SortTh key="ledger" label="Ledger" kind="number" class="num hide-sm" bind:sort={sortAcct[c.id]} /><SortTh key="drift" label="Drift" kind="number" class="num" bind:sort={sortAcct[c.id]} /><SortTh key="terms" label="Terms" kind="number" class="hide-sm" bind:sort={sortAcct[c.id]} /><th></th></tr></thead>
 			<tbody>
-			{#each c.accounts as a (a.id)}
+			{#each sortRows(c.accounts, sortAcct[c.id] ?? null, acctPick) as a (a.id)}
 				<tr id="account-{a.id}">
 					<td>{a.name}{#if a.mask} <span class="muted small">····{a.mask}</span>{/if}{#if a.closedAt} <span class="status">closed {shortDate(a.closedAt)}</span>{/if}{#if !a.onBudget} <span class="status">off-budget</span>{/if}
 						<div class="small muted only-sm">{a.type} · ledger <Money cents={a.drift.ledgerBalance} neutral={a.isDebt} />{#if a.isDebt && a.terms} · APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ? shortDate(a.terms.nextDueDate) : '—'}{/if}</div></td>
