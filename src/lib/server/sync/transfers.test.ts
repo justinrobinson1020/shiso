@@ -3,7 +3,7 @@ import { openMemoryDatabase, type Db } from '../db';
 import { accounts, connections } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId } from '../ledger/categories';
 import { ensurePeriods } from '../budget/periods';
-import { createTransaction, getTransaction } from '../ledger/transactions';
+import { createTransaction, getTransaction, setSplits } from '../ledger/transactions';
 import { detectTransfers } from './transfers';
 
 let db: Db; let chk: number; let card: number; let loan: number; let savings: number;
@@ -65,6 +65,18 @@ describe('detectTransfers', () => {
 		const r = detectTransfers(db, [near], { windowDays: 4 });
 		expect(r.flagged).toBe(1);
 		expect(getTransaction(db, near).reviewReason).toBe('transfer_off_budget_uncategorized');
+	});
+	it('keeps a category a rule already gave the near side when the off-budget far account has no payment category', () => {
+		const wedding = createCategory(db, { groupId: createGroup(db, 'Savings'), name: 'Wedding', kind: 'savings' });
+		const near = mk(chk, 'n', -60000, '2026-03-21', 'PAYMENT TO AMEX');
+		setSplits(db, near, [{ categoryId: wedding, amount: -60000 }]);
+		const far = mk(loan, 'f', 60000, '2026-03-21', 'TRANSFER FROM NASA');
+		const r = detectTransfers(db, [near], { windowDays: 4 });
+		expect(r).toEqual({ linked: 1, flagged: 0, categorized: 1 });
+		expect(getTransaction(db, near).transferPeerId).toBe(far);
+		expect(getTransaction(db, near).splits.map((s) => s.categoryId)).toEqual([wedding]);
+		expect(getTransaction(db, near).needsReview).toBe(false);
+		expect(getTransaction(db, far).splits[0].categoryId).toBe(systemCategoryId(db, 'transfer'));
 	});
 	it('ignores pairs outside the window and pairs with no cash side', () => {
 		const a = mk(chk, 'a', -100, '2026-03-01', 'X');

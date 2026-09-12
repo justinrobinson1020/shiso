@@ -2,7 +2,7 @@ import { and, eq, isNull, ne } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { accounts, transactions, CASH_TYPES } from '../db/schema';
 import { flagForReview, getTransaction, linkTransfer, setSplits } from '../ledger/transactions';
-import { paymentCategoryForAccount } from '../ledger/categories';
+import { paymentCategoryForAccount, uncategorizedId } from '../ledger/categories';
 import { parseIso } from '$lib/dates';
 
 export const PAYMENT_HINT = /payment|pymt|pmt|transfer|xfer|autopay|epay|online pay/i;
@@ -14,7 +14,9 @@ function dayDiff(a: string, b: string): number {
 /**
  * Spec §5.6 step 3. For each candidate: find the unique equal-and-opposite counterpart on another
  * account inside the window, requiring a cash-type on-budget side. Link both. If the far account is
- * off-budget, categorise the near side to that account's payment category or flag it.
+ * off-budget, categorise the near side to that account's payment category; failing that keep the
+ * category a payee rule already gave it (a joint savings account has an envelope, not a payment
+ * category); failing that flag it.
  */
 export function detectTransfers(db: DbOrTx, candidateIds: number[], opts: { windowDays: number }): { linked: number; flagged: number; categorized: number } {
 	const acctById = new Map(db.select().from(accounts).all().map((a) => [a.id, a]));
@@ -42,6 +44,9 @@ export function detectTransfers(db: DbOrTx, candidateIds: number[], opts: { wind
 		if (chosen.length > 1) { flagForReview(db, id, 'transfer_ambiguous'); flagged++; continue; }
 
 		const peer = chosen[0];
+		// linkTransfer resets both sides to the transfer category; remember what the rules step left so an
+		// off-budget pair can keep it.
+		const priorSplits = new Map([id, peer.id].map((x) => [x, getTransaction(db, x).splits]));
 		linkTransfer(db, id, peer.id);
 		linked++;
 
@@ -51,7 +56,12 @@ export function detectTransfers(db: DbOrTx, candidateIds: number[], opts: { wind
 			if (!nearAcct.onBudget || farAcct.onBudget) continue;
 			const payCat = paymentCategoryForAccount(db, farAcct.id);
 			const full = getTransaction(db, near.id);
+			const prior = priorSplits.get(near.id)!;
 			if (payCat != null) { setSplits(db, near.id, [{ categoryId: payCat, amount: full.amount }]); categorized++; }
+			else if (prior.some((s) => s.categoryId !== uncategorizedId(db))) {
+				setSplits(db, near.id, prior.map((s) => ({ categoryId: s.categoryId, amount: s.amount, memo: s.memo })));
+				categorized++;
+			}
 			else { flagForReview(db, near.id, 'transfer_off_budget_uncategorized'); flagged++; }
 		}
 	}

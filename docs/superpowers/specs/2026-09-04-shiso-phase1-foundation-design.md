@@ -362,7 +362,9 @@ the UI never waits on a provider.
    both get the transfer kind and link as peers (overriding any rule
    category; a transfer is structural). If the far side is off-budget, the
    near side is categorized to the far account's debt_payment category when
-   it has one, otherwise flagged. With multiple candidates, prefer the pair
+   it has one, otherwise keeps the category a payee rule gave it in step 2
+   (a joint savings account has a savings envelope, not a payment category),
+   otherwise flagged. With multiple candidates, prefer the pair
    whose payees look like a payment or transfer; if still tied, leave
    unlinked and flag for review.
 4. **Bill and income matching** (§6.2).
