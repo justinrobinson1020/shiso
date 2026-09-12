@@ -18,5 +18,8 @@ export const POST = handle(async ({ request }) => {
 		accessToken = getCredential(getDb(), connectionId, config.appKey);
 	}
 	const linkToken = await createLinkToken(client, { clientName: config.plaidClientName, userId: 'shiso-owner', accessToken });
+	// Logged so a failed Link attempt can be diagnosed afterwards: /link/token/get returns the session's
+	// exit error against the token. Tokens are single-use and expire within hours; the journal is root-only.
+	console.log(`[shiso] plaid link token minted${accessToken ? ' (update mode)' : ''}: ${linkToken}`);
 	return { linkToken };
 });
