@@ -76,7 +76,12 @@ export function applyBatch(db: Db, connectionId: number, batch: SyncBatch, opts:
 		for (const t of batch.terms) if (appendTermsIfChanged(tx, acct(t.accountExternalId).id, { ...t, source: 'provider' })) result.termsWritten++;
 
 		// 4. Removals (§5.7). Bill-link unwinding happens in the runner from removedTransactionIds.
+		// Plaid reports a pending row's id under `removed` in the same page that adds its posted successor
+		// (`pending_transaction_id`). That row is superseded, not removed: leave it live here so the add path
+		// can inherit its edits, links, and bill links, and let inheritTransaction retire it (§5.5).
+		const superseded = new Set([...batch.added, ...batch.modified].map((t) => t.pendingExternalId).filter((x): x is string => !!x));
 		for (const r of batch.removed) {
+			if (superseded.has(r.externalId)) continue;
 			const row = liveByExternal(tx, acct(r.accountExternalId).id, r.externalId);
 			if (!row) continue;
 			softDelete(tx, row.id, 'provider_removed');

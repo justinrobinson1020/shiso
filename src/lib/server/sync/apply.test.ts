@@ -136,6 +136,29 @@ describe('applyBatch pending reconciliation', () => {
 		expect(posted.needsReview).toBe(false);
 	});
 
+	it('explicit: inherits when the provider removes the pending row in the same update that posts it', () => {
+		applyBatch(db, conn, batch({ added: [tx({ externalId: 'p11', amount: -4200, postedDate: '2026-09-03', pending: true })] }), opts);
+		const pendingId = byExt('p11')!.id;
+		const g = createGroup(db, 'Spending B');
+		const groceries = createCategory(db, { groupId: g, name: 'Groceries B', kind: 'spending' });
+		setSplits(db, pendingId, [{ categoryId: groceries, amount: -4200 }]);
+		db.update(transactions).set({ payee: 'Grocer', memo: 'weekly' }).where(eq(transactions.id, pendingId)).run();
+
+		// Plaid's /transactions/sync reports the pending id under `removed` and the posted row under `added` in one page.
+		const r = applyBatch(db, conn, batch({
+			removed: [{ accountExternalId: 'chk', externalId: 'p11' }],
+			added: [tx({ externalId: 'q11', pendingExternalId: 'p11', amount: -4200, postedDate: '2026-09-05', pending: false })]
+		}), opts);
+		expect(r.added).toBe(1);
+		expect(r.removedTransactionIds).toEqual([]);   // superseded, not removed: its bill links travel with the posted row
+		const old = getTransaction(db, pendingId);
+		const posted = getTransaction(db, byExt('q11')!.id);
+		expect(old.deletedAt).not.toBeNull();
+		expect(old.replacedById).toBe(posted.id);
+		expect(posted.payee).toBe('Grocer');
+		expect(posted.memo).toBe('weekly');
+		expect(posted.splits[0].categoryId).toBe(groceries);
+	});
 	it('explicit: a changed amount on a multi-split pending row flags the posted row', () => {
 		applyBatch(db, conn, batch({ added: [tx({ externalId: 'p2', amount: -1000, postedDate: '2026-09-03', pending: true })] }), opts);
 		const id = byExt('p2')!.id;
