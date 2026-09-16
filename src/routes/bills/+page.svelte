@@ -14,17 +14,18 @@
 	let error = $state(''); let open = $state<Record<string, boolean>>({});
 	let editing = $state<{ kind: 'bill' | 'income'; def: Def } | null>(null);
 	const run = async (fn: () => Promise<unknown>) => { error = ''; try { await fn(); await invalidateAll(); } catch (e) { error = (e as Error).message; } };
-	const blank = (kind: 'bill' | 'income') => ({ kind, def: { name: '', categoryId: null, accountId: null, expectedAmount: '', cadence: 'monthly', dueDay: 1, dueDay2: null, interval: null, anchorDate: null, toleranceAbs: '', tolerancePct: 0, matchPattern: '', autopay: false, linkedDebtAccountId: null, active: true } });
+	const blank = (kind: 'bill' | 'income') => ({ kind, def: { name: '', categoryId: null, accountId: null, expectedAmount: '', cadence: 'monthly', dueDay: 1, dueDay2: null, interval: null, anchorDate: null, settleBusinessDays: null, toleranceAbs: '', tolerancePct: 0, matchPattern: '', autopay: false, linkedDebtAccountId: null, active: true } });
 	const fromBill = (b: (typeof v.bills)[number]) => ({ kind: 'bill' as const, def: { id: b.id, name: b.name, categoryId: b.categoryId, accountId: b.payFromAccountId, expectedAmount: (b.expectedAmount / 100).toFixed(2), cadence: b.cadence, dueDay: b.dueDay, dueDay2: b.dueDay2, interval: b.interval, anchorDate: b.anchorDate, toleranceAbs: b.toleranceAbs ? (b.toleranceAbs / 100).toFixed(2) : '', tolerancePct: b.tolerancePct, matchPattern: b.matchPattern ?? '', autopay: b.autopay, linkedDebtAccountId: b.linkedDebtAccountId, active: b.active } });
-	const fromIncome = (s: (typeof v.income)[number]) => ({ kind: 'income' as const, def: { id: s.id, name: s.name, categoryId: s.categoryId, accountId: s.depositAccountId, expectedAmount: (s.expectedAmount / 100).toFixed(2), cadence: s.cadence, dueDay: s.dueDay, dueDay2: s.dueDay2, interval: s.interval, anchorDate: s.anchorDate, toleranceAbs: s.toleranceAbs ? (s.toleranceAbs / 100).toFixed(2) : '', tolerancePct: s.tolerancePct, matchPattern: s.matchPattern ?? '', autopay: false, linkedDebtAccountId: null, active: s.active } });
+	const fromIncome = (s: (typeof v.income)[number]) => ({ kind: 'income' as const, def: { id: s.id, name: s.name, categoryId: s.categoryId, accountId: s.depositAccountId, expectedAmount: (s.expectedAmount / 100).toFixed(2), cadence: s.cadence, dueDay: s.dueDay, dueDay2: s.dueDay2, interval: s.interval, anchorDate: s.anchorDate, settleBusinessDays: s.settleBusinessDays, toleranceAbs: s.toleranceAbs ? (s.toleranceAbs / 100).toFixed(2) : '', tolerancePct: s.tolerancePct, matchPattern: s.matchPattern ?? '', autopay: false, linkedDebtAccountId: null, active: s.active } });
 	async function save(body: Record<string, unknown>) {
 		const e = editing!; editing = null;
 		const base = e.kind === 'bill' ? '/api/bills' : '/api/income';
 		await run(() => post(e.def.id != null ? `${base}/${e.def.id}` : base, body));
 	}
 	const occAction = (kind: 'bill' | 'income', id: number, action: string) => run(() => post(kind === 'bill' ? `/api/occurrences/${id}` : `/api/income-occurrences/${id}`, { action }));
-	const schedule = (d: { cadence: string; dueDay: number | null; dueDay2: number | null; interval: number | null; anchorDate: string | null }) =>
-		d.cadence === 'monthly' ? `monthly on the ${d.dueDay}` : d.cadence === 'semi_monthly' ? `on the ${d.dueDay} and ${d.dueDay2}` : d.cadence === 'every_n_weeks' ? `every ${d.interval} weeks from ${d.anchorDate}` : `yearly on ${d.anchorDate}`;
+	const schedule = (d: { cadence: string; dueDay: number | null; dueDay2: number | null; interval: number | null; anchorDate: string | null; settleBusinessDays?: number | null }) =>
+		(d.cadence === 'monthly' ? `monthly on the ${d.dueDay}` : d.cadence === 'semi_monthly' ? `on the ${d.dueDay} and ${d.dueDay2}` : d.cadence === 'every_n_weeks' ? `every ${d.interval} weeks from ${d.anchorDate}` : `yearly on ${d.anchorDate}`)
+		+ (d.settleBusinessDays ? `, landing ${d.settleBusinessDays} business day${d.settleBusinessDays === 1 ? '' : 's'} later` : '');
 </script>
 
 <h1>Bills & income</h1>

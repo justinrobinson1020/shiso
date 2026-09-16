@@ -235,6 +235,8 @@ export const incomeSources = sqliteTable('income_sources', {
 	dueDay2: integer('due_day_2'),
 	interval: integer('interval'),
 	anchorDate: text('anchor_date'),
+	/** Business days after the nominal date before the deposit lands (weekends roll forward first); null = the nominal date. */
+	settleBusinessDays: integer('settle_business_days'),
 	matchPattern: text('match_pattern'),
 	active: integer('active', { mode: 'boolean' }).notNull().default(true),
 	...timestamps

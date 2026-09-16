@@ -1,5 +1,5 @@
 <script module lang="ts">
-	export type Def = { id?: number; name: string; categoryId: number | null; accountId: number | null; expectedAmount: string; cadence: string; dueDay: number | null; dueDay2: number | null; interval: number | null; anchorDate: string | null; toleranceAbs: string; tolerancePct: number; matchPattern: string; autopay: boolean; linkedDebtAccountId: number | null; active: boolean };
+	export type Def = { id?: number; name: string; categoryId: number | null; accountId: number | null; expectedAmount: string; cadence: string; dueDay: number | null; dueDay2: number | null; interval: number | null; anchorDate: string | null; settleBusinessDays?: number | null; toleranceAbs: string; tolerancePct: number; matchPattern: string; autopay: boolean; linkedDebtAccountId: number | null; active: boolean };
 </script>
 
 <script lang="ts">
@@ -11,7 +11,7 @@
 	let error = $state('');
 	function body(): Record<string, unknown> {
 		const b: Record<string, unknown> = { name: f.name, categoryId: f.categoryId, expectedAmount: decimalToCents(f.expectedAmount), cadence: f.cadence, dueDay: f.dueDay, dueDay2: f.dueDay2, interval: f.interval, anchorDate: f.anchorDate, toleranceAbs: f.toleranceAbs ? decimalToCents(f.toleranceAbs) : 0, tolerancePct: f.tolerancePct, matchPattern: f.matchPattern || null };
-		if (kind === 'bill') { b.payFromAccountId = f.accountId; b.autopay = f.autopay; b.linkedDebtAccountId = f.linkedDebtAccountId; } else b.depositAccountId = f.accountId;
+		if (kind === 'bill') { b.payFromAccountId = f.accountId; b.autopay = f.autopay; b.linkedDebtAccountId = f.linkedDebtAccountId; } else { b.depositAccountId = f.accountId; b.settleBusinessDays = f.settleBusinessDays == null || f.settleBusinessDays === 0 ? null : f.settleBusinessDays; }
 		if (f.id != null) b.active = f.active;
 		return b;
 	}
@@ -34,6 +34,7 @@
 		{#if f.cadence === 'semi_monthly'}<label for="d-day2">Second due day</label><input id="d-day2" type="number" min="1" max="31" bind:value={f.dueDay2} required />{/if}
 		{#if f.cadence === 'every_n_weeks'}<label for="d-int">Every N weeks</label><input id="d-int" type="number" min="1" bind:value={f.interval} required />{/if}
 		{#if f.cadence === 'every_n_weeks' || f.cadence === 'yearly'}<label for="d-anchor">Anchor date</label><input id="d-anchor" type="date" bind:value={f.anchorDate} required />{/if}
+		{#if kind === 'income'}<label for="d-settle">Lands N business days after</label><span><input id="d-settle" type="number" min="0" max="10" class="w4" bind:value={f.settleBusinessDays} placeholder="0" /> <span class="muted small">weekend dates roll to Monday first; US federal holidays are skipped</span></span>{/if}
 		<label for="d-tol">Tolerance ($ / %)</label><span><input class="num w5" bind:value={f.toleranceAbs} placeholder="0.00" /> <input type="number" min="0" max="100" class="w4" bind:value={f.tolerancePct} /></span>
 		<label for="d-pat">Match pattern</label><input id="d-pat" bind:value={f.matchPattern} placeholder="substring of the payee, optional" />
 		{#if kind === 'bill'}

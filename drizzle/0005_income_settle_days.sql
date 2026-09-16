@@ -1,0 +1,1 @@
+ALTER TABLE `income_sources` ADD `settle_business_days` integer;

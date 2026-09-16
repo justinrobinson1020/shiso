@@ -4,13 +4,17 @@ import { bills, billOccurrences, incomeSources, incomeOccurrences, type BillCade
 import { ensurePeriods, periodIdForDate, periodBoundsFor, nextPeriodStart, type Cadence } from '../budget/periods';
 import { latestTerms } from '../sync/connections';
 import { addDays, compareIso, endOfMonth, isoDate, parseIso } from '$lib/dates';
+import { landOnBusinessDays } from '$lib/business-days';
 
 export const DEBT_WINDOW_BEFORE = 25;
 export const BILL_WINDOW_BEFORE = 10;
 export const INCOME_WINDOW_BEFORE = 5;
 const LOOKBACK_DAYS = 31;
 
-export type Schedule = { cadence: BillCadence; dueDay?: number | null; dueDay2?: number | null; interval?: number | null; anchorDate?: string | null };
+/** `settleBusinessDays` moves each nominal date to where the money actually lands (see landOnBusinessDays); null or 0 keeps the nominal date. */
+export type Schedule = { cadence: BillCadence; dueDay?: number | null; dueDay2?: number | null; interval?: number | null; anchorDate?: string | null; settleBusinessDays?: number | null };
+/** Landing can only move a date forward, and never by more than this many calendar days. */
+const MAX_SETTLE_SHIFT = 14;
 
 function clampDay(year: number, month0: number, day: number): string {
 	const first = isoDate(new Date(Date.UTC(year, month0, 1)));
@@ -23,6 +27,12 @@ function clampDay(year: number, month0: number, day: number): string {
 export function dueDatesBetween(s: Schedule, fromIso: string, throughIso: string): string[] {
 	const out: string[] = [];
 	const inRange = (d: string) => compareIso(d, fromIso) >= 0 && compareIso(d, throughIso) <= 0;
+	const settle = s.settleBusinessDays ?? 0;
+	if (settle > 0) {
+		// A nominal date shortly before the range can land inside it, so widen the nominal search backwards.
+		const nominal = dueDatesBetween({ ...s, settleBusinessDays: null }, addDays(fromIso, -MAX_SETTLE_SHIFT), throughIso);
+		return [...new Set(nominal.map((d) => landOnBusinessDays(d, settle)).filter(inRange))].sort();
+	}
 	if (s.cadence === 'monthly' || s.cadence === 'semi_monthly') {
 		const days = s.cadence === 'monthly' ? [s.dueDay ?? 1] : [s.dueDay ?? 1, s.dueDay2 ?? 15];
 		const start = parseIso(fromIso), end = parseIso(throughIso);

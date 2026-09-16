@@ -17,7 +17,7 @@ export type BillsView = {
 	}[];
 	income: {
 		id: number; name: string; categoryId: number; depositAccountId: number; depositAccountName: string; expectedAmount: number;
-		toleranceAbs: number; tolerancePct: number; cadence: string; dueDay: number | null; dueDay2: number | null; interval: number | null;
+		toleranceAbs: number; tolerancePct: number; cadence: string; dueDay: number | null; dueDay2: number | null; interval: number | null; settleBusinessDays: number | null;
 		anchorDate: string | null; matchPattern: string | null; active: boolean;
 		next: Occ | null; history: Occ[];
 	}[];
@@ -60,7 +60,7 @@ export function billsView(db: DbOrTx, opts: { todayIso: string }): BillsView {
 		income: incRows.map((s) => ({
 			id: s.id, name: s.name, categoryId: s.categoryId, depositAccountId: s.depositAccountId, depositAccountName: acctName.get(s.depositAccountId) ?? '',
 			expectedAmount: s.expectedAmount, toleranceAbs: s.toleranceAbs, tolerancePct: s.tolerancePct,
-			cadence: s.cadence, dueDay: s.dueDay, dueDay2: s.dueDay2, interval: s.interval, anchorDate: s.anchorDate,
+			cadence: s.cadence, dueDay: s.dueDay, dueDay2: s.dueDay2, interval: s.interval, anchorDate: s.anchorDate, settleBusinessDays: s.settleBusinessDays,
 			matchPattern: s.matchPattern, active: s.active,
 			...split(incOccs.filter((o) => o.incomeSourceId === s.id).map((o) => ({
 				id: o.id, dueDate: o.dueDate, periodLabel: periodLabel.get(o.periodId) ?? '', expected: o.expectedAmount,

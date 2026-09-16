@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openMemoryDatabase, type Db } from '../db';
-import { accounts, billOccurrences, connections, incomeOccurrences } from '../db/schema';
+import { eq } from 'drizzle-orm';
+import { accounts, billOccurrences, connections, incomeOccurrences, periods } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId } from '../ledger/categories';
 import { ensurePeriods } from '../budget/periods';
 import { appendTermsIfChanged } from '../sync/connections';
-import { createBill, createIncomeSource, listBills } from './bills';
+import { createBill, createIncomeSource, clearPendingIncomeOccurrences, listBills } from './bills';
 import { generateOccurrences } from './schedule';
 
 let db: Db; let chk: number; let card: number; let rentCat: number; let cardEnv: number;
@@ -67,6 +68,23 @@ describe('generateOccurrences', () => {
 		expect(gen().incomeCreated).toBe(4); // floor Aug 8 .. horizon Sep 30
 		const rows = db.select().from(incomeOccurrences).all().map((r) => r.dueDate).sort();
 		expect(rows).toEqual(['2026-08-15', '2026-08-30', '2026-09-15', '2026-09-30']);
+	});
+	it('lands income on the settlement day and files it in that period', () => {
+		createIncomeSource(db, { name: 'Salary', categoryId: systemCategoryId(db, 'income'), depositAccountId: chk, expectedAmount: 319623, cadence: 'semi_monthly', dueDay: 15, dueDay2: 31, settleBusinessDays: 2 });
+		gen();
+		const rows = db.select().from(incomeOccurrences).all().sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1));
+		expect(rows.map((r) => r.dueDate)).toEqual(['2026-08-19', '2026-09-02', '2026-09-17']); // Aug 15 Sat → Wed 19; Aug 31 Mon → Wed 2; Sep 15 Tue → Thu 17
+		const sep2 = rows[1];
+		expect(db.select().from(periods).where(eq(periods.id, sep2.periodId)).get()?.startDate).toBe('2026-09-01');
+		expect([sep2.windowStart, sep2.windowEnd]).toEqual(['2026-08-28', '2026-09-05']);
+	});
+	it('clearPendingIncomeOccurrences drops only future, pending, unmatched occurrences', () => {
+		const id = createIncomeSource(db, { name: 'Salary', categoryId: systemCategoryId(db, 'income'), depositAccountId: chk, expectedAmount: 319200, cadence: 'semi_monthly', dueDay: 15, dueDay2: 30 });
+		gen();
+		db.update(incomeOccurrences).set({ status: 'paid', receivedAmount: 319200 }).where(eq(incomeOccurrences.dueDate, '2026-08-30')).run();
+		expect(clearPendingIncomeOccurrences(db, id, TODAY)).toBe(2); // Sep 15 and Sep 30; Aug 15 is past, Aug 30 is paid
+		expect(db.select().from(incomeOccurrences).all().map((r) => r.dueDate).sort()).toEqual(['2026-08-15', '2026-08-30']);
+		expect(gen().incomeCreated).toBe(2);
 	});
 	it('lists bills with their category and account', () => {
 		createBill(db, { name: 'Rent', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 1, cadence: 'monthly', dueDay: 1 });

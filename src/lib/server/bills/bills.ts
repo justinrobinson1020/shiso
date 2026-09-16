@@ -1,6 +1,7 @@
 import { asc, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
-import { bills, incomeSources, type BillCadence } from '../db/schema';
+import { and, gte, isNull } from 'drizzle-orm';
+import { bills, incomeSources, incomeOccurrences, type BillCadence } from '../db/schema';
 import { nowIso } from '$lib/dates';
 
 export type NewBill = {
@@ -11,7 +12,7 @@ export type NewBill = {
 export type NewIncome = {
 	name: string; categoryId: number; depositAccountId: number; expectedAmount: number;
 	toleranceAbs?: number; tolerancePct?: number; cadence: BillCadence; dueDay?: number | null; dueDay2?: number | null;
-	interval?: number | null; anchorDate?: string | null; matchPattern?: string | null;
+	interval?: number | null; anchorDate?: string | null; settleBusinessDays?: number | null; matchPattern?: string | null;
 };
 const touch = () => ({ updatedAt: nowIso() });
 
@@ -38,11 +39,21 @@ export function createIncomeSource(db: DbOrTx, input: NewIncome): number {
 		name: input.name, categoryId: input.categoryId, depositAccountId: input.depositAccountId, expectedAmount: input.expectedAmount,
 		toleranceAbs: input.toleranceAbs ?? 0, tolerancePct: input.tolerancePct ?? 0, cadence: input.cadence,
 		dueDay: input.dueDay ?? null, dueDay2: input.dueDay2 ?? null, interval: input.interval ?? null, anchorDate: input.anchorDate ?? null,
-		matchPattern: input.matchPattern ?? null
+		settleBusinessDays: input.settleBusinessDays ?? null, matchPattern: input.matchPattern ?? null
 	}).returning({ id: incomeSources.id }).get().id;
 }
 export function updateIncomeSource(db: DbOrTx, id: number, patch: Partial<NewIncome>): void {
 	db.update(incomeSources).set({ ...patch, ...touch() }).where(eq(incomeSources.id, id)).run();
+}
+/**
+ * Drop the occurrences a schedule change would leave at stale dates: those still pending, not yet matched to a
+ * deposit, and due today or later. The next generateOccurrences run recreates them from the new schedule.
+ */
+export function clearPendingIncomeOccurrences(db: DbOrTx, incomeSourceId: number, todayIso: string): number {
+	return db.delete(incomeOccurrences).where(and(
+		eq(incomeOccurrences.incomeSourceId, incomeSourceId), eq(incomeOccurrences.status, 'pending'),
+		isNull(incomeOccurrences.transactionId), gte(incomeOccurrences.dueDate, todayIso)
+	)).run().changes;
 }
 export function setIncomeActive(db: DbOrTx, id: number, active: boolean): void {
 	db.update(incomeSources).set({ active, ...touch() }).where(eq(incomeSources.id, id)).run();

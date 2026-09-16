@@ -34,6 +34,15 @@ export function scheduleFields(b: Record<string, unknown>, partial: boolean): Pa
 	return out;
 }
 
+/** Income only: `settleBusinessDays` is an integer 0–10 or null; absent on create means null. */
+export function settleField(b: Record<string, unknown>, partial: boolean): { settleBusinessDays?: number | null } {
+	if (b.settleBusinessDays === undefined) return partial ? {} : { settleBusinessDays: null };
+	if (b.settleBusinessDays === null || b.settleBusinessDays === '') return { settleBusinessDays: null };
+	const v = cents(b.settleBusinessDays, 'settleBusinessDays');
+	if (v < 0 || v > 10) throw new ValidationError('settleBusinessDays must be 0-10');
+	return { settleBusinessDays: v === 0 ? null : v };
+}
+
 export function commonFields(b: Record<string, unknown>, partial: boolean) {
 	const out: Record<string, unknown> = {};
 	if (b.name !== undefined || !partial) {
