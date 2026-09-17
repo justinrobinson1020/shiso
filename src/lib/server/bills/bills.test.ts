@@ -48,6 +48,20 @@ describe('generateOccurrences', () => {
 		expect(o.windowStart).toBe('2026-09-01');
 		expect(o.windowEnd).toBe('2026-09-29');
 	});
+	it('refreshes an open terms-driven occurrence when the card minimum changes', () => {
+		createBill(db, { name: 'Card', categoryId: cardEnv, payFromAccountId: chk, expectedAmount: 5000, cadence: 'monthly', dueDay: 25, linkedDebtAccountId: card });
+		appendTermsIfChanged(db, card, { asOf: '2026-09-01', minPayment: 0, nextDueDate: '2026-09-25', lastStatementBalance: null, lastStatementDate: null, source: 'provider' });
+		gen();
+		const occ = () => db.select().from(billOccurrences).all().find((o) => o.dueDate === '2026-09-25')!;
+		expect(occ().expectedAmount).toBe(0);   // statement not cut yet
+		appendTermsIfChanged(db, card, { asOf: '2026-09-05', minPayment: 9800, nextDueDate: '2026-09-25', lastStatementBalance: 346192, lastStatementDate: '2026-09-02', source: 'provider' });
+		gen();
+		expect(occ()).toMatchObject({ expectedAmount: 9800, statementBalance: 346192, windowStart: '2026-09-02', status: 'pending' });
+		markOccurrencePaid(db, occ().id, { amount: 9800 });
+		appendTermsIfChanged(db, card, { asOf: '2026-09-10', minPayment: 0, nextDueDate: '2026-09-25', lastStatementBalance: 346192, lastStatementDate: '2026-09-02', source: 'provider' });
+		gen();
+		expect(occ().expectedAmount).toBe(9800);   // paid: left alone
+	});
 	it('falls back to the cadence when the terms due date is stale', () => {
 		createBill(db, { name: 'Card', categoryId: cardEnv, payFromAccountId: chk, expectedAmount: 5000, cadence: 'monthly', dueDay: 20, linkedDebtAccountId: card });
 		appendTermsIfChanged(db, card, { asOf: '2026-07-01', minPayment: 3560, nextDueDate: '2026-07-26', source: 'provider' });

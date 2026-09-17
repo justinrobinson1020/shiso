@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
-import { bills, billOccurrences, incomeSources, incomeOccurrences, type BillCadence } from '../db/schema';
+import { bills, billOccurrences, billOccurrenceTransactions, incomeSources, incomeOccurrences, type BillCadence } from '../db/schema';
 import { ensurePeriods, periodIdForDate, periodBoundsFor, nextPeriodStart, type Cadence } from '../budget/periods';
 import { latestTerms } from '../sync/connections';
 import { lastPaidAmount } from './bills';
@@ -82,7 +82,18 @@ export function generateOccurrences(db: DbOrTx, opts: { todayIso: string; cadenc
 			}));
 		}
 		for (const p of plan) {
-			if (existing.has(p.due)) continue;
+			if (existing.has(p.due)) {
+				// Plaid reports a card's minimum as 0 until the statement cuts, and the number moves after a payment.
+				// Keep a terms-driven occurrence current while it is still open and no payment is linked to it.
+				if (isDebt && termsInRange && p.due === termsDue) {
+					const row = db.select().from(billOccurrences).where(and(eq(billOccurrences.billId, b.id), eq(billOccurrences.dueDate, p.due))).get();
+					const linked = row && db.select({ t: billOccurrenceTransactions.transactionId }).from(billOccurrenceTransactions).where(eq(billOccurrenceTransactions.billOccurrenceId, row.id)).get();
+					if (row && row.status === 'pending' && !linked && (row.expectedAmount !== p.expected || row.statementBalance !== p.statement || row.windowStart !== p.windowStart)) {
+						db.update(billOccurrences).set({ expectedAmount: p.expected, statementBalance: p.statement, windowStart: p.windowStart }).where(eq(billOccurrences.id, row.id)).run();
+					}
+				}
+				continue;
+			}
 			db.insert(billOccurrences).values({
 				billId: b.id, dueDate: p.due, periodId: periodIdForDate(db, p.due), expectedAmount: p.expected, statementBalance: p.statement,
 				windowStart: p.windowStart, windowEnd: addDays(p.due, opts.graceDays)
