@@ -12,6 +12,7 @@ export const POST = handle(async ({ request, params }) => {
 	const patch = { ...commonFields(b, true), ...scheduleFields(b, true) } as Partial<NewBill>;
 	if (b.payFromAccountId !== undefined) patch.payFromAccountId = cents(b.payFromAccountId, 'payFromAccountId');
 	if (b.autopay !== undefined) patch.autopay = b.autopay === true;
+	if (b.variable !== undefined) patch.variable = b.variable === true;
 	if (b.linkedDebtAccountId !== undefined) patch.linkedDebtAccountId = b.linkedDebtAccountId == null ? null : cents(b.linkedDebtAccountId, 'linkedDebtAccountId');
 	if (!db.select({ id: bills.id }).from(bills).where(eq(bills.id, id)).get()) throw new Error(`bill ${id} not found`);
 	if (Object.keys(patch).length) updateBill(db, id, patch);

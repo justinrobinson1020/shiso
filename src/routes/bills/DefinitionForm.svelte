@@ -1,5 +1,5 @@
 <script module lang="ts">
-	export type Def = { id?: number; name: string; categoryId: number | null; accountId: number | null; expectedAmount: string; cadence: string; dueDay: number | null; dueDay2: number | null; interval: number | null; anchorDate: string | null; settleBusinessDays?: number | null; toleranceAbs: string; tolerancePct: number; matchPattern: string; autopay: boolean; linkedDebtAccountId: number | null; active: boolean };
+	export type Def = { id?: number; name: string; categoryId: number | null; accountId: number | null; expectedAmount: string; cadence: string; dueDay: number | null; dueDay2: number | null; interval: number | null; anchorDate: string | null; settleBusinessDays?: number | null; variable?: boolean; toleranceAbs: string; tolerancePct: number; matchPattern: string; autopay: boolean; linkedDebtAccountId: number | null; active: boolean };
 </script>
 
 <script lang="ts">
@@ -11,7 +11,7 @@
 	let error = $state('');
 	function body(): Record<string, unknown> {
 		const b: Record<string, unknown> = { name: f.name, categoryId: f.categoryId, expectedAmount: decimalToCents(f.expectedAmount), cadence: f.cadence, dueDay: f.dueDay, dueDay2: f.dueDay2, interval: f.interval, anchorDate: f.anchorDate, toleranceAbs: f.toleranceAbs ? decimalToCents(f.toleranceAbs) : 0, tolerancePct: f.tolerancePct, matchPattern: f.matchPattern || null };
-		if (kind === 'bill') { b.payFromAccountId = f.accountId; b.autopay = f.autopay; b.linkedDebtAccountId = f.linkedDebtAccountId; } else { b.depositAccountId = f.accountId; b.settleBusinessDays = f.settleBusinessDays == null || f.settleBusinessDays === 0 ? null : f.settleBusinessDays; }
+		if (kind === 'bill') { b.payFromAccountId = f.accountId; b.autopay = f.autopay; b.variable = f.variable === true; b.linkedDebtAccountId = f.linkedDebtAccountId; } else { b.depositAccountId = f.accountId; b.settleBusinessDays = f.settleBusinessDays == null || f.settleBusinessDays === 0 ? null : f.settleBusinessDays; }
 		if (f.id != null) b.active = f.active;
 		return b;
 	}
@@ -39,6 +39,7 @@
 		<label for="d-pat">Match pattern</label><input id="d-pat" bind:value={f.matchPattern} placeholder="substring of the payee, optional" />
 		{#if kind === 'bill'}
 			<label for="d-auto">Autopay</label><input id="d-auto" type="checkbox" bind:checked={f.autopay} />
+			<label for="d-var">Amount varies</label><span><input id="d-var" type="checkbox" bind:checked={f.variable} /> <span class="muted small">month to month; each month's estimate starts at the last amount paid and can be corrected on the month page</span></span>
 			<label for="d-debt">Card / loan paid</label><select id="d-debt" bind:value={f.linkedDebtAccountId}><option value={null}>not a debt payment</option>{#each debtAccounts as a}<option value={a.id}>{a.name}</option>{/each}</select>
 		{/if}
 		{#if f.id != null}<label for="d-active">Active</label><input id="d-active" type="checkbox" bind:checked={f.active} />{/if}

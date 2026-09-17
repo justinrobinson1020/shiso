@@ -12,7 +12,7 @@ export type BillsView = {
 		id: number; name: string; categoryId: number; categoryName: string; payFromAccountId: number; payFromAccountName: string;
 		expectedAmount: number; toleranceAbs: number; tolerancePct: number;
 		cadence: string; dueDay: number | null; dueDay2: number | null; interval: number | null; anchorDate: string | null;
-		autopay: boolean; matchPattern: string | null; linkedDebtAccountId: number | null; active: boolean;
+		autopay: boolean; variable: boolean; matchPattern: string | null; linkedDebtAccountId: number | null; active: boolean;
 		next: Occ | null; history: Occ[];
 	}[];
 	income: {
@@ -50,7 +50,7 @@ export function billsView(db: DbOrTx, opts: { todayIso: string }): BillsView {
 			payFromAccountId: b.payFromAccountId, payFromAccountName: acctName.get(b.payFromAccountId) ?? '',
 			expectedAmount: b.expectedAmount, toleranceAbs: b.toleranceAbs, tolerancePct: b.tolerancePct,
 			cadence: b.cadence, dueDay: b.dueDay, dueDay2: b.dueDay2, interval: b.interval, anchorDate: b.anchorDate,
-			autopay: b.autopay, matchPattern: b.matchPattern, linkedDebtAccountId: b.linkedDebtAccountId, active: b.active,
+			autopay: b.autopay, variable: b.variable, matchPattern: b.matchPattern, linkedDebtAccountId: b.linkedDebtAccountId, active: b.active,
 			...split(billOccs.filter((o) => o.billId === b.id).map((o) => ({
 				id: o.id, dueDate: o.dueDate, periodLabel: periodLabel.get(o.periodId) ?? '', expected: o.expectedAmount,
 				paid: o.paidAmount, extra: o.extraAmount, status: o.status, markedBy: o.markedBy, needsReview: o.needsReview,

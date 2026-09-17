@@ -10,7 +10,7 @@ const shiftMonth = (month: string, by: number) => { const y = +month.slice(0, 4)
 const OPEN = ['pending', 'overdue'] as const;
 
 /** `dueNow`: open and due on or before the next paycheck that has not arrived, so it comes out of cash on hand. */
-export type BillRow = { id: number; name: string; dueDate: string; expected: number; paid: number; extra: number; status: string; markedBy: string | null; dueNow: boolean };
+export type BillRow = { id: number; name: string; dueDate: string; expected: number; paid: number; extra: number; status: string; markedBy: string | null; dueNow: boolean; variable: boolean };
 
 export type MonthView = {
 	month: string; label: string; prev: string; prevLabel: string; next: string; nextLabel: string; today: string;
@@ -55,7 +55,7 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 		.where(and(inArray(incomeOccurrences.status, [...OPEN]), gt(incomeOccurrences.dueDate, arrivedThrough))).orderBy(asc(incomeOccurrences.dueDate)).get()?.d ?? null;
 	const dueNow = (status: string, due: string) => open(status) && (nextPaycheck == null || due <= nextPaycheck);
 	const rows = bl.map(({ o, b, categoryName }) => ({
-		row: { id: o.id, name: b.name, dueDate: o.dueDate, expected: o.expectedAmount, paid: o.paidAmount, extra: o.extraAmount, status: o.status, markedBy: o.markedBy, dueNow: dueNow(o.status, o.dueDate) },
+		row: { id: o.id, name: b.name, dueDate: o.dueDate, expected: o.expectedAmount, paid: o.paidAmount, extra: o.extraAmount, status: o.status, markedBy: o.markedBy, dueNow: dueNow(o.status, o.dueDate), variable: b.variable },
 		kind: b.linkedDebtAccountId != null ? 'card' : /subscription/i.test(categoryName) ? 'subscription' : 'bill'
 	}));
 	const sum = <T>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + f(x), 0);

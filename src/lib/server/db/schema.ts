@@ -194,6 +194,8 @@ export const bills = sqliteTable('bills', {
 	interval: integer('interval'),
 	anchorDate: text('anchor_date'),
 	autopay: integer('autopay', { mode: 'boolean' }).notNull().default(false),
+	/** The amount changes month to month (a utility): each occurrence's expected amount is an estimate the user can correct. */
+	variable: integer('variable', { mode: 'boolean' }).notNull().default(false),
 	matchPattern: text('match_pattern'),
 	linkedDebtAccountId: integer('linked_debt_account_id').references(() => accounts.id),
 	active: integer('active', { mode: 'boolean' }).notNull().default(true),

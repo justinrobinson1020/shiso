@@ -7,12 +7,16 @@
 	import { shortDate } from '$lib/dates';
 	import { invalidateAll } from '$app/navigation';
 	import { post } from '$lib/ui/api';
+	import { decimalToCents } from '$lib/money';
 	let { data } = $props();
 	const v = $derived(data.view);
 	const day = (iso: string) => String(+iso.slice(8, 10));
 	let error = $state('');
 	const mark = async (id: number, action: 'paid' | 'unmark') => { error = ''; try { await post(`/api/occurrences/${id}`, { action }); await invalidateAll(); } catch (e) { error = (e as Error).message; } };
 	const rowClass = (o: { status: string; dueNow: boolean }) => (o.status === 'paid' ? 'paid' : o.dueNow ? 'due-now' : '');
+	// A variable bill's estimate is editable in place; Enter or leaving the field saves it for this month only.
+	const expect = async (id: number, raw: string) => { error = ''; try { await post(`/api/occurrences/${id}`, { action: 'expect', amount: decimalToCents(raw) }); await invalidateAll(); } catch (e) { error = (e as Error).message; } };
+	const editable = (o: { variable: boolean; status: string }) => o.variable && (o.status === 'pending' || o.status === 'overdue');
 </script>
 
 <div class="toolbar month-nav">
@@ -27,14 +31,14 @@
 		{#if error}<p class="error">{error}</p>{/if}
 		<table class="block">
 			<thead><tr><SortTh key="name" label="Bill" kind="text" bind:sort={sortBills} /><SortTh key="dueDate" label="Due" kind="date" class="num" bind:sort={sortBills} /><SortTh key="expected" label="Expected" kind="number" class="num" bind:sort={sortBills} /><SortTh key="paid" label="Paid" kind="number" class="num" bind:sort={sortBills} /><SortTh key="status" label="Status" kind="text" bind:sort={sortBills} /></tr></thead>
-			<tbody>{#each sortRows(v.bills.occurrences, sortBills) as o}<tr class={rowClass(o)}><td>{o.name}</td><td class="num">{day(o.dueDate)}</td><td class="num"><Money cents={o.expected} /></td><td class="num"><Money cents={o.paid} /></td><td class="status-cell"><span class="status {o.status}">{o.status}</span>{#if o.status === 'pending' || o.status === 'overdue'}<button class="small link" onclick={() => mark(o.id, 'paid')}>mark paid</button>{:else if o.status === 'paid' && o.markedBy === 'manual'}<button class="small link" onclick={() => mark(o.id, 'unmark')}>undo</button>{/if}</td></tr>{:else}<tr><td colspan="5" class="muted">No bills due this month. Define them on <a href="/bills">Bills</a>.</td></tr>{/each}</tbody>
+			<tbody>{#each sortRows(v.bills.occurrences, sortBills) as o}<tr class={rowClass(o)}><td>{o.name}</td><td class="num">{day(o.dueDate)}</td><td class="num">{#if editable(o)}<input class="num estimate" value={(o.expected / 100).toFixed(2)} onchange={(e) => expect(o.id, (e.currentTarget as HTMLInputElement).value)} aria-label="Estimated amount for {o.name}" />{:else}<Money cents={o.expected} />{/if}</td><td class="num"><Money cents={o.paid} /></td><td class="status-cell"><span class="status {o.status}">{o.status}</span>{#if o.status === 'pending' || o.status === 'overdue'}<button class="small link" onclick={() => mark(o.id, 'paid')}>mark paid</button>{:else if o.status === 'paid' && o.markedBy === 'manual'}<button class="small link" onclick={() => mark(o.id, 'unmark')}>undo</button>{/if}</td></tr>{:else}<tr><td colspan="5" class="muted">No bills due this month. Define them on <a href="/bills">Bills</a>.</td></tr>{/each}</tbody>
 			<tfoot><tr><td colspan="2"></td><td class="num"><Money cents={v.bills.paid + v.bills.pending} /></td><td class="num"><Money cents={v.bills.paid} /></td><td></td></tr></tfoot>
 		</table>
 
 		<h2>Subscriptions</h2>
 		<table class="block">
 			<thead><tr><SortTh key="name" label="Service" kind="text" bind:sort={sortSubs} /><SortTh key="dueDate" label="Due" kind="date" class="num" bind:sort={sortSubs} /><SortTh key="expected" label="Expected" kind="number" class="num" bind:sort={sortSubs} /><SortTh key="paid" label="Paid" kind="number" class="num" bind:sort={sortSubs} /><SortTh key="status" label="Status" kind="text" bind:sort={sortSubs} /></tr></thead>
-			<tbody>{#each sortRows(v.subscriptions.occurrences, sortSubs) as o}<tr class={rowClass(o)}><td>{o.name}</td><td class="num">{day(o.dueDate)}</td><td class="num"><Money cents={o.expected} /></td><td class="num"><Money cents={o.paid} /></td><td class="status-cell"><span class="status {o.status}">{o.status}</span>{#if o.status === 'pending' || o.status === 'overdue'}<button class="small link" onclick={() => mark(o.id, 'paid')}>mark paid</button>{:else if o.status === 'paid' && o.markedBy === 'manual'}<button class="small link" onclick={() => mark(o.id, 'unmark')}>undo</button>{/if}</td></tr>{:else}<tr><td colspan="5" class="muted">No subscriptions due this month. A bill in the Subscriptions category shows here.</td></tr>{/each}</tbody>
+			<tbody>{#each sortRows(v.subscriptions.occurrences, sortSubs) as o}<tr class={rowClass(o)}><td>{o.name}</td><td class="num">{day(o.dueDate)}</td><td class="num">{#if editable(o)}<input class="num estimate" value={(o.expected / 100).toFixed(2)} onchange={(e) => expect(o.id, (e.currentTarget as HTMLInputElement).value)} aria-label="Estimated amount for {o.name}" />{:else}<Money cents={o.expected} />{/if}</td><td class="num"><Money cents={o.paid} /></td><td class="status-cell"><span class="status {o.status}">{o.status}</span>{#if o.status === 'pending' || o.status === 'overdue'}<button class="small link" onclick={() => mark(o.id, 'paid')}>mark paid</button>{:else if o.status === 'paid' && o.markedBy === 'manual'}<button class="small link" onclick={() => mark(o.id, 'unmark')}>undo</button>{/if}</td></tr>{:else}<tr><td colspan="5" class="muted">No subscriptions due this month. A bill in the Subscriptions category shows here.</td></tr>{/each}</tbody>
 			<tfoot><tr><td colspan="2"></td><td class="num"><Money cents={v.subscriptions.paid + v.subscriptions.pending} /></td><td class="num"><Money cents={v.subscriptions.paid} /></td><td></td></tr></tfoot>
 		</table>
 

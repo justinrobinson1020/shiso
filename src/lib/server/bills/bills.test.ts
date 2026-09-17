@@ -5,7 +5,8 @@ import { accounts, billOccurrences, connections, incomeOccurrences, periods } fr
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId } from '../ledger/categories';
 import { ensurePeriods } from '../budget/periods';
 import { appendTermsIfChanged } from '../sync/connections';
-import { createBill, createIncomeSource, clearPendingIncomeOccurrences, listBills } from './bills';
+import { createBill, createIncomeSource, clearPendingIncomeOccurrences, lastPaidAmount, setOccurrenceExpected, listBills } from './bills';
+import { markOccurrencePaid } from './matching';
 import { generateOccurrences } from './schedule';
 
 let db: Db; let chk: number; let card: number; let rentCat: number; let cardEnv: number;
@@ -85,6 +86,27 @@ describe('generateOccurrences', () => {
 		expect(clearPendingIncomeOccurrences(db, id, TODAY)).toBe(2); // Sep 15 and Sep 30; Aug 15 is past, Aug 30 is paid
 		expect(db.select().from(incomeOccurrences).all().map((r) => r.dueDate).sort()).toEqual(['2026-08-15', '2026-08-30']);
 		expect(gen().incomeCreated).toBe(2);
+	});
+	it('a variable bill estimates each new occurrence from the last amount paid', () => {
+		const id = createBill(db, { name: 'Water', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 10000, cadence: 'monthly', dueDay: 12, variable: true });
+		gen();
+		const aug = db.select().from(billOccurrences).all().find((o) => o.dueDate === '2026-08-12')!;
+		expect(aug.expectedAmount).toBe(10000);                       // never paid: the definition seeds it
+		markOccurrencePaid(db, aug.id, { amount: 12854 });
+		expect(lastPaidAmount(db, id)).toBe(12854);
+		db.delete(billOccurrences).where(eq(billOccurrences.dueDate, '2026-09-12')).run();
+		gen();
+		expect(db.select().from(billOccurrences).all().find((o) => o.dueDate === '2026-09-12')!.expectedAmount).toBe(12854);
+	});
+	it('setOccurrenceExpected corrects one open estimate and refuses a paid one', () => {
+		createBill(db, { name: 'Gas', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 5000, cadence: 'monthly', dueDay: 5, variable: true });
+		gen();
+		const sep = db.select().from(billOccurrences).all().find((o) => o.dueDate === '2026-09-05')!;
+		setOccurrenceExpected(db, sep.id, 2237);
+		expect(db.select().from(billOccurrences).where(eq(billOccurrences.id, sep.id)).get()!.expectedAmount).toBe(2237);
+		markOccurrencePaid(db, sep.id);
+		expect(() => setOccurrenceExpected(db, sep.id, 1)).toThrow('OCCURRENCE_ALREADY_PAID');
+		expect(() => setOccurrenceExpected(db, 9999, 1)).toThrow('not found');
 	});
 	it('lists bills with their category and account', () => {
 		createBill(db, { name: 'Rent', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 1, cadence: 'monthly', dueDay: 1 });

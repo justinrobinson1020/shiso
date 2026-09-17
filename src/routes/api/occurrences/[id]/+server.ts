@@ -3,6 +3,7 @@ import { handle, readJson, intParam, cents, ValidationError } from '$lib/server/
 import { getDb } from '$lib/server/db/instance';
 import { billOccurrences } from '$lib/server/db/schema';
 import { markOccurrencePaid, unmarkOccurrence, skipOccurrence } from '$lib/server/bills/matching';
+import { setOccurrenceExpected } from '$lib/server/bills/bills';
 
 export const POST = handle(async ({ request, params }) => {
 	const id = intParam(params.id, 'id');
@@ -19,6 +20,9 @@ export const POST = handle(async ({ request, params }) => {
 	} else if (b.action === 'skip') {
 		if (!db.select({ id: billOccurrences.id }).from(billOccurrences).where(eq(billOccurrences.id, id)).get()) throw new Error(`occurrence ${id} not found`);
 		skipOccurrence(db, id);
-	} else throw new ValidationError('action must be paid, unmark, or skip');
+	} else if (b.action === 'expect') {
+		if (opts.amount == null) throw new ValidationError('amount is required');
+		setOccurrenceExpected(db, id, opts.amount);
+	} else throw new ValidationError('action must be paid, unmark, skip, or expect');
 	return { ok: true };
 });

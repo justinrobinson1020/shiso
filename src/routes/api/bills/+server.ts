@@ -8,7 +8,7 @@ export const POST = handle(async ({ request }) => {
 	const input = {
 		...commonFields(b, false), ...scheduleFields(b, false),
 		payFromAccountId: cents(b.payFromAccountId, 'payFromAccountId'),
-		autopay: b.autopay === true,
+		autopay: b.autopay === true, variable: b.variable === true,
 		linkedDebtAccountId: b.linkedDebtAccountId == null ? null : cents(b.linkedDebtAccountId, 'linkedDebtAccountId')
 	} as NewBill;
 	const id = createBill(getDb(), input);

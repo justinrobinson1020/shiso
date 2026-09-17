@@ -3,6 +3,7 @@ import type { DbOrTx } from '../db';
 import { bills, billOccurrences, incomeSources, incomeOccurrences, type BillCadence } from '../db/schema';
 import { ensurePeriods, periodIdForDate, periodBoundsFor, nextPeriodStart, type Cadence } from '../budget/periods';
 import { latestTerms } from '../sync/connections';
+import { lastPaidAmount } from './bills';
 import { addDays, compareIso, endOfMonth, isoDate, parseIso } from '$lib/dates';
 import { landOnBusinessDays } from '$lib/business-days';
 
@@ -74,8 +75,10 @@ export function generateOccurrences(db: DbOrTx, opts: { todayIso: string; cadenc
 			plan = [{ due, expected: terms!.minPayment ?? b.expectedAmount, statement: terms!.lastStatementBalance ?? null,
 				windowStart: terms!.lastStatementDate ?? addDays(due, -DEBT_WINDOW_BEFORE) }];
 		} else {
+			// A variable bill's estimate is what it cost last time; the definition's amount only seeds a bill never paid.
+			const expected = (b.variable && lastPaidAmount(db, b.id)) || b.expectedAmount;
 			plan = dueDatesBetween(b, floor, horizonEnd).map((due) => ({
-				due, expected: b.expectedAmount, statement: null, windowStart: addDays(due, -(isDebt ? DEBT_WINDOW_BEFORE : BILL_WINDOW_BEFORE))
+				due, expected, statement: null, windowStart: addDays(due, -(isDebt ? DEBT_WINDOW_BEFORE : BILL_WINDOW_BEFORE))
 			}));
 		}
 		for (const p of plan) {

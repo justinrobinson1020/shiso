@@ -1,0 +1,1 @@
+ALTER TABLE `bills` ADD `variable` integer DEFAULT false NOT NULL;
