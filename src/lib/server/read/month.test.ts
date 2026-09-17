@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { fixture } from '../test/fixture';
 import { appendBalance } from '../sync/connections';
 import { createBill, createIncomeSource } from '../bills/bills';
+import { createCategory, createGroup } from '../ledger/categories';
 import { generateOccurrences } from '../bills/schedule';
 import { markOccurrencePaid } from '../bills/matching';
 import { billOccurrences } from '../db/schema';
@@ -45,8 +46,21 @@ describe('monthView', () => {
 		expect(v.income.occurrences.map((o) => o.dueDate)).toEqual(['2026-09-02', '2026-09-17']);
 		expect(v.income.remaining).toBe(0);            // Sep 2 is late, Sep 17 is in the balance: neither is still to come
 		expect(v.cashLeft).toBe(319468);
+		expect(v.nextPaycheck).toBe('2026-10-02');     // today's paycheck is already in the balance, so the boundary is the next one
 		const later = monthView(f.db, { month: '2026-10', todayIso: '2026-09-17', cadence: 'semi_monthly' });
 		expect(later.income.remaining).toBe(319623);   // Oct 2 is after the balance date
+	});
+	it('files bills in the Subscriptions category under subscriptions', () => {
+		const f = fixture();
+		const subs = createCategory(f.db, { groupId: createGroup(f.db, 'Spending'), name: 'Subscriptions', kind: 'spending' });
+		createBill(f.db, { name: 'Rent', categoryId: f.rent, payFromAccountId: f.checking, expectedAmount: 200000, cadence: 'monthly', dueDay: 1 });
+		createBill(f.db, { name: 'Seedbox', categoryId: subs, payFromAccountId: f.checking, expectedAmount: 1360, cadence: 'monthly', dueDay: 26 });
+		generateOccurrences(f.db, { todayIso: '2026-09-08', cadence: 'semi_monthly', graceDays: 3 });
+		const v = monthView(f.db, { month: '2026-09', todayIso: '2026-09-08', cadence: 'semi_monthly' });
+		expect(v.bills.occurrences.map((o) => o.name)).toEqual(['Rent']);
+		expect(v.subscriptions.occurrences.map((o) => o.name)).toEqual(['Seedbox']);
+		expect(v.subscriptions.pending).toBe(1360);
+		expect(v.expensesPending).toBe(201360);
 	});
 	it('flags open rows due on or before the next unreceived paycheck as due now', () => {
 		const f = fixture();

@@ -2,7 +2,7 @@
 	import Money from '$lib/ui/Money.svelte';
 	import SortTh from '$lib/ui/SortTh.svelte';
 	import { sortRows, type SortState } from '$lib/ui/sort';
-	let sortBills = $state<SortState>(null); let sortCards = $state<SortState>(null); let sortInc = $state<SortState>(null);
+	let sortBills = $state<SortState>(null); let sortSubs = $state<SortState>(null); let sortCards = $state<SortState>(null); let sortInc = $state<SortState>(null);
 	import LineChart from '$lib/ui/LineChart.svelte';
 	import { shortDate } from '$lib/dates';
 	import { invalidateAll } from '$app/navigation';
@@ -31,13 +31,20 @@
 			<tfoot><tr><td colspan="2"></td><td class="num"><Money cents={v.bills.paid + v.bills.pending} /></td><td class="num"><Money cents={v.bills.paid} /></td><td></td></tr></tfoot>
 		</table>
 
+		<h2>Subscriptions</h2>
+		<table class="block">
+			<thead><tr><SortTh key="name" label="Service" kind="text" bind:sort={sortSubs} /><SortTh key="dueDate" label="Due" kind="date" class="num" bind:sort={sortSubs} /><SortTh key="expected" label="Expected" kind="number" class="num" bind:sort={sortSubs} /><SortTh key="paid" label="Paid" kind="number" class="num" bind:sort={sortSubs} /><SortTh key="status" label="Status" kind="text" bind:sort={sortSubs} /></tr></thead>
+			<tbody>{#each sortRows(v.subscriptions.occurrences, sortSubs) as o}<tr class={rowClass(o)}><td>{o.name}</td><td class="num">{day(o.dueDate)}</td><td class="num"><Money cents={o.expected} /></td><td class="num"><Money cents={o.paid} /></td><td class="status-cell"><span class="status {o.status}">{o.status}</span>{#if o.status === 'pending' || o.status === 'overdue'}<button class="small link" onclick={() => mark(o.id, 'paid')}>mark paid</button>{:else if o.status === 'paid' && o.markedBy === 'manual'}<button class="small link" onclick={() => mark(o.id, 'unmark')}>undo</button>{/if}</td></tr>{:else}<tr><td colspan="5" class="muted">No subscriptions due this month. A bill in the Subscriptions category shows here.</td></tr>{/each}</tbody>
+			<tfoot><tr><td colspan="2"></td><td class="num"><Money cents={v.subscriptions.paid + v.subscriptions.pending} /></td><td class="num"><Money cents={v.subscriptions.paid} /></td><td></td></tr></tfoot>
+		</table>
+
 		<h2>Credit cards</h2>
 		<table class="block">
 			<thead><tr><SortTh key="name" label="Card" kind="text" bind:sort={sortCards} /><SortTh key="dueDate" label="Due" kind="date" class="num" bind:sort={sortCards} /><SortTh key="expected" label="Minimum" kind="number" class="num" bind:sort={sortCards} /><SortTh key="extra" label="Additional" kind="number" class="num hide-sm" bind:sort={sortCards} /><SortTh key="paid" label="Paid" kind="number" class="num" bind:sort={sortCards} /><SortTh key="status" label="Status" kind="text" bind:sort={sortCards} /></tr></thead>
 			<tbody>{#each sortRows(v.cards.occurrences, sortCards) as o}<tr class={rowClass(o)}><td>{o.name}{#if o.extra > 0}<div class="small muted only-sm">+ <Money cents={o.extra} /> extra</div>{/if}</td><td class="num">{day(o.dueDate)}</td><td class="num"><Money cents={o.expected} /></td><td class="num hide-sm">{#if o.extra > 0}<Money cents={o.extra} />{/if}</td><td class="num"><Money cents={o.paid} /></td><td class="status-cell"><span class="status {o.status}">{o.status}</span>{#if o.status === 'pending' || o.status === 'overdue'}<button class="small link" onclick={() => mark(o.id, 'paid')}>mark paid</button>{:else if o.status === 'paid' && o.markedBy === 'manual'}<button class="small link" onclick={() => mark(o.id, 'unmark')}>undo</button>{/if}</td></tr>{:else}<tr><td colspan="6" class="muted">No card payments this month.</td></tr>{/each}</tbody>
 			<tfoot>
 				<tr><td colspan="2"></td><td class="num"><Money cents={v.cards.minimum} /></td><td class="num hide-sm"><Money cents={v.cards.extra} /></td><td class="num"><Money cents={v.cards.paid} /></td><td></td></tr>
-				<tr class="grand"><td colspan="2">Total</td><td class="num"><Money cents={v.bills.paid + v.bills.pending + v.cards.minimum} /></td><td class="num hide-sm"><Money cents={v.cards.extra} /></td><td class="num"><Money cents={v.bills.paid + v.cards.paid} /></td><td></td></tr>
+				<tr class="grand"><td colspan="2">Total</td><td class="num"><Money cents={v.bills.paid + v.bills.pending + v.subscriptions.paid + v.subscriptions.pending + v.cards.minimum} /></td><td class="num hide-sm"><Money cents={v.cards.extra} /></td><td class="num"><Money cents={v.bills.paid + v.subscriptions.paid + v.cards.paid} /></td><td></td></tr>
 			</tfoot>
 		</table>
 	</section>
@@ -46,7 +53,7 @@
 		<h2>Balances</h2>
 		<table class="block balances">
 			<tbody>
-				<tr><td>Expenses <span class="muted small">bills and cards pending</span></td><td class="num"><Money cents={-v.expensesPending} /></td></tr>
+				<tr><td>Expenses <span class="muted small">bills, subscriptions and cards pending</span></td><td class="num"><Money cents={-v.expensesPending} /></td></tr>
 				{#each v.cash.accounts as a}<tr><td>{a.name} <span class="muted small">{a.asOf ? `as of ${shortDate(a.asOf)}` : 'no balance'}</span></td><td class="num"><Money cents={a.current} /></td></tr>{/each}
 				<tr><td>Income <span class="muted small">expected, not yet received</span></td><td class="num"><Money cents={v.income.remaining} /></td></tr>
 			</tbody>

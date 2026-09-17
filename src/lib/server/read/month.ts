@@ -1,6 +1,6 @@
-import { and, asc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
-import { accounts, accountBalances, billOccurrences, bills, incomeOccurrences, incomeSources, CASH_TYPES } from '../db/schema';
+import { accounts, accountBalances, billOccurrences, bills, categories, incomeOccurrences, incomeSources, CASH_TYPES } from '../db/schema';
 import { latestBalance } from '../sync/connections';
 import type { Cadence } from '../budget/periods';
 import { addDays, endOfMonth } from '$lib/dates';
@@ -18,6 +18,8 @@ export type MonthView = {
 	income: { expected: number; received: number; remaining: number; occurrences: { id: number; name: string; dueDate: string; expected: number; received: number; status: string }[] };
 	/** Bills paid from cash that are not card or loan payments. */
 	bills: { paid: number; pending: number; occurrences: BillRow[] };
+	/** Bills whose category is the Subscriptions envelope, shown apart from household bills. */
+	subscriptions: { paid: number; pending: number; occurrences: BillRow[] };
 	/** Bills linked to a debt account: the sheet's Credit Cards block. `minimum` is Σ expected; `pending` is Σ expected for open occurrences. */
 	cards: { minimum: number; extra: number; paid: number; pending: number; occurrences: BillRow[] };
 	/** Bills pending plus cards pending: the sheet's Expenses line. */
@@ -40,19 +42,26 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 	const incomeOcc = inc.map(({ o, name }) => ({ id: o.id, name, dueDate: o.dueDate, expected: o.expectedAmount, received: o.receivedAmount, status: o.status }));
 	const live = incomeOcc.filter((o) => o.status !== 'skipped');
 
-	const bl = db.select({ o: billOccurrences, b: bills }).from(billOccurrences).innerJoin(bills, eq(billOccurrences.billId, bills.id))
+	const bl = db.select({ o: billOccurrences, b: bills, categoryName: categories.name }).from(billOccurrences)
+		.innerJoin(bills, eq(billOccurrences.billId, bills.id)).innerJoin(categories, eq(bills.categoryId, categories.id))
 		.where(and(gte(billOccurrences.dueDate, start), lte(billOccurrences.dueDate, end))).orderBy(asc(billOccurrences.dueDate)).all();
 	const open = (s: string) => (OPEN as readonly string[]).includes(s);
+	// A balance already reflects every deposit through its as-of date, and the transactions feed can lag a
+	// live balance by a day. A paycheck due on or before that date is in the balance or late — never still to
+	// come — so it is neither "expected" income nor the boundary for what must be paid from cash on hand.
+	const cashAsOf = cashAccounts.reduce<string | null>((m, a) => (a.asOf && (!m || a.asOf > m) ? a.asOf : m), null);
+	const arrivedThrough = cashAsOf ?? addDays(opts.todayIso, -1);
 	const nextPaycheck = db.select({ d: incomeOccurrences.dueDate }).from(incomeOccurrences)
-		.where(and(inArray(incomeOccurrences.status, [...OPEN]), gte(incomeOccurrences.dueDate, opts.todayIso))).orderBy(asc(incomeOccurrences.dueDate)).get()?.d ?? null;
+		.where(and(inArray(incomeOccurrences.status, [...OPEN]), gt(incomeOccurrences.dueDate, arrivedThrough))).orderBy(asc(incomeOccurrences.dueDate)).get()?.d ?? null;
 	const dueNow = (status: string, due: string) => open(status) && (nextPaycheck == null || due <= nextPaycheck);
-	const rows = bl.map(({ o, b }) => ({
+	const rows = bl.map(({ o, b, categoryName }) => ({
 		row: { id: o.id, name: b.name, dueDate: o.dueDate, expected: o.expectedAmount, paid: o.paidAmount, extra: o.extraAmount, status: o.status, markedBy: o.markedBy, dueNow: dueNow(o.status, o.dueDate) },
-		isDebt: b.linkedDebtAccountId != null
+		kind: b.linkedDebtAccountId != null ? 'card' : /subscription/i.test(categoryName) ? 'subscription' : 'bill'
 	}));
 	const sum = <T>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + f(x), 0);
-	const billOcc = rows.filter((r) => !r.isDebt).map((r) => r.row);
-	const cardOcc = rows.filter((r) => r.isDebt).map((r) => r.row);
+	const billOcc = rows.filter((r) => r.kind === 'bill').map((r) => r.row);
+	const subOcc = rows.filter((r) => r.kind === 'subscription').map((r) => r.row);
+	const cardOcc = rows.filter((r) => r.kind === 'card').map((r) => r.row);
 
 	const checkingIds = cashRows.filter((a) => a.type === 'checking').map((a) => a.id);
 	// Balance rows are append-only and a day can hold several per account (a sync plus a manual entry, or two
@@ -64,12 +73,9 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 		.groupBy(accountBalances.asOf).orderBy(asc(accountBalances.asOf)).all();
 
 	const cashTotal = sum(cashAccounts, (a) => a.current);
-	// A balance already reflects every deposit through its as-of date, and the transactions feed can lag a
-	// live balance by a day, so income due on or before that date is either in the balance or late — never
-	// still to come. Counting it again would double the paycheck on payday.
-	const cashAsOf = cashAccounts.reduce<string | null>((m, a) => (a.asOf && (!m || a.asOf > m) ? a.asOf : m), null);
-	const incomeRemaining = sum(live.filter((o) => open(o.status) && (cashAsOf == null || o.dueDate > cashAsOf)), (o) => o.expected);
+	const incomeRemaining = sum(live.filter((o) => open(o.status) && o.dueDate > arrivedThrough), (o) => o.expected);
 	const billsPending = sum(billOcc.filter((o) => open(o.status)), (o) => o.expected);
+	const subsPending = sum(subOcc.filter((o) => open(o.status)), (o) => o.expected);
 	const cardsPending = sum(cardOcc.filter((o) => open(o.status)), (o) => o.expected);
 	return {
 		month: opts.month, label: `${MONTHS[+opts.month.slice(5, 7) - 1]} ${opts.month.slice(0, 4)}`, today: opts.todayIso,
@@ -77,9 +83,10 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 		cash: { accounts: cashAccounts, total: cashTotal },
 		income: { expected: sum(live, (o) => o.expected), received: sum(live, (o) => o.received), remaining: incomeRemaining, occurrences: incomeOcc },
 		bills: { paid: sum(billOcc, (o) => o.paid), pending: billsPending, occurrences: billOcc },
+		subscriptions: { paid: sum(subOcc, (o) => o.paid), pending: subsPending, occurrences: subOcc },
 		cards: { minimum: sum(cardOcc, (o) => o.expected), extra: sum(cardOcc, (o) => o.extra), paid: sum(cardOcc, (o) => o.paid), pending: cardsPending, occurrences: cardOcc },
-		expensesPending: billsPending + cardsPending,
-		cashLeft: cashTotal + incomeRemaining - billsPending - cardsPending,
+		expensesPending: billsPending + subsPending + cardsPending,
+		cashLeft: cashTotal + incomeRemaining - billsPending - subsPending - cardsPending,
 		trend: trendRows.map((r) => ({ asOf: r.asOf, current: r.total })),
 		nextPaycheck
 	};
