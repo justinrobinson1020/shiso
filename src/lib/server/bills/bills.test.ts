@@ -5,7 +5,7 @@ import { accounts, billOccurrences, connections, incomeOccurrences, periods } fr
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId } from '../ledger/categories';
 import { ensurePeriods } from '../budget/periods';
 import { appendTermsIfChanged } from '../sync/connections';
-import { createBill, createIncomeSource, clearPendingIncomeOccurrences, lastPaidAmount, setOccurrenceExpected, listBills } from './bills';
+import { createBill, createIncomeSource, clearPendingIncomeOccurrences, clearPendingBillOccurrences, lastPaidAmount, setOccurrenceExpected, listBills } from './bills';
 import { markOccurrencePaid } from './matching';
 import { generateOccurrences } from './schedule';
 
@@ -86,6 +86,16 @@ describe('generateOccurrences', () => {
 		expect(clearPendingIncomeOccurrences(db, id, TODAY)).toBe(2); // Sep 15 and Sep 30; Aug 15 is past, Aug 30 is paid
 		expect(db.select().from(incomeOccurrences).all().map((r) => r.dueDate).sort()).toEqual(['2026-08-15', '2026-08-30']);
 		expect(gen().incomeCreated).toBe(2);
+	});
+	it('clearPendingBillOccurrences drops only future, pending, unlinked occurrences', () => {
+		const id = createBill(db, { name: 'Water', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 10000, cadence: 'monthly', dueDay: 12 });
+		gen();   // Aug 12 (past) and Sep 12 (future)
+		expect(clearPendingBillOccurrences(db, id, TODAY)).toBe(1);
+		expect(db.select().from(billOccurrences).all().map((r) => r.dueDate)).toEqual(['2026-08-12']);
+		gen();
+		const sep = db.select().from(billOccurrences).all().find((o) => o.dueDate === '2026-09-12')!;
+		markOccurrencePaid(db, sep.id);
+		expect(clearPendingBillOccurrences(db, id, TODAY)).toBe(0);   // paid: kept
 	});
 	it('a variable bill estimates each new occurrence from the last amount paid', () => {
 		const id = createBill(db, { name: 'Water', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 10000, cadence: 'monthly', dueDay: 12, variable: true });

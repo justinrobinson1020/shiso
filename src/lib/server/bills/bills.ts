@@ -1,7 +1,7 @@
 import { asc, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
-import { and, desc, gt, gte, isNull } from 'drizzle-orm';
-import { bills, billOccurrences, incomeSources, incomeOccurrences, type BillCadence } from '../db/schema';
+import { and, desc, gt, gte, isNull, notInArray } from 'drizzle-orm';
+import { bills, billOccurrences, billOccurrenceTransactions, incomeSources, incomeOccurrences, type BillCadence } from '../db/schema';
 import { InvariantError } from '../ledger/errors';
 import { nowIso } from '$lib/dates';
 
@@ -27,6 +27,17 @@ export function createBill(db: DbOrTx, input: NewBill): number {
 }
 export function updateBill(db: DbOrTx, id: number, patch: Partial<NewBill>): void {
 	db.update(bills).set({ ...patch, ...touch() }).where(eq(bills.id, id)).run();
+}
+/**
+ * Drop the occurrences a schedule change would leave at stale dates: still pending, not linked to any
+ * transaction, and due today or later. The next generateOccurrences run recreates them from the new schedule.
+ */
+export function clearPendingBillOccurrences(db: DbOrTx, billId: number, todayIso: string): number {
+	const linked = db.select({ id: billOccurrenceTransactions.billOccurrenceId }).from(billOccurrenceTransactions);
+	return db.delete(billOccurrences).where(and(
+		eq(billOccurrences.billId, billId), eq(billOccurrences.status, 'pending'),
+		gte(billOccurrences.dueDate, todayIso), notInArray(billOccurrences.id, linked)
+	)).run().changes;
 }
 /** What the bill last actually cost: the most recent paid occurrence's amount, or null if it has never been paid. */
 export function lastPaidAmount(db: DbOrTx, billId: number): number | null {
