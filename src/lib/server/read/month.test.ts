@@ -55,12 +55,15 @@ describe('monthView', () => {
 		const subs = createCategory(f.db, { groupId: createGroup(f.db, 'Spending'), name: 'Subscriptions', kind: 'spending' });
 		createBill(f.db, { name: 'Rent', categoryId: f.rent, payFromAccountId: f.checking, expectedAmount: 200000, cadence: 'monthly', dueDay: 1 });
 		createBill(f.db, { name: 'Seedbox', categoryId: subs, payFromAccountId: f.checking, expectedAmount: 1360, cadence: 'monthly', dueDay: 26 });
+		const storeCards = createCategory(f.db, { groupId: createGroup(f.db, 'Bills'), name: 'Synchrony Cards', kind: 'bill' });
+		createBill(f.db, { name: 'Amazon Store Card', categoryId: storeCards, payFromAccountId: f.checking, expectedAmount: 5000, cadence: 'monthly', dueDay: 13 });
 		generateOccurrences(f.db, { todayIso: '2026-09-08', cadence: 'semi_monthly', graceDays: 3 });
 		const v = monthView(f.db, { month: '2026-09', todayIso: '2026-09-08', cadence: 'semi_monthly' });
 		expect(v.bills.occurrences.map((o) => o.name)).toEqual(['Rent']);
 		expect(v.subscriptions.occurrences.map((o) => o.name)).toEqual(['Seedbox']);
+		expect(v.cards.occurrences.map((o) => o.name)).toEqual(['Amazon Store Card']);   // a card shiso cannot read, placed by its category
 		expect(v.subscriptions.pending).toBe(1360);
-		expect(v.expensesPending).toBe(201360);
+		expect(v.expensesPending).toBe(206360);
 	});
 	it('flags open rows due on or before the next unreceived paycheck as due now', () => {
 		const f = fixture();

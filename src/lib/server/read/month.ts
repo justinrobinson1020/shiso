@@ -42,7 +42,7 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 	const incomeOcc = inc.map(({ o, name }) => ({ id: o.id, name, dueDate: o.dueDate, expected: o.expectedAmount, received: o.receivedAmount, status: o.status }));
 	const live = incomeOcc.filter((o) => o.status !== 'skipped');
 
-	const bl = db.select({ o: billOccurrences, b: bills, categoryName: categories.name }).from(billOccurrences)
+	const bl = db.select({ o: billOccurrences, b: bills, categoryName: categories.name, categoryKind: categories.kind }).from(billOccurrences)
 		.innerJoin(bills, eq(billOccurrences.billId, bills.id)).innerJoin(categories, eq(bills.categoryId, categories.id))
 		.where(and(gte(billOccurrences.dueDate, start), lte(billOccurrences.dueDate, end))).orderBy(asc(billOccurrences.dueDate)).all();
 	const open = (s: string) => (OPEN as readonly string[]).includes(s);
@@ -54,9 +54,13 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 	const nextPaycheck = db.select({ d: incomeOccurrences.dueDate }).from(incomeOccurrences)
 		.where(and(inArray(incomeOccurrences.status, [...OPEN]), gt(incomeOccurrences.dueDate, arrivedThrough))).orderBy(asc(incomeOccurrences.dueDate)).get()?.d ?? null;
 	const dueNow = (status: string, due: string) => open(status) && (nextPaycheck == null || due <= nextPaycheck);
-	const rows = bl.map(({ o, b, categoryName }) => ({
+	// Section by what the bill pays: a linked debt account or a debt-payment category is a card; a card or
+	// financing plan shiso cannot read (Synchrony, Apple Card, "Other Debt Payments") is one by its category name.
+	const section = (b: { linkedDebtAccountId: number | null }, categoryName: string, categoryKind: string) =>
+		b.linkedDebtAccountId != null || categoryKind === 'debt_payment' || /card|debt/i.test(categoryName) ? 'card' : /subscription/i.test(categoryName) ? 'subscription' : 'bill';
+	const rows = bl.map(({ o, b, categoryName, categoryKind }) => ({
 		row: { id: o.id, name: b.name, dueDate: o.dueDate, expected: o.expectedAmount, paid: o.paidAmount, extra: o.extraAmount, status: o.status, markedBy: o.markedBy, dueNow: dueNow(o.status, o.dueDate), variable: b.variable },
-		kind: b.linkedDebtAccountId != null ? 'card' : /subscription/i.test(categoryName) ? 'subscription' : 'bill'
+		kind: section(b, categoryName, categoryKind)
 	}));
 	const sum = <T>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + f(x), 0);
 	const billOcc = rows.filter((r) => r.kind === 'bill').map((r) => r.row);
