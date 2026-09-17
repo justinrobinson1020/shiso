@@ -36,4 +36,22 @@ describe('monthView', () => {
 		expect(v.cashLeft).toBe(340000 + 550000 - 3500);
 		expect(v.trend).toEqual([{ asOf: '2026-09-01', current: 300000 }, { asOf: '2026-09-07', current: 240000 }]);
 	});
+	it('flags open rows due on or before the next unreceived paycheck as due now', () => {
+		const f = fixture();
+		createBill(f.db, { name: 'Water', categoryId: f.rent, payFromAccountId: f.checking, expectedAmount: 10000, cadence: 'monthly', dueDay: 12 });
+		createBill(f.db, { name: 'Phone', categoryId: f.rent, payFromAccountId: f.checking, expectedAmount: 9000, cadence: 'monthly', dueDay: 17 });
+		createBill(f.db, { name: 'Rent', categoryId: f.rent, payFromAccountId: f.checking, expectedAmount: 200000, cadence: 'monthly', dueDay: 30 });
+		createIncomeSource(f.db, { name: 'Salary', categoryId: f.income, depositAccountId: f.checking, expectedAmount: 275000, cadence: 'semi_monthly', dueDay: 2, dueDay2: 17 });
+		generateOccurrences(f.db, { todayIso: '2026-09-10', cadence: 'semi_monthly', graceDays: 3 });
+		const water = f.db.select().from(billOccurrences).all().find((o) => o.dueDate === '2026-09-12')!;
+		markOccurrencePaid(f.db, water.id);
+
+		const v = monthView(f.db, { month: '2026-09', todayIso: '2026-09-10', cadence: 'semi_monthly' });
+		expect(v.nextPaycheck).toBe('2026-09-17');
+		const byName = Object.fromEntries(v.bills.occurrences.map((o) => [o.name, o]));
+		expect(byName.Water.dueNow).toBe(false);   // paid, even though it is before the paycheck
+		expect(byName.Water.markedBy).toBe('manual');
+		expect(byName.Phone.dueNow).toBe(true);    // due on the paycheck day itself: the money is not there yet
+		expect(byName.Rent.dueNow).toBe(false);    // paid from the Sep 17 paycheck
+	});
 });

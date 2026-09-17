@@ -5,9 +5,14 @@
 	let sortBills = $state<SortState>(null); let sortCards = $state<SortState>(null); let sortInc = $state<SortState>(null);
 	import LineChart from '$lib/ui/LineChart.svelte';
 	import { shortDate } from '$lib/dates';
+	import { invalidateAll } from '$app/navigation';
+	import { post } from '$lib/ui/api';
 	let { data } = $props();
 	const v = $derived(data.view);
 	const day = (iso: string) => String(+iso.slice(8, 10));
+	let error = $state('');
+	const mark = async (id: number, action: 'paid' | 'unmark') => { error = ''; try { await post(`/api/occurrences/${id}`, { action }); await invalidateAll(); } catch (e) { error = (e as Error).message; } };
+	const rowClass = (o: { status: string; dueNow: boolean }) => (o.status === 'paid' ? 'paid' : o.dueNow ? 'due-now' : '');
 </script>
 
 <div class="toolbar month-nav">
@@ -18,17 +23,18 @@
 
 <div class="sheet">
 	<section class="col">
-		<h2>Bills</h2>
+		<h2>Bills{#if v.nextPaycheck} <span class="muted small">due before {shortDate(v.nextPaycheck)}</span>{/if}</h2>
+		{#if error}<p class="error">{error}</p>{/if}
 		<table class="block">
 			<thead><tr><SortTh key="name" label="Bill" kind="text" bind:sort={sortBills} /><SortTh key="dueDate" label="Due" kind="date" class="num" bind:sort={sortBills} /><SortTh key="expected" label="Expected" kind="number" class="num" bind:sort={sortBills} /><SortTh key="paid" label="Paid" kind="number" class="num" bind:sort={sortBills} /><SortTh key="status" label="Status" kind="text" bind:sort={sortBills} /></tr></thead>
-			<tbody>{#each sortRows(v.bills.occurrences, sortBills) as o}<tr><td>{o.name}</td><td class="num">{day(o.dueDate)}</td><td class="num"><Money cents={o.expected} /></td><td class="num"><Money cents={o.paid} /></td><td><span class="status {o.status}">{o.status}</span></td></tr>{:else}<tr><td colspan="5" class="muted">No bills due this month. Define them on <a href="/bills">Bills</a>.</td></tr>{/each}</tbody>
+			<tbody>{#each sortRows(v.bills.occurrences, sortBills) as o}<tr class={rowClass(o)}><td>{o.name}</td><td class="num">{day(o.dueDate)}</td><td class="num"><Money cents={o.expected} /></td><td class="num"><Money cents={o.paid} /></td><td class="status-cell"><span class="status {o.status}">{o.status}</span>{#if o.status === 'pending' || o.status === 'overdue'}<button class="small link" onclick={() => mark(o.id, 'paid')}>mark paid</button>{:else if o.status === 'paid' && o.markedBy === 'manual'}<button class="small link" onclick={() => mark(o.id, 'unmark')}>undo</button>{/if}</td></tr>{:else}<tr><td colspan="5" class="muted">No bills due this month. Define them on <a href="/bills">Bills</a>.</td></tr>{/each}</tbody>
 			<tfoot><tr><td colspan="2"></td><td class="num"><Money cents={v.bills.paid + v.bills.pending} /></td><td class="num"><Money cents={v.bills.paid} /></td><td></td></tr></tfoot>
 		</table>
 
 		<h2>Credit cards</h2>
 		<table class="block">
 			<thead><tr><SortTh key="name" label="Card" kind="text" bind:sort={sortCards} /><SortTh key="dueDate" label="Due" kind="date" class="num" bind:sort={sortCards} /><SortTh key="expected" label="Minimum" kind="number" class="num" bind:sort={sortCards} /><SortTh key="extra" label="Additional" kind="number" class="num hide-sm" bind:sort={sortCards} /><SortTh key="paid" label="Paid" kind="number" class="num" bind:sort={sortCards} /><SortTh key="status" label="Status" kind="text" bind:sort={sortCards} /></tr></thead>
-			<tbody>{#each sortRows(v.cards.occurrences, sortCards) as o}<tr><td>{o.name}{#if o.extra > 0}<div class="small muted only-sm">+ <Money cents={o.extra} /> extra</div>{/if}</td><td class="num">{day(o.dueDate)}</td><td class="num"><Money cents={o.expected} /></td><td class="num hide-sm">{#if o.extra > 0}<Money cents={o.extra} />{/if}</td><td class="num"><Money cents={o.paid} /></td><td><span class="status {o.status}">{o.status}</span></td></tr>{:else}<tr><td colspan="6" class="muted">No card payments this month.</td></tr>{/each}</tbody>
+			<tbody>{#each sortRows(v.cards.occurrences, sortCards) as o}<tr class={rowClass(o)}><td>{o.name}{#if o.extra > 0}<div class="small muted only-sm">+ <Money cents={o.extra} /> extra</div>{/if}</td><td class="num">{day(o.dueDate)}</td><td class="num"><Money cents={o.expected} /></td><td class="num hide-sm">{#if o.extra > 0}<Money cents={o.extra} />{/if}</td><td class="num"><Money cents={o.paid} /></td><td class="status-cell"><span class="status {o.status}">{o.status}</span>{#if o.status === 'pending' || o.status === 'overdue'}<button class="small link" onclick={() => mark(o.id, 'paid')}>mark paid</button>{:else if o.status === 'paid' && o.markedBy === 'manual'}<button class="small link" onclick={() => mark(o.id, 'unmark')}>undo</button>{/if}</td></tr>{:else}<tr><td colspan="6" class="muted">No card payments this month.</td></tr>{/each}</tbody>
 			<tfoot>
 				<tr><td colspan="2"></td><td class="num"><Money cents={v.cards.minimum} /></td><td class="num hide-sm"><Money cents={v.cards.extra} /></td><td class="num"><Money cents={v.cards.paid} /></td><td></td></tr>
 				<tr class="grand"><td colspan="2">Total</td><td class="num"><Money cents={v.bills.paid + v.bills.pending + v.cards.minimum} /></td><td class="num hide-sm"><Money cents={v.cards.extra} /></td><td class="num"><Money cents={v.bills.paid + v.cards.paid} /></td><td></td></tr>

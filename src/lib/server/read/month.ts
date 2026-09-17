@@ -9,7 +9,8 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const shiftMonth = (month: string, by: number) => { const y = +month.slice(0, 4), m = +month.slice(5, 7) - 1 + by; const d = new Date(Date.UTC(y, m, 1)); return d.toISOString().slice(0, 7); };
 const OPEN = ['pending', 'overdue'] as const;
 
-export type BillRow = { id: number; name: string; dueDate: string; expected: number; paid: number; extra: number; status: string };
+/** `dueNow`: open and due on or before the next paycheck that has not arrived, so it comes out of cash on hand. */
+export type BillRow = { id: number; name: string; dueDate: string; expected: number; paid: number; extra: number; status: string; markedBy: string | null; dueNow: boolean };
 
 export type MonthView = {
 	month: string; label: string; prev: string; prevLabel: string; next: string; nextLabel: string; today: string;
@@ -23,6 +24,8 @@ export type MonthView = {
 	expensesPending: number;
 	cashLeft: number;
 	trend: { asOf: string; current: number }[];
+	/** Due date of the next open paycheck on or after today; null when none is scheduled. */
+	nextPaycheck: string | null;
 };
 
 export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; cadence: Cadence }): MonthView {
@@ -39,8 +42,14 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 
 	const bl = db.select({ o: billOccurrences, b: bills }).from(billOccurrences).innerJoin(bills, eq(billOccurrences.billId, bills.id))
 		.where(and(gte(billOccurrences.dueDate, start), lte(billOccurrences.dueDate, end))).orderBy(asc(billOccurrences.dueDate)).all();
-	const rows = bl.map(({ o, b }) => ({ row: { id: o.id, name: b.name, dueDate: o.dueDate, expected: o.expectedAmount, paid: o.paidAmount, extra: o.extraAmount, status: o.status }, isDebt: b.linkedDebtAccountId != null }));
 	const open = (s: string) => (OPEN as readonly string[]).includes(s);
+	const nextPaycheck = db.select({ d: incomeOccurrences.dueDate }).from(incomeOccurrences)
+		.where(and(inArray(incomeOccurrences.status, [...OPEN]), gte(incomeOccurrences.dueDate, opts.todayIso))).orderBy(asc(incomeOccurrences.dueDate)).get()?.d ?? null;
+	const dueNow = (status: string, due: string) => open(status) && (nextPaycheck == null || due <= nextPaycheck);
+	const rows = bl.map(({ o, b }) => ({
+		row: { id: o.id, name: b.name, dueDate: o.dueDate, expected: o.expectedAmount, paid: o.paidAmount, extra: o.extraAmount, status: o.status, markedBy: o.markedBy, dueNow: dueNow(o.status, o.dueDate) },
+		isDebt: b.linkedDebtAccountId != null
+	}));
 	const sum = <T>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + f(x), 0);
 	const billOcc = rows.filter((r) => !r.isDebt).map((r) => r.row);
 	const cardOcc = rows.filter((r) => r.isDebt).map((r) => r.row);
@@ -67,6 +76,7 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 		cards: { minimum: sum(cardOcc, (o) => o.expected), extra: sum(cardOcc, (o) => o.extra), paid: sum(cardOcc, (o) => o.paid), pending: cardsPending, occurrences: cardOcc },
 		expensesPending: billsPending + cardsPending,
 		cashLeft: cashTotal + incomeRemaining - billsPending - cardsPending,
-		trend: trendRows.map((r) => ({ asOf: r.asOf, current: r.total }))
+		trend: trendRows.map((r) => ({ asOf: r.asOf, current: r.total })),
+		nextPaycheck
 	};
 }
