@@ -4,7 +4,7 @@ import { appendBalance } from '../sync/connections';
 import { createBill, createIncomeSource } from '../bills/bills';
 import { createCategory, createGroup } from '../ledger/categories';
 import { generateOccurrences } from '../bills/schedule';
-import { markOccurrencePaid } from '../bills/matching';
+import { markOccurrencePaid, skipOccurrence } from '../bills/matching';
 import { billOccurrences } from '../db/schema';
 import { monthView } from './month';
 
@@ -62,6 +62,11 @@ describe('monthView', () => {
 		expect(v.bills.occurrences.map((o) => o.name)).toEqual(['Rent']);
 		expect(v.subscriptions.occurrences.map((o) => o.name)).toEqual(['Seedbox']);
 		expect(v.cards.occurrences.map((o) => o.name)).toEqual(['Amazon Store Card']);   // a card shiso cannot read, placed by its category
+		const seedbox = f.db.select().from(billOccurrences).all().find((o) => o.expectedAmount === 1360 && o.dueDate === '2026-09-26')!;
+		skipOccurrence(f.db, seedbox.id);
+		const after = monthView(f.db, { month: '2026-09', todayIso: '2026-09-08', cadence: 'semi_monthly' });
+		expect(after.subscriptions.occurrences).toEqual([]);   // skipped rows are hidden and drop out of the totals
+		expect(after.expensesPending).toBe(205000);
 		expect(v.subscriptions.pending).toBe(1360);
 		expect(v.expensesPending).toBe(206360);
 	});

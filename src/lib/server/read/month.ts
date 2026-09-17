@@ -63,9 +63,11 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 		kind: section(b, categoryName, categoryKind)
 	}));
 	const sum = <T>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + f(x), 0);
-	const billOcc = rows.filter((r) => r.kind === 'bill').map((r) => r.row);
-	const subOcc = rows.filter((r) => r.kind === 'subscription').map((r) => r.row);
-	const cardOcc = rows.filter((r) => r.kind === 'card').map((r) => r.row);
+	// Skipped occurrences are not obligations: a schedule edit or a month with no charge leaves them behind.
+	const shown = rows.filter((r) => r.row.status !== 'skipped');
+	const billOcc = shown.filter((r) => r.kind === 'bill').map((r) => r.row);
+	const subOcc = shown.filter((r) => r.kind === 'subscription').map((r) => r.row);
+	const cardOcc = shown.filter((r) => r.kind === 'card').map((r) => r.row);
 
 	const checkingIds = cashRows.filter((a) => a.type === 'checking').map((a) => a.id);
 	// Balance rows are append-only and a day can hold several per account (a sync plus a manual entry, or two
