@@ -64,7 +64,11 @@ export function monthView(db: DbOrTx, opts: { month: string; todayIso: string; c
 		.groupBy(accountBalances.asOf).orderBy(asc(accountBalances.asOf)).all();
 
 	const cashTotal = sum(cashAccounts, (a) => a.current);
-	const incomeRemaining = sum(live.filter((o) => open(o.status)), (o) => o.expected);
+	// A balance already reflects every deposit through its as-of date, and the transactions feed can lag a
+	// live balance by a day, so income due on or before that date is either in the balance or late — never
+	// still to come. Counting it again would double the paycheck on payday.
+	const cashAsOf = cashAccounts.reduce<string | null>((m, a) => (a.asOf && (!m || a.asOf > m) ? a.asOf : m), null);
+	const incomeRemaining = sum(live.filter((o) => open(o.status) && (cashAsOf == null || o.dueDate > cashAsOf)), (o) => o.expected);
 	const billsPending = sum(billOcc.filter((o) => open(o.status)), (o) => o.expected);
 	const cardsPending = sum(cardOcc.filter((o) => open(o.status)), (o) => o.expected);
 	return {

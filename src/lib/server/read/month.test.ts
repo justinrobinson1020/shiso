@@ -36,6 +36,18 @@ describe('monthView', () => {
 		expect(v.cashLeft).toBe(340000 + 550000 - 3500);
 		expect(v.trend).toEqual([{ asOf: '2026-09-01', current: 300000 }, { asOf: '2026-09-07', current: 240000 }]);
 	});
+	it('does not count expected income due on or before the cash balance date', () => {
+		const f = fixture();
+		appendBalance(f.db, f.checking, { asOf: '2026-09-17', current: 319468, source: 'sync' });   // payday balance, deposit already in it
+		createIncomeSource(f.db, { name: 'Salary', categoryId: f.income, depositAccountId: f.checking, expectedAmount: 319623, cadence: 'semi_monthly', dueDay: 2, dueDay2: 17 });
+		generateOccurrences(f.db, { todayIso: '2026-09-17', cadence: 'semi_monthly', graceDays: 3 });
+		const v = monthView(f.db, { month: '2026-09', todayIso: '2026-09-17', cadence: 'semi_monthly' });
+		expect(v.income.occurrences.map((o) => o.dueDate)).toEqual(['2026-09-02', '2026-09-17']);
+		expect(v.income.remaining).toBe(0);            // Sep 2 is late, Sep 17 is in the balance: neither is still to come
+		expect(v.cashLeft).toBe(319468);
+		const later = monthView(f.db, { month: '2026-10', todayIso: '2026-09-17', cadence: 'semi_monthly' });
+		expect(later.income.remaining).toBe(319623);   // Oct 2 is after the balance date
+	});
 	it('flags open rows due on or before the next unreceived paycheck as due now', () => {
 		const f = fixture();
 		createBill(f.db, { name: 'Water', categoryId: f.rent, payFromAccountId: f.checking, expectedAmount: 10000, cadence: 'monthly', dueDay: 12 });
