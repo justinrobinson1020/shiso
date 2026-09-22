@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openMemoryDatabase, type Db } from '../db';
 import { eq } from 'drizzle-orm';
-import { accounts, billOccurrences, connections, incomeOccurrences, periods } from '../db/schema';
+import { accounts, billOccurrences, bills, connections, incomeOccurrences, periods } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId } from '../ledger/categories';
 import { ensurePeriods } from '../budget/periods';
 import { appendTermsIfChanged } from '../sync/connections';
@@ -100,6 +100,16 @@ describe('generateOccurrences', () => {
 		expect(clearPendingIncomeOccurrences(db, id, TODAY)).toBe(2); // Sep 15 and Sep 30; Aug 15 is past, Aug 30 is paid
 		expect(db.select().from(incomeOccurrences).all().map((r) => r.dueDate).sort()).toEqual(['2026-08-15', '2026-08-30']);
 		expect(gen().incomeCreated).toBe(2);
+	});
+	it('a due-day edit does not add a second occurrence to a cycle that already has a live one', () => {
+		const id = createBill(db, { name: 'Water', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 10000, cadence: 'monthly', dueDay: 12 });
+		gen();
+		const sep = db.select().from(billOccurrences).all().find((o) => o.dueDate === '2026-09-12')!;
+		markOccurrencePaid(db, sep.id);
+		db.update(bills).set({ dueDay: 8 }).where(eq(bills.id, id)).run();
+		clearPendingBillOccurrences(db, id, TODAY);
+		gen();
+		expect(db.select().from(billOccurrences).all().map((o) => o.dueDate).sort()).toEqual(['2026-08-12', '2026-09-12']);   // no Sep 8 alongside the paid Sep 12
 	});
 	it('clearPendingBillOccurrences drops only future, pending, unlinked occurrences', () => {
 		const id = createBill(db, { name: 'Water', categoryId: rentCat, payFromAccountId: chk, expectedAmount: 10000, cadence: 'monthly', dueDay: 12 });

@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { bills, billOccurrences, billOccurrenceTransactions, incomeSources, incomeOccurrences, type BillCadence } from '../db/schema';
 import { ensurePeriods, periodIdForDate, periodBoundsFor, nextPeriodStart, type Cadence } from '../budget/periods';
@@ -22,6 +22,16 @@ function clampDay(year: number, month0: number, day: number): string {
 	const eom = endOfMonth(first);
 	const d = Math.min(day, +eom.slice(8, 10));
 	return `${first.slice(0, 8)}${String(d).padStart(2, '0')}`;
+}
+
+/** Calendar days one cycle of the schedule spans. */
+export function cycleDays(s: Schedule): number {
+	switch (s.cadence) {
+		case 'monthly': return 30;
+		case 'semi_monthly': return 15;
+		case 'every_n_weeks': return Math.max(1, s.interval ?? 1) * 7;
+		case 'yearly': return 365;
+	}
 }
 
 /** Due dates inside [fromIso, throughIso], ascending. Pure. */
@@ -65,6 +75,12 @@ export function generateOccurrences(db: DbOrTx, opts: { todayIso: string; cadenc
 	for (const b of db.select().from(bills).where(eq(bills.active, true)).all()) {
 		const floor = lookback;
 		const existing = new Set(db.select({ d: billOccurrences.dueDate }).from(billOccurrences).where(eq(billOccurrences.billId, b.id)).all().map((r) => r.d));
+		// A due-day edit moves the nominal date, but a cycle that already has a live occurrence (paid at the old
+		// date, say) must not get a second one. Skipped occurrences do not count: they are what an edit leaves behind.
+		const live = db.select({ d: billOccurrences.dueDate }).from(billOccurrences)
+			.where(and(eq(billOccurrences.billId, b.id), ne(billOccurrences.status, 'skipped'))).all().map((r) => r.d);
+		const half = Math.floor(cycleDays(b) / 2);
+		const cycleTaken = (due: string) => live.some((d) => Math.abs((parseIso(d).getTime() - parseIso(due).getTime()) / 86_400_000) < half);
 		const terms = b.linkedDebtAccountId != null ? latestTerms(db, b.linkedDebtAccountId) : null;
 		const isDebt = b.linkedDebtAccountId != null;
 		let plan: { due: string; expected: number; statement: number | null; windowStart: string }[];
@@ -94,6 +110,7 @@ export function generateOccurrences(db: DbOrTx, opts: { todayIso: string; cadenc
 				}
 				continue;
 			}
+			if (cycleTaken(p.due)) continue;
 			db.insert(billOccurrences).values({
 				billId: b.id, dueDate: p.due, periodId: periodIdForDate(db, p.due), expectedAmount: p.expected, statementBalance: p.statement,
 				windowStart: p.windowStart, windowEnd: addDays(p.due, opts.graceDays)
