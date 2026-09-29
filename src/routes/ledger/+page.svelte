@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import SortTh from '$lib/ui/SortTh.svelte';
 	import { sortRows, type SortState } from '$lib/ui/sort';
 	import { page } from '$app/state';
@@ -7,6 +7,7 @@
 	import Dialog from '$lib/ui/Dialog.svelte';
 	import SplitEditor from './SplitEditor.svelte';
 	import { post } from '$lib/ui/api';
+	import { attempt } from '$lib/ui/run';
 	import { decimalToCents } from '$lib/money';
 	import { shortDate } from '$lib/dates';
 	let { data } = $props();
@@ -17,7 +18,7 @@
 	let splitting = $state<(typeof v.rows)[number] | null>(null);
 	let ruleFor = $state<{ id: number; payeeRaw: string; payee: string; pattern: string; categoryId: number | null } | null>(null);
 	let adding = $state(false); let add = $state({ accountId: null as number | null, postedDate: '', amount: '', payee: '', memo: '', categoryId: null as number | null });
-	const run = async (fn: () => Promise<unknown>) => { error = ''; try { await fn(); await invalidateAll(); } catch (e) { error = (e as Error).message; } };
+	const run = async (fn: () => Promise<unknown>) => { error = ''; error = await attempt(fn); };
 	const patch = (id: number, body: unknown) => run(() => post(`/api/transactions/${id}`, body));
 	function setParam(k: string, val: string | null) { const u = new URL(page.url); if (val) u.searchParams.set(k, val); else u.searchParams.delete(k); u.searchParams.delete('page'); goto(u.pathname + u.search); }
 	async function renamePayee(row: (typeof v.rows)[number], payee: string) {
@@ -33,11 +34,11 @@
 
 <h1>Ledger</h1>
 <div class="toolbar">
-	<select value={data.filter.accountId ?? ''} onchange={(e) => setParam('account', (e.target as HTMLSelectElement).value || null)}><option value="">All accounts</option>{#each v.accounts as a}<option value={a.id}>{a.name}{a.closed ? ' (closed)' : ''}</option>{/each}</select>
-	<select value={data.filter.periodId ?? ''} onchange={(e) => setParam('period', (e.target as HTMLSelectElement).value || null)}><option value="">All periods</option>{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}</select>
-	<select value={data.filter.categoryId ?? ''} onchange={(e) => setParam('category', (e.target as HTMLSelectElement).value || null)}><option value="">All categories</option>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select>
-	<input placeholder="Search payee or memo" value={data.filter.q ?? ''} onchange={(e) => setParam('q', (e.target as HTMLInputElement).value || null)} />
-	<label class="small"><input type="checkbox" checked={data.filter.review} onchange={(e) => setParam('review', (e.target as HTMLInputElement).checked ? '1' : null)} /> review queue</label>
+	<select value={data.filter.accountId ?? ''} onchange={(e) => setParam('account', e.currentTarget.value || null)}><option value="">All accounts</option>{#each v.accounts as a}<option value={a.id}>{a.name}{a.closed ? ' (closed)' : ''}</option>{/each}</select>
+	<select value={data.filter.periodId ?? ''} onchange={(e) => setParam('period', e.currentTarget.value || null)}><option value="">All periods</option>{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}</select>
+	<select value={data.filter.categoryId ?? ''} onchange={(e) => setParam('category', e.currentTarget.value || null)}><option value="">All categories</option>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select>
+	<input placeholder="Search payee or memo" value={data.filter.q ?? ''} onchange={(e) => setParam('q', e.currentTarget.value || null)} />
+	<label class="small"><input type="checkbox" checked={data.filter.review} onchange={(e) => setParam('review', e.currentTarget.checked ? '1' : null)} /> review queue</label>
 	<button onclick={() => (adding = !adding)}>+ Manual transaction</button>
 	<span class="muted small">{v.total} rows</span>
 </div>
@@ -63,16 +64,16 @@
 		<tr>
 			<td class="date" title={row.postedDate}>{shortDate(row.postedDate)}{#if row.pending}<div class="muted small">pending</div>{/if}</td>
 			<td class="hide-sm">{row.accountName}</td>
-			<td><input class="inline" value={row.payee} title={row.payeeRaw} onchange={(e) => renamePayee(row, (e.target as HTMLInputElement).value)} />
+			<td><input class="inline" value={row.payee} title={row.payeeRaw} onchange={(e) => renamePayee(row, e.currentTarget.value)} />
 				<div class="only-sm"><Money cents={row.amount} signed neutral /></div>
 				<div class="small muted only-sm">{row.accountName} · {periodLabel(row.periodId)}</div>
-				<input class="inline only-sm" placeholder="Memo" value={row.memo ?? ''} onchange={(e) => patch(row.id, { memo: (e.target as HTMLInputElement).value || null })} /></td>
+				<input class="inline only-sm" placeholder="Memo" value={row.memo ?? ''} onchange={(e) => patch(row.id, { memo: e.currentTarget.value || null })} /></td>
 			<td>{#if row.transferPeerId != null}<span class="muted">Transfer · {row.transferPeerAccountName}</span> <button class="small" onclick={() => run(() => post(`/api/transactions/${row.id}/unlink`))}>unlink</button>
-				{:else if row.splits.length === 1}<select value={row.splits[0].categoryId} onchange={(e) => patch(row.id, { splits: [{ categoryId: Number((e.target as HTMLSelectElement).value), amount: row.amount }] })}>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories.filter((c) => !c.hidden || c.id === row.splits[0].categoryId) as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select> <button class="small" onclick={() => (splitting = row)}>split</button>
+				{:else if row.splits.length === 1}<select value={row.splits[0].categoryId} onchange={(e) => patch(row.id, { splits: [{ categoryId: Number(e.currentTarget.value), amount: row.amount }] })}>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories.filter((c) => !c.hidden || c.id === row.splits[0].categoryId) as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select> <button class="small" onclick={() => (splitting = row)}>split</button>
 				{:else}<button class="small" onclick={() => (splitting = row)}>{row.splits.length} splits: {row.splits.map((s) => s.categoryName).join(', ')}</button>{/if}</td>
-			<td class="hide-sm"><input class="inline" value={row.memo ?? ''} onchange={(e) => patch(row.id, { memo: (e.target as HTMLInputElement).value || null })} /></td>
+			<td class="hide-sm"><input class="inline" value={row.memo ?? ''} onchange={(e) => patch(row.id, { memo: e.currentTarget.value || null })} /></td>
 			<td class="num hide-sm"><Money cents={row.amount} signed neutral /></td>
-			<td class="hide-sm"><select value={row.periodId} onchange={(e) => patch(row.id, { periodId: Number((e.target as HTMLSelectElement).value) })}>{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}</select></td>
+			<td class="hide-sm"><select value={row.periodId} onchange={(e) => patch(row.id, { periodId: Number(e.currentTarget.value) })}>{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}</select></td>
 			<td>{#if row.needsReview}<span class="status overdue" title={row.reviewReason ?? ''}>{row.reviewReason}</span> <button class="small" onclick={() => run(() => post(`/api/transactions/${row.id}/review`))}>clear</button>{/if}
 				{#if row.source === 'manual' || row.source === 'import'}<button class="small danger" onclick={() => run(() => post(`/api/transactions/${row.id}/delete`))}>delete</button>{/if}</td>
 		</tr>
@@ -85,12 +86,13 @@
 	{#if data.page < pages}<a href={(() => { const u = new URL(page.url); u.searchParams.set('page', String(data.page + 1)); return u.pathname + u.search; })()}>older →</a>{/if}
 </div>
 
-{#if splitting}<SplitEditor row={splitting} {tree} onclose={() => (splitting = null)} onsave={async (splits) => { const id = splitting!.id; splitting = null; await patch(id, { splits }); }} />{/if}
+{#if splitting}{@const row = splitting}{#key row.id}<SplitEditor {row} {tree} onclose={() => (splitting = null)} onsave={async (splits) => { splitting = null; await patch(row.id, { splits }); }} />{/key}{/if}
 
 {#if ruleFor}
+{@const rule = ruleFor}
 <Dialog open={true} title="Create a payee rule?" onclose={() => (ruleFor = null)}>
 	<p class="small">Rename every transaction whose raw payee contains the pattern to <strong>{ruleFor.payee}</strong>{#if ruleFor.categoryId} and categorise it as {catName(ruleFor.categoryId)}{/if}.</p>
-	<form class="grid" onsubmit={(e) => { e.preventDefault(); const r = ruleFor!; ruleFor = null; run(() => post('/api/payee-rules', { pattern: r.pattern, payee: r.payee, categoryId: r.categoryId, applyToExisting: true })); }}>
+	<form class="grid" onsubmit={(e) => { e.preventDefault(); ruleFor = null; run(() => post('/api/payee-rules', { pattern: rule.pattern, payee: rule.payee, categoryId: rule.categoryId, applyToExisting: true })); }}>
 		<label for="rule-pattern">Pattern</label><input id="rule-pattern" bind:value={ruleFor.pattern} />
 		<div class="actions"><button type="button" onclick={() => (ruleFor = null)}>No thanks</button><button class="primary" type="submit">Create rule</button></div>
 	</form>

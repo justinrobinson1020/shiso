@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import SortTh from '$lib/ui/SortTh.svelte';
-	import { sortRows, type SortState } from '$lib/ui/sort';
+	import { sortRows, type SortColumns, type SortState } from '$lib/ui/sort';
 	let sortCat = $state<SortState>(null); let sortMerch = $state<SortState>(null); let sortTrend = $state<SortState>(null); let sortOut = $state<SortState>(null);
-	const catPick = (c: (typeof v.byCategory)[number], k: string) => (k === 'delta' ? (c.prevAmount == null ? null : c.amount - c.prevAmount) : (c as unknown as Record<string, string | number | null>)[k]);
+	type CatRow = (typeof v.byCategory)[number];
+	const catCols: SortColumns<CatRow> = {
+		name: (c) => c.name, groupName: (c) => c.groupName, amount: (c) => c.amount, share: (c) => c.share, prevAmount: (c) => c.prevAmount,
+		delta: (c) => (c.prevAmount == null ? null : c.amount - c.prevAmount)
+	};
 	import { page } from '$app/state';
 	import Money from '$lib/ui/Money.svelte';
 	import RangePicker from '$lib/ui/RangePicker.svelte';
@@ -25,10 +29,10 @@
 <div class="toolbar"><h1>Spending</h1><a href="/spending/recurring" class="small">Recurring charges →</a></div>
 <RangePicker range={v.range} compare={v.filter.compare ?? false} />
 <div class="toolbar">
-	<select value={v.filter.accountId ?? ''} onchange={(e) => setParam('account', (e.target as HTMLSelectElement).value || null)}><option value="">All accounts</option>{#each v.accounts as a}<option value={a.id}>{a.name}</option>{/each}</select>
-	<select value={v.filter.groupId ?? ''} onchange={(e) => setParam('group', (e.target as HTMLSelectElement).value || null)}><option value="">All groups</option>{#each v.groups as g}<option value={g.id}>{g.name}</option>{/each}</select>
+	<select value={v.filter.accountId ?? ''} onchange={(e) => setParam('account', e.currentTarget.value || null)}><option value="">All accounts</option>{#each v.accounts as a}<option value={a.id}>{a.name}</option>{/each}</select>
+	<select value={v.filter.groupId ?? ''} onchange={(e) => setParam('group', e.currentTarget.value || null)}><option value="">All groups</option>{#each v.groups as g}<option value={g.id}>{g.name}</option>{/each}</select>
 	{#if v.filter.merchant}<span class="status">merchant: {v.filter.merchant} <button class="small" onclick={() => setParam('merchant', null)}>×</button></span>{/if}
-	<label class="small"><input type="checkbox" checked={v.filter.includeExcluded} onchange={(e) => setParam('all', (e.target as HTMLInputElement).checked ? '1' : null)} /> include bills, debt payments, transfers, income</label>
+	<label class="small"><input type="checkbox" checked={v.filter.includeExcluded} onchange={(e) => setParam('all', e.currentTarget.checked ? '1' : null)} /> include bills, debt payments, transfers, income</label>
 </div>
 <div class="lead"><div class="label">Total spending · {v.range.label}</div><div class="value"><Money cents={v.total} /></div>{#if v.prevTotal != null}<div class="sub">{v.range.prevLabel}: <Money cents={v.prevTotal} /> ({delta(v.total, v.prevTotal)})</div>{/if}</div>
 
@@ -39,7 +43,7 @@
 
 <h2>By category</h2>
 <table><thead><tr><SortTh key="name" label="Category" kind="text" bind:sort={sortCat} /><SortTh key="groupName" label="Group" kind="text" class="hide-sm" bind:sort={sortCat} /><SortTh key="amount" label="Amount" kind="number" class="num" bind:sort={sortCat} /><SortTh key="share" label="Share" kind="number" class="num" bind:sort={sortCat} />{#if v.prevTotal != null}<SortTh key="prevAmount" label="Previous" kind="number" class="num" bind:sort={sortCat} /><SortTh key="delta" label="Δ" kind="number" class="num" bind:sort={sortCat} />{/if}<th></th></tr></thead>
-<tbody>{#each sortRows(v.byCategory, sortCat, catPick) as c}<tr><td>{c.name}</td><td class="muted hide-sm">{c.groupName}</td><td class="num"><Money cents={c.amount} /></td><td class="num">{(c.share * 100).toFixed(1)}%</td>
+<tbody>{#each sortRows(v.byCategory, sortCat, catCols) as c}<tr><td>{c.name}</td><td class="muted hide-sm">{c.groupName}</td><td class="num"><Money cents={c.amount} /></td><td class="num">{(c.share * 100).toFixed(1)}%</td>
 	{#if v.prevTotal != null}<td class="num"><Money cents={c.prevAmount ?? 0} /></td><td class="num">{delta(c.amount, c.prevAmount)}</td>{/if}<td><a href={ledgerLink(c.categoryId)}>transactions →</a></td></tr>{:else}<tr><td colspan="7" class="muted">No spending in this range.</td></tr>{/each}</tbody></table>
 
 <h2>By merchant</h2>

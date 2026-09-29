@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import SortTh from '$lib/ui/SortTh.svelte';
-	import { sortRows, type SortState } from '$lib/ui/sort';
+	import { sortRows, type SortColumns, type SortState } from '$lib/ui/sort';
 	let sortRec = $state<SortState>(null);
-	const recPick = (r: (typeof v.rows)[number], k: string) => (k === 'status' ? (r.overdue ? 'overdue' : r.covered ? 'covered' : 'new') : (r as unknown as Record<string, string | number | null>)[k]);
+	type RecRow = (typeof v.rows)[number];
+	const recCols: SortColumns<RecRow> = {
+		payee: (r) => r.payee, cadence: (r) => r.cadence, typical: (r) => r.typical, monthlyCost: (r) => r.monthlyCost, last: (r) => r.last, next: (r) => r.next,
+		status: (r) => (r.overdue ? 'overdue' : r.covered ? 'covered' : 'new')
+	};
 	import { page } from '$app/state';
 	import Money from '$lib/ui/Money.svelte';
 	import { shortDate } from '$lib/dates';
@@ -19,7 +23,7 @@
 	<h1>Recurring charges</h1>
 	<a href="/spending" class="small">← Spending</a>
 	<label class="small"><input type="checkbox" bind:checked={newOnly} /> new only</label>
-	<label class="small"><input type="checkbox" checked={v.includeExcluded} onchange={(e) => setParam('all', (e.target as HTMLInputElement).checked ? '1' : null)} /> include bills, debt payments, transfers, income</label>
+	<label class="small"><input type="checkbox" checked={v.includeExcluded} onchange={(e) => setParam('all', e.currentTarget.checked ? '1' : null)} /> include bills, debt payments, transfers, income</label>
 </div>
 
 <dl class="facts">
@@ -31,7 +35,7 @@
 <table class="block">
 	<thead><tr><SortTh key="payee" label="Payee" kind="text" bind:sort={sortRec} /><SortTh key="cadence" label="Cadence" kind="text" class="hide-sm" bind:sort={sortRec} /><SortTh key="typical" label="Typical" kind="number" class="num" bind:sort={sortRec} /><SortTh key="monthlyCost" label="Per month" kind="number" class="num" bind:sort={sortRec} /><SortTh key="last" label="Last" kind="date" class="hide-sm" bind:sort={sortRec} /><SortTh key="next" label="Next" kind="date" bind:sort={sortRec} /><SortTh key="status" label="Status" kind="text" bind:sort={sortRec} /></tr></thead>
 	<tbody>
-	{#each sortRows(rows, sortRec, recPick) as r (r.payee)}
+	{#each sortRows(rows, sortRec, recCols) as r (r.payee)}
 		<tr>
 			<td><a href={ledgerLink(r.payee)}>{r.payee}</a><div class="small muted only-sm">{r.cadence} · last {shortDate(r.last)} · {r.count} charges</div><div class="small muted hide-sm">{r.count} charges, {r.matched} of {r.intervals} intervals on cadence</div></td>
 			<td class="hide-sm">{r.cadence}</td>

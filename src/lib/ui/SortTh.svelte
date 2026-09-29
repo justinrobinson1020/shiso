@@ -11,14 +11,16 @@
 	} = $props();
 	const active = $derived(sort?.key === key);
 	const next = $derived(nextSort(sort, key, kind));
-	const aria = $derived(active ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+	const dir = $derived(active && sort ? sort.dir : null);
+	const aria = $derived(dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none');
+	const arrow = $derived(dir === 'asc' ? '▲' : dir === 'desc' ? '▼' : '');
 </script>
 
 <th class="sortable {cls}" aria-sort={aria}>
 	{#if href}
-		<a href={href(next)} class:active>{label}<span class="arrow" aria-hidden="true">{active ? (sort!.dir === 'asc' ? '▲' : '▼') : ''}</span></a>
+		<a href={href(next)} class:active>{label}<span class="arrow" aria-hidden="true">{arrow}</span></a>
 	{:else}
-		<button type="button" class:active onclick={() => { if (onsort) onsort(next); else sort = next; }}>{label}<span class="arrow" aria-hidden="true">{active ? (sort!.dir === 'asc' ? '▲' : '▼') : ''}</span></button>
+		<button type="button" class:active onclick={() => { if (onsort) onsort(next); else sort = next; }}>{label}<span class="arrow" aria-hidden="true">{arrow}</span></button>
 	{/if}
 </th>
 

@@ -9,7 +9,10 @@ export function nextSort(current: SortState, key: string, kind: SortKind): NonNu
 	return { key, dir: kind === 'text' ? 'asc' : 'desc' };
 }
 
-type Cell = string | number | boolean | null | undefined;
+export type Cell = string | number | boolean | null | undefined;
+/** One reader per sortable column key. Typed against the row, so a misspelled property is a compile error. */
+export type SortColumns<T> = Readonly<Record<string, (row: T) => Cell>>;
+function toCell(v: unknown): Cell { return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? v : null; }
 function compare(a: Cell, b: Cell): number {
 	if (a == null && b == null) return 0;
 	if (a == null) return 1;   // nulls last in either direction
@@ -19,10 +22,11 @@ function compare(a: Cell, b: Cell): number {
 	return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
 }
 
-/** Stable sort by `state.key`; a missing key or null state returns the rows in their given order. `pick` reads a cell when the key is not a plain property. */
-export function sortRows<T>(rows: readonly T[], state: SortState, pick?: (row: T, key: string) => Cell): T[] {
+/** Stable sort by `state.key`; a null state returns the rows in their given order. `columns` reads each sortable key; without it (or for a key it lacks) the row's own property of that name is used, and non-scalar values sort as null. */
+export function sortRows<T>(rows: readonly T[], state: SortState, columns?: SortColumns<T>): T[] {
 	if (!state) return [...rows];
-	const get = (r: T) => (pick ? pick(r, state.key) : (r as Record<string, unknown>)[state.key] as Cell);
+	const read = columns?.[state.key];
+	const get = (r: T): Cell => (read ? read(r) : toCell(Reflect.get(Object(r), state.key)));
 	const sign = state.dir === 'asc' ? 1 : -1;
 	return rows.map((r, i) => ({ r, i, v: get(r) }))
 		.sort((x, y) => {

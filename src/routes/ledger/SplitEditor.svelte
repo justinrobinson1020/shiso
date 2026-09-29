@@ -1,9 +1,11 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import Dialog from '$lib/ui/Dialog.svelte';
 	import { decimalToCents, formatCents } from '$lib/money';
 	import type { CategoryTree } from '$lib/server/read/categories';
 	let { row, tree, onsave, onclose }: { row: { id: number; amount: number; splits: { categoryId: number; amount: number; memo: string | null }[] }; tree: CategoryTree; onsave: (splits: { categoryId: number; amount: number; memo: string | null }[]) => Promise<void>; onclose: () => void } = $props();
-	let lines = $state(row.splits.map((s) => ({ categoryId: s.categoryId, amount: (s.amount / 100).toFixed(2), memo: s.memo ?? '' })));
+	// Seeded once: the parent mounts this editor fresh (`{#key}`) for every open, so later prop changes never apply.
+	let lines = $state(untrack(() => row.splits.map((s) => ({ categoryId: s.categoryId, amount: (s.amount / 100).toFixed(2), memo: s.memo ?? '' }))));
 	let error = $state('');
 	const parsedLines = $derived(lines.map((l) => { try { return decimalToCents(l.amount); } catch { return null; } }));
 	const valid = $derived(parsedLines.every((p) => p != null));

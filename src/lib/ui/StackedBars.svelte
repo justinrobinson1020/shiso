@@ -13,7 +13,11 @@
 	const keyOf = (c: { id: number }) => (c.id === 0 ? 'other' : String(c.id));
 	// The total line stops at the last bucket that has begun; a future bucket has nothing to report yet.
 	const linePath = $derived(buckets.filter((b) => !b.future).map((b, i) => `${i ? 'L' : 'M'}${x(i) + BW / 2},${yClamped(b.total)}`).join(' '));
-	const prevPath = $derived(buckets.every((b) => b.prevTotal != null) ? buckets.map((b, i) => `${i ? 'L' : 'M'}${x(i) + BW / 2},${yClamped(b.prevTotal!)}`).join(' ') : '');
+	const prevPath = $derived.by(() => {
+		const totals = buckets.map((b) => b.prevTotal);
+		if (!totals.every((t): t is number => t != null)) return '';
+		return totals.map((t, i) => `${i ? 'L' : 'M'}${x(i) + BW / 2},${yClamped(t)}`).join(' ');
+	});
 </script>
 <svg class="chart" viewBox="0 0 {W} {H}">
 	{#each buckets as b, i}

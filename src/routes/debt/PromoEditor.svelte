@@ -3,10 +3,12 @@
 </script>
 
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import Dialog from '$lib/ui/Dialog.svelte';
 	import { decimalToCents } from '$lib/money';
 	let { draft, accounts, onsave, onclose }: { draft: PromoDraft; accounts: { id: number; name: string }[]; onsave: (id: number | null, body: Record<string, unknown>) => Promise<void>; onclose: () => void } = $props();
-	let f = $state({ ...draft });
+	// Seeded once: the parent mounts this editor fresh (`{#key}`) for every open, so later prop changes never apply.
+	let f = $state(untrack(() => ({ ...draft })));
 	let error = $state('');
 	const bps = (s: string) => (s.trim() === '' ? 0 : Math.round(parseFloat(s) * 100));
 </script>

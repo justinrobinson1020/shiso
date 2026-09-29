@@ -20,9 +20,9 @@ describe('sortRows', () => {
 		expect(sortRows(rows, { key: 'date', dir: 'asc' }).map((r) => r.name)).toEqual(['Alpha', 'beta', 'delta', 'gamma']);
 		expect(sortRows(rows, { key: 'note', dir: 'asc' }).map((r) => r.name)).toEqual(['gamma', 'Alpha', 'beta', 'delta']);
 	});
-	it('returns a copy in the given order with no state, and reads through a picker', () => {
+	it('returns a copy in the given order with no state, and reads through a column accessor', () => {
 		expect(sortRows(rows, null)).toEqual(rows); expect(sortRows(rows, null)).not.toBe(rows);
-		expect(sortRows(rows, { key: 'len', dir: 'desc' }, (r, k) => (k === 'len' ? r.name.length : null)).map((r) => r.name)).toEqual(['Alpha', 'gamma', 'delta', 'beta']);
+		expect(sortRows(rows, { key: 'len', dir: 'desc' }, { len: (r) => r.name.length }).map((r) => r.name)).toEqual(['Alpha', 'gamma', 'delta', 'beta']);
 	});
 });
 describe('nextSort', () => {

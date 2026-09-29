@@ -1,13 +1,17 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
 	import SortTh from '$lib/ui/SortTh.svelte';
-	import { sortRows, type SortState } from '$lib/ui/sort';
+	import { sortRows, type SortColumns, type SortState } from '$lib/ui/sort';
 	let sortAcct = $state<Record<number, SortState>>({});
-	const acctPick = (a: (typeof v.connections)[number]['accounts'][number], k: string) => k === 'balance' ? (a.balance?.current ?? null) : k === 'ledger' ? a.drift.ledgerBalance : k === 'drift' ? a.drift.drift : k === 'terms' ? (a.terms?.aprBps ?? null) : (a as unknown as Record<string, string | number | null>)[k];
+	type AcctRow = (typeof v.connections)[number]['accounts'][number];
+	const acctCols: SortColumns<AcctRow> = {
+		name: (a) => a.name, type: (a) => a.type, balance: (a) => a.balance?.current ?? null, ledger: (a) => a.drift.ledgerBalance,
+		drift: (a) => a.drift.drift, terms: (a) => a.terms?.aprBps ?? null
+	};
 	import Money from '$lib/ui/Money.svelte';
 	import Dialog from '$lib/ui/Dialog.svelte';
 	import TermsEditor, { type Terms } from './TermsEditor.svelte';
-	import { post, upload } from '$lib/ui/api';
+	import { post, upload, errorMessage } from '$lib/ui/api';
+	import { attempt } from '$lib/ui/run';
 	import { decimalToCents, formatCents } from '$lib/money';
 	import { shortDate } from '$lib/dates';
 	let { data } = $props();
@@ -20,7 +24,7 @@
 	let addManual = $state<{ institutionName: string; accounts: { name: string; type: string }[] } | null>(null);
 	let simplefin = $state<{ setupToken: string; institutionName: string } | null>(null);
 	let plaidName = $state('');
-	const run = async (key: string, fn: () => Promise<unknown>) => { error = ''; busy = key; try { await fn(); await invalidateAll(); } catch (e) { error = (e as Error).message; } finally { busy = null; } };
+	const run = async (key: string, fn: () => Promise<unknown>) => { error = ''; busy = key; error = await attempt(fn); busy = null; };
 	const fmtTime = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'never');
 	const pct = (bps: number | null) => (bps == null ? '—' : `${(bps / 100).toFixed(2)}%`);
 
@@ -33,7 +37,7 @@
 				if (connectionId) run('relink', () => post(`/api/sync/${connectionId}`, {}));   // update mode: same access token, just sync again
 				else run('plaid', () => post('/api/plaid/exchange', { publicToken, institutionName: plaidName || meta.institution?.name || 'Plaid' }));
 			} }).open();
-		} catch (e) { error = (e as Error).message; }
+		} catch (e) { error = errorMessage(e); }
 	}
 	type Report = { format: string; statement: { opensOn: string; closesOn: string } | null; created: number; duplicates: number; matched: number; balances: number; opening: { from: number; to: number; date: string } | { seeded: number; date: string } | null; dryRun: boolean };
 	const FORMAT = { apple: 'Apple Card CSV', capital_one: 'Capital One CSV', nasa_fcu: 'NASA FCU CSV', chase: 'Chase statement', synchrony: 'Synchrony statement' } as Record<string, string>;
@@ -79,7 +83,7 @@
 		<table class="stack-sm">
 			<thead><tr><SortTh key="name" label="Account" kind="text" sort={sortAcct[c.id] ?? null} onsort={(n) => (sortAcct[c.id] = n)} /><SortTh key="type" label="Type" kind="text" class="hide-sm" sort={sortAcct[c.id] ?? null} onsort={(n) => (sortAcct[c.id] = n)} /><SortTh key="balance" label="Balance" kind="number" class="num" sort={sortAcct[c.id] ?? null} onsort={(n) => (sortAcct[c.id] = n)} /><SortTh key="ledger" label="Ledger" kind="number" class="num hide-sm" sort={sortAcct[c.id] ?? null} onsort={(n) => (sortAcct[c.id] = n)} /><SortTh key="drift" label="Drift" kind="number" class="num" sort={sortAcct[c.id] ?? null} onsort={(n) => (sortAcct[c.id] = n)} /><SortTh key="terms" label="Terms" kind="number" class="hide-sm" sort={sortAcct[c.id] ?? null} onsort={(n) => (sortAcct[c.id] = n)} /><th></th></tr></thead>
 			<tbody>
-			{#each sortRows(c.accounts, sortAcct[c.id] ?? null, acctPick) as a (a.id)}
+			{#each sortRows(c.accounts, sortAcct[c.id] ?? null, acctCols) as a (a.id)}
 				<tr id="account-{a.id}">
 					<td>{a.name}{#if a.mask} <span class="muted small">····{a.mask}</span>{/if}{#if a.closedAt} <span class="status">closed {shortDate(a.closedAt)}</span>{/if}{#if !a.onBudget} <span class="status">off-budget</span>{/if}
 						<div class="small muted only-sm">{a.type} · ledger <Money cents={a.drift.ledgerBalance} neutral={a.isDebt} />{#if a.isDebt && a.terms} · APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ? shortDate(a.terms.nextDueDate) : '—'}{/if}</div></td>
@@ -105,11 +109,12 @@
 	</div>
 {:else}<p class="muted">No connections yet. Connect a bank with Plaid, paste a SimpleFIN token, or add a manual account and enter balances by hand.</p>{/each}
 
-{#if termsFor}<TermsEditor account={termsFor} terms={termsFor.terms} today={data.today} onclose={() => (termsFor = null)} onsave={async (body) => { const id = termsFor!.id; termsFor = null; await run('terms', () => post(`/api/accounts/${id}/terms`, body)); }} />{/if}
+{#if termsFor}{@const acct = termsFor}{#key acct.id}<TermsEditor account={acct} terms={acct.terms} today={data.today} onclose={() => (termsFor = null)} onsave={async (body) => { termsFor = null; await run('terms', () => post(`/api/accounts/${acct.id}/terms`, body)); }} />{/key}{/if}
 
 {#if balanceFor}
+{@const b = balanceFor}
 <Dialog open={true} title="Record balance" onclose={() => (balanceFor = null)}>
-	<form class="grid" onsubmit={(e) => { e.preventDefault(); const b = balanceFor!; balanceFor = null; run('balance', () => post(`/api/accounts/${b.id}/balance`, { current: decimalToCents(b.current), asOf: b.asOf })); }}>
+	<form class="grid" onsubmit={(e) => { e.preventDefault(); balanceFor = null; run('balance', () => post(`/api/accounts/${b.id}/balance`, { current: decimalToCents(b.current), asOf: b.asOf })); }}>
 		<label for="b-cur">Current balance</label><input id="b-cur" class="num" bind:value={balanceFor.current} placeholder="-1234.56 for money owed" required />
 		<label for="b-asof">As of</label><input id="b-asof" type="date" bind:value={balanceFor.asOf} required />
 		<div class="actions"><button type="button" onclick={() => (balanceFor = null)}>Cancel</button><button class="primary" type="submit">Save</button></div>
@@ -118,8 +123,9 @@
 {/if}
 
 {#if editFor}
+{@const f = editFor}
 <Dialog open={true} title="Edit account" onclose={() => (editFor = null)}>
-	<form class="grid" onsubmit={(e) => { e.preventDefault(); const f = editFor!; editFor = null; run('edit', () => post(`/api/accounts/${f.id}`, { name: f.name, type: f.type, onBudget: f.onBudget, closedAt: f.closed ? (f.closedAt ?? data.today) : null })); }}>
+	<form class="grid" onsubmit={(e) => { e.preventDefault(); editFor = null; run('edit', () => post(`/api/accounts/${f.id}`, { name: f.name, type: f.type, onBudget: f.onBudget, closedAt: f.closed ? (f.closedAt ?? data.today) : null })); }}>
 		<label for="e-name">Name</label><input id="e-name" bind:value={editFor.name} required />
 		<label for="e-type">Type</label><select id="e-type" bind:value={editFor.type}>{#each v.types as t}<option value={t}>{t}</option>{/each}</select>
 		<label for="e-ob">On budget</label><input id="e-ob" type="checkbox" bind:checked={editFor.onBudget} />
@@ -130,21 +136,23 @@
 {/if}
 
 {#if addManual}
+{@const m = addManual}
 <Dialog open={true} title="Manual connection" onclose={() => (addManual = null)}>
-	<form onsubmit={(e) => { e.preventDefault(); const m = addManual!; addManual = null; run('manual', () => post('/api/connections', m)); }}>
+	<form onsubmit={(e) => { e.preventDefault(); addManual = null; run('manual', () => post('/api/connections', m)); }}>
 		<div class="grid"><label for="m-inst">Institution</label><input id="m-inst" bind:value={addManual.institutionName} required /></div>
 		<table><thead><tr><th>Account</th><th>Type</th><th></th></tr></thead><tbody>
-		{#each addManual.accounts as a, i}<tr><td><input bind:value={a.name} required /></td><td><select bind:value={a.type}>{#each v.types as t}<option value={t}>{t}</option>{/each}</select></td><td><button type="button" onclick={() => addManual!.accounts.splice(i, 1)} disabled={addManual.accounts.length === 1}>×</button></td></tr>{/each}
+		{#each addManual.accounts as a, i}<tr><td><input bind:value={a.name} required /></td><td><select bind:value={a.type}>{#each v.types as t}<option value={t}>{t}</option>{/each}</select></td><td><button type="button" onclick={() => m.accounts.splice(i, 1)} disabled={addManual.accounts.length === 1}>×</button></td></tr>{/each}
 		</tbody></table>
-		<div class="actions"><button type="button" onclick={() => addManual!.accounts.push({ name: '', type: 'credit' })}>Add account</button><button type="button" onclick={() => (addManual = null)}>Cancel</button><button class="primary" type="submit">Create</button></div>
+		<div class="actions"><button type="button" onclick={() => m.accounts.push({ name: '', type: 'credit' })}>Add account</button><button type="button" onclick={() => (addManual = null)}>Cancel</button><button class="primary" type="submit">Create</button></div>
 	</form>
 </Dialog>
 {/if}
 
 {#if simplefin}
+{@const s = simplefin}
 <Dialog open={true} title="Connect SimpleFIN" onclose={() => (simplefin = null)}>
 	<p class="small muted">Paste the setup token from your SimpleFIN Bridge account. It is claimed once and exchanged for an access URL stored encrypted.</p>
-	<form class="grid" onsubmit={(e) => { e.preventDefault(); const s = simplefin!; simplefin = null; run('simplefin', () => post('/api/simplefin/claim', s)); }}>
+	<form class="grid" onsubmit={(e) => { e.preventDefault(); simplefin = null; run('simplefin', () => post('/api/simplefin/claim', s)); }}>
 		<label for="s-name">Institution</label><input id="s-name" bind:value={simplefin.institutionName} required />
 		<label for="s-tok">Setup token</label><textarea id="s-tok" rows="3" bind:value={simplefin.setupToken} required></textarea>
 		<div class="actions"><button type="button" onclick={() => (simplefin = null)}>Cancel</button><button class="primary" type="submit">Connect</button></div>

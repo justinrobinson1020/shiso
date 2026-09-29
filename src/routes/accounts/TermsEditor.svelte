@@ -3,12 +3,14 @@
 </script>
 
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import Dialog from '$lib/ui/Dialog.svelte';
 	import { decimalToCents } from '$lib/money';
 	let { account, terms, today, onsave, onclose }: { account: { id: number; name: string }; terms: Terms; today: string; onsave: (body: Record<string, unknown>) => Promise<void>; onclose: () => void } = $props();
 	const pct = (bps: number | null) => (bps == null ? '' : (bps / 100).toFixed(2));
 	const dollars = (c: number | null) => (c == null ? '' : (c / 100).toFixed(2));
-	let f = $state({ asOf: today, apr: pct(terms?.aprBps ?? null), promoApr: pct(terms?.promoAprBps ?? null), minPayment: dollars(terms?.minPayment ?? null), nextDueDate: terms?.nextDueDate ?? '', lastStatementBalance: dollars(terms?.lastStatementBalance ?? null), lastStatementDate: terms?.lastStatementDate ?? '', annualFee: dollars(terms?.annualFee ?? null) });
+	// Seeded once: the parent mounts this editor fresh (`{#key}`) for every open, so later prop changes never apply.
+	let f = $state(untrack(() => ({ asOf: today, apr: pct(terms?.aprBps ?? null), promoApr: pct(terms?.promoAprBps ?? null), minPayment: dollars(terms?.minPayment ?? null), nextDueDate: terms?.nextDueDate ?? '', lastStatementBalance: dollars(terms?.lastStatementBalance ?? null), lastStatementDate: terms?.lastStatementDate ?? '', annualFee: dollars(terms?.annualFee ?? null) })));
 	let error = $state('');
 	const bps = (s: string) => (s.trim() === '' ? null : Math.round(parseFloat(s) * 100));
 	const c = (s: string) => (s.trim() === '' ? null : decimalToCents(s));

@@ -1,13 +1,18 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import SortTh from '$lib/ui/SortTh.svelte';
-	import { sortRows, type SortState } from '$lib/ui/sort';
+	import { sortRows, type SortColumns, type SortState } from '$lib/ui/sort';
 	let sortDebts = $state<SortState>(null); let sortPlan = $state<SortState>(null); let sortStrat = $state<SortState>(null); let sortPromos = $state<SortState>(null); let sortTrend = $state<SortState>(null);
-	const debtPick = (d: (typeof v.debts)[number], k: string) => (k === 'interestMonthly' ? d.interest.monthly : (d as unknown as Record<string, string | number | null>)[k]);
+	type DebtRow = (typeof v.debts)[number];
+	const debtCols: SortColumns<DebtRow> = {
+		name: (d) => d.name, owed: (d) => d.owed, accruing: (d) => d.accruing, aprBps: (d) => d.aprBps, interestMonthly: (d) => d.interest.monthly,
+		minimum: (d) => d.minimum, nextDue: (d) => d.nextDue, annualFee: (d) => d.annualFee, openedOn: (d) => d.openedOn
+	};
 	import Money from '$lib/ui/Money.svelte';
 	import LineChart from '$lib/ui/LineChart.svelte';
 	import PromoEditor, { type PromoDraft } from './PromoEditor.svelte';
 	import { post } from '$lib/ui/api';
+	import { attempt } from '$lib/ui/run';
 	import { decimalToCents } from '$lib/money';
 	import { shortDate } from '$lib/dates';
 	let { data } = $props();
@@ -17,7 +22,7 @@
 	let strategy = $state<'plan' | 'minimums' | 'avalanche' | 'snowball'>('plan');
 	let promo = $state<PromoDraft | null>(null);
 	const selected = $derived(v.strategies.find((s) => s.strategy === strategy) ?? v.strategies[0]);
-	const run = async (key: string, fn: () => Promise<unknown>) => { error = ''; busy = key; try { await fn(); await invalidateAll(); } catch (e) { error = (e as Error).message; } finally { busy = null; } };
+	const run = async (key: string, fn: () => Promise<unknown>) => { error = ''; busy = key; error = await attempt(fn); busy = null; };
 	const pct = (bps: number | null) => (bps == null ? '—' : `${(bps / 100).toFixed(2)}%`);
 	const dollars = (c: number) => (c / 100).toFixed(2);
 	const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -32,7 +37,7 @@
 
 <div class="toolbar">
 	<h1>Debt</h1>
-	<select value={v.period.id} onchange={(e) => goto(`/debt?period=${(e.target as HTMLSelectElement).value}`)}>
+	<select value={v.period.id} onchange={(e) => goto(`/debt?period=${e.currentTarget.value}`)}>
 		{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}
 	</select>
 	{#if v.period.isCurrent}<span class="status paid">current</span>{/if}
@@ -46,7 +51,7 @@
 	<table class="block debts">
 		<thead><tr><SortTh key="name" label="Account" kind="text" bind:sort={sortDebts} /><SortTh key="owed" label="Owed" kind="number" class="num" bind:sort={sortDebts} /><SortTh key="accruing" label="Accruing" kind="number" class="num hide-sm" bind:sort={sortDebts} /><SortTh key="aprBps" label="APR" kind="number" class="num" bind:sort={sortDebts} /><SortTh key="interestMonthly" label="Interest / mo" kind="number" class="num" bind:sort={sortDebts} /><SortTh key="minimum" label="Minimum" kind="number" class="num hide-sm" bind:sort={sortDebts} /><SortTh key="nextDue" label="Due" kind="date" class="hide-sm" bind:sort={sortDebts} /><SortTh key="annualFee" label="Fee" kind="number" class="num hide-sm" bind:sort={sortDebts} /><SortTh key="openedOn" label="Opened" kind="date" class="hide-sm" bind:sort={sortDebts} /><th></th></tr></thead>
 		<tbody>
-		{#each sortRows(v.debts, sortDebts, debtPick) as d (d.id)}
+		{#each sortRows(v.debts, sortDebts, debtCols) as d (d.id)}
 			<tr>
 				<td>{d.name} <span class="muted small">{d.type}</span>
 					<div class="small muted only-sm">min {#if d.minimum == null}—{:else}<Money cents={d.minimum} />{/if} · due {d.nextDue ? shortDate(d.nextDue) : '—'}{#if d.accruing !== d.owed} · accruing <Money cents={d.accruing} />{/if}</div></td>
@@ -73,7 +78,7 @@
 	</table>
 
 	<h2>Plan · {v.period.label}</h2>
-	{#if v.historyOnly}<p class="muted">Before the budget started on {shortDate(v.budgetStart!)}. History only: the ledger and spending pages cover this period, the envelopes do not.</p>{/if}
+	{#if v.historyOnly && v.budgetStart}<p class="muted">Before the budget started on {shortDate(v.budgetStart)}. History only: the ledger and spending pages cover this period, the envelopes do not.</p>{/if}
 	<table class="block plan">
 		<thead><tr><SortTh key="name" label="Account" kind="text" bind:sort={sortPlan} /><SortTh key="minimum" label="Minimum" kind="number" class="num" bind:sort={sortPlan} /><SortTh key="extra" label="Additional" kind="number" class="num" bind:sort={sortPlan} /><SortTh key="planned" label="Planned" kind="number" class="num hide-sm" bind:sort={sortPlan} /><SortTh key="available" label="Envelope" kind="number" class="num hide-sm" bind:sort={sortPlan} /><SortTh key="shortfall" label="Shortfall" kind="number" class="num" bind:sort={sortPlan} /><th></th></tr></thead>
 		<tbody>
@@ -81,7 +86,7 @@
 			<tr>
 				<td>{d.name}{#if d.categoryId == null}<span class="muted small hide-sm" title="no debt_payment category is linked to this account"> · no envelope</span><div class="small muted only-sm">no envelope</div>{:else}<div class="small muted only-sm">envelope <Money cents={d.available ?? 0} signed /></div>{/if}</td>
 				<td class="num">{#if d.minimum == null}<span class="muted" title="no terms minimum and no linked bill">none</span>{:else}<Money cents={d.minimum} />{/if}</td>
-				<td class="num">{#if v.historyOnly}<Money cents={d.extra} />{:else}<input class="num" value={dollars(d.extra)} disabled={busy != null} onchange={(e) => saveExtra(d.id, (e.target as HTMLInputElement).value)} />{/if}</td>
+				<td class="num">{#if v.historyOnly}<Money cents={d.extra} />{:else}<input class="num" value={dollars(d.extra)} disabled={busy != null} onchange={(e) => saveExtra(d.id, e.currentTarget.value)} />{/if}</td>
 				<td class="num hide-sm"><Money cents={d.planned} /></td>
 				<td class="num hide-sm">{#if d.available == null}<span class="muted">—</span>{:else}<Money cents={d.available} signed />{/if}</td>
 				<td class="num">{#if d.categoryId == null}<span class="muted">—</span>{:else if d.shortfall > 0}<Money cents={d.shortfall} />{:else}<span class="status paid">funded</span>{/if}</td>
@@ -155,4 +160,4 @@
 	{:else}<p class="muted small">The trend appears once a debt account has a balance snapshot.</p>{/if}
 {/if}
 
-{#if promo}<PromoEditor draft={promo} accounts={v.debts.map((d) => ({ id: d.id, name: d.name }))} onclose={() => (promo = null)} onsave={async (id, body) => { promo = null; await run('promo', () => post(id == null ? '/api/debt/promos' : `/api/debt/promos/${id}`, body)); }} />{/if}
+{#if promo}{#key promo.id ?? 'new'}<PromoEditor draft={promo} accounts={v.debts.map((d) => ({ id: d.id, name: d.name }))} onclose={() => (promo = null)} onsave={async (id, body) => { promo = null; await run('promo', () => post(id == null ? '/api/debt/promos' : `/api/debt/promos/${id}`, body)); }} />{/key}{/if}

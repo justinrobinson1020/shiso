@@ -3,11 +3,13 @@
 </script>
 
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import Dialog from '$lib/ui/Dialog.svelte';
 	import { decimalToCents } from '$lib/money';
 	import type { CategoryTree } from '$lib/server/read/categories';
 	let { kind, def, tree, accounts, cadences, onsave, onclose }: { kind: 'bill' | 'income'; def: Def; tree: CategoryTree; accounts: { id: number; name: string; type: string; isDebt: boolean }[]; cadences: readonly string[]; onsave: (body: Record<string, unknown>) => Promise<void>; onclose: () => void } = $props();
-	let f = $state({ ...def });
+	// Seeded once: the parent mounts this editor fresh (`{#key}`) for every open, so later prop changes never apply.
+	let f = $state(untrack(() => ({ ...def })));
 	let error = $state('');
 	function body(): Record<string, unknown> {
 		const b: Record<string, unknown> = { name: f.name, categoryId: f.categoryId, expectedAmount: decimalToCents(f.expectedAmount), cadence: f.cadence, dueDay: f.dueDay, dueDay2: f.dueDay2, interval: f.interval, anchorDate: f.anchorDate, toleranceAbs: f.toleranceAbs ? decimalToCents(f.toleranceAbs) : 0, tolerancePct: f.tolerancePct, matchPattern: f.matchPattern || null };

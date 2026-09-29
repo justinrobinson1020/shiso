@@ -1,24 +1,30 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
 	import SortTh from '$lib/ui/SortTh.svelte';
-	import { sortRows, type SortState } from '$lib/ui/sort';
+	import { sortRows, type SortColumns, type SortState } from '$lib/ui/sort';
 	let sortHist = $state<SortState>(null); let sortBillDefs = $state<SortState>(null); let sortIncDefs = $state<SortState>(null);
-	const nextPick = (b: { next: { dueDate: string } | null; cadence: string; [k: string]: unknown }, k: string) => (k === 'next' ? (b.next?.dueDate ?? null) : (b[k] as string | number | null));
+	type BillRow = (typeof v.bills)[number]; type IncomeRow = (typeof v.income)[number];
+	const billCols: SortColumns<BillRow> = {
+		name: (b) => b.name, cadence: (b) => b.cadence, payFromAccountName: (b) => b.payFromAccountName, expectedAmount: (b) => b.expectedAmount, next: (b) => b.next?.dueDate ?? null
+	};
+	const incomeCols: SortColumns<IncomeRow> = {
+		name: (s) => s.name, cadence: (s) => s.cadence, depositAccountName: (s) => s.depositAccountName, expectedAmount: (s) => s.expectedAmount, next: (s) => s.next?.dueDate ?? null
+	};
 	import Money from '$lib/ui/Money.svelte';
 	import DefinitionForm from './DefinitionForm.svelte';
 	import type { Def } from './DefinitionForm.svelte';
 	import { post } from '$lib/ui/api';
+	import { attempt } from '$lib/ui/run';
 	import { shortDate } from '$lib/dates';
 	let { data } = $props();
 	const v = $derived(data.view);
 	let error = $state(''); let open = $state<Record<string, boolean>>({});
 	let editing = $state<{ kind: 'bill' | 'income'; def: Def } | null>(null);
-	const run = async (fn: () => Promise<unknown>) => { error = ''; try { await fn(); await invalidateAll(); } catch (e) { error = (e as Error).message; } };
+	const run = async (fn: () => Promise<unknown>) => { error = ''; error = await attempt(fn); };
 	const blank = (kind: 'bill' | 'income') => ({ kind, def: { name: '', categoryId: null, accountId: null, expectedAmount: '', cadence: 'monthly', dueDay: 1, dueDay2: null, interval: null, anchorDate: null, settleBusinessDays: null, toleranceAbs: '', tolerancePct: 0, matchPattern: '', autopay: false, variable: false, linkedDebtAccountId: null, active: true } });
 	const fromBill = (b: (typeof v.bills)[number]) => ({ kind: 'bill' as const, def: { id: b.id, name: b.name, categoryId: b.categoryId, accountId: b.payFromAccountId, expectedAmount: (b.expectedAmount / 100).toFixed(2), cadence: b.cadence, dueDay: b.dueDay, dueDay2: b.dueDay2, interval: b.interval, anchorDate: b.anchorDate, toleranceAbs: b.toleranceAbs ? (b.toleranceAbs / 100).toFixed(2) : '', tolerancePct: b.tolerancePct, matchPattern: b.matchPattern ?? '', autopay: b.autopay, variable: b.variable, linkedDebtAccountId: b.linkedDebtAccountId, active: b.active } });
 	const fromIncome = (s: (typeof v.income)[number]) => ({ kind: 'income' as const, def: { id: s.id, name: s.name, categoryId: s.categoryId, accountId: s.depositAccountId, expectedAmount: (s.expectedAmount / 100).toFixed(2), cadence: s.cadence, dueDay: s.dueDay, dueDay2: s.dueDay2, interval: s.interval, anchorDate: s.anchorDate, settleBusinessDays: s.settleBusinessDays, toleranceAbs: s.toleranceAbs ? (s.toleranceAbs / 100).toFixed(2) : '', tolerancePct: s.tolerancePct, matchPattern: s.matchPattern ?? '', autopay: false, linkedDebtAccountId: null, active: s.active } });
 	async function save(body: Record<string, unknown>) {
-		const e = editing!; editing = null;
+		const e = editing; if (!e) return; editing = null;
 		const base = e.kind === 'bill' ? '/api/bills' : '/api/income';
 		await run(() => post(e.def.id != null ? `${base}/${e.def.id}` : base, body));
 	}
@@ -44,7 +50,7 @@
 
 <div class="toolbar"><h2>Bills</h2><button class="primary" onclick={() => (editing = blank('bill'))}>+ Bill</button></div>
 <table><thead><tr><SortTh key="name" label="Bill" kind="text" bind:sort={sortBillDefs} /><SortTh key="cadence" label="Schedule" kind="text" class="hide-sm" bind:sort={sortBillDefs} /><SortTh key="payFromAccountName" label="From" kind="text" bind:sort={sortBillDefs} /><SortTh key="expectedAmount" label="Expected" kind="number" class="num" bind:sort={sortBillDefs} /><SortTh key="next" label="Next" kind="date" bind:sort={sortBillDefs} /><th></th></tr></thead><tbody>
-{#each sortRows(v.bills, sortBillDefs, nextPick) as b (b.id)}
+{#each sortRows(v.bills, sortBillDefs, billCols) as b (b.id)}
 	<tr class:muted={!b.active}><td>{b.name}{#if b.linkedDebtAccountId} <span class="muted small">card</span>{/if}{#if b.autopay} <span class="muted small">autopay</span>{/if}{#if !b.active} <span class="status">inactive</span>{/if}
 		<div class="small muted only-sm">{schedule(b)}</div></td>
 		<td class="small hide-sm">{schedule(b)}</td><td>{b.payFromAccountName}</td><td class="num"><Money cents={b.expectedAmount} /></td>
@@ -56,7 +62,7 @@
 
 <div class="toolbar"><h2>Income</h2><button class="primary" onclick={() => (editing = blank('income'))}>+ Income</button></div>
 <table><thead><tr><SortTh key="name" label="Source" kind="text" bind:sort={sortIncDefs} /><SortTh key="cadence" label="Schedule" kind="text" class="hide-sm" bind:sort={sortIncDefs} /><SortTh key="depositAccountName" label="To" kind="text" bind:sort={sortIncDefs} /><SortTh key="expectedAmount" label="Expected" kind="number" class="num" bind:sort={sortIncDefs} /><SortTh key="next" label="Next" kind="date" bind:sort={sortIncDefs} /><th></th></tr></thead><tbody>
-{#each sortRows(v.income, sortIncDefs, nextPick) as s (s.id)}
+{#each sortRows(v.income, sortIncDefs, incomeCols) as s (s.id)}
 	<tr class:muted={!s.active}><td>{s.name}<div class="small muted only-sm">{schedule(s)}</div></td><td class="small hide-sm">{schedule(s)}</td><td>{s.depositAccountName}</td><td class="num"><Money cents={s.expectedAmount} /></td>
 		<td class="date">{#if s.next}{shortDate(s.next.dueDate)} <span class="status {s.next.status}">{s.next.status}</span>{:else}<span class="muted">—</span>{/if}</td>
 		<td><button class="small" onclick={() => (editing = fromIncome(s))}>edit</button> <button class="small" onclick={() => (open[`i${s.id}`] = !open[`i${s.id}`])}>{open[`i${s.id}`] ? 'hide' : 'history'}</button></td></tr>
@@ -64,4 +70,4 @@
 {:else}<tr><td colspan="6" class="muted">No income sources yet. Add your paycheck with + Income so the Month page can count cash still coming in.</td></tr>{/each}
 </tbody></table>
 
-{#if editing}<DefinitionForm kind={editing.kind} def={editing.def} tree={data.tree} accounts={v.accounts} cadences={v.cadences} onsave={save} onclose={() => (editing = null)} />{/if}
+{#if editing}{#key `${editing.kind}:${editing.def.id ?? 'new'}`}<DefinitionForm kind={editing.kind} def={editing.def} tree={data.tree} accounts={v.accounts} cadences={v.cadences} onsave={save} onclose={() => (editing = null)} />{/key}{/if}
