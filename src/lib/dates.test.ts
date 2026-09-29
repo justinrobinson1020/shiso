@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isoDate, addDays, endOfMonth, compareIso, isoDateInZone, todayIso, shortDate, monthLabel } from './dates';
+import { daysBetween, dayDistance, isoDate, addDays, endOfMonth, compareIso, isoDateInZone, todayIso, shortDate, monthLabel } from './dates';
 
 describe('dates', () => {
 	it('shortens dates for display, keeping the year only when it differs from today', () => {
@@ -31,5 +31,15 @@ describe('dates', () => {
 		expect(isoDateInZone(instant, 'America/New_York')).toBe('2026-09-04');
 		expect(isoDateInZone(instant, 'UTC')).toBe('2026-09-05');
 		expect(todayIso('America/New_York')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+	});
+});
+
+describe('daysBetween', () => {
+	it('is signed, whole days, and dayDistance ignores order', () => {
+		expect(daysBetween('2026-09-01', '2026-09-04')).toBe(3);
+		expect(daysBetween('2026-09-04', '2026-09-01')).toBe(-3);
+		expect(daysBetween('2026-02-28', '2026-03-01')).toBe(1);
+		expect(dayDistance('2026-09-04', '2026-09-01')).toBe(3);
+		expect(dayDistance('2026-09-01', '2026-09-01')).toBe(0);
 	});
 });

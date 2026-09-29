@@ -10,6 +10,7 @@ import { accruing, interestEstimates, monthsLeft } from '../debt/interest';
 import { project, type Strategy, type Projection } from '../debt/projection';
 import { debtTrend, type TrendRow } from '../debt/trend';
 import { budgetStart } from '../settings';
+import { NotFoundError } from '../ledger/errors';
 
 export type DebtRow = {
 	id: number; name: string; type: string; owed: number; asOf: string | null; accruing: number;
@@ -46,7 +47,7 @@ export function debtView(db: DbOrTx, opts: { periodId: number | null; todayIso: 
 	const currentId = currentPeriodId(db, opts.cadence, opts.todayIso);
 	const periodId = opts.periodId ?? currentId;
 	const period = db.select().from(periods).where(eq(periods.id, periodId)).get();
-	if (!period) throw new Error(`period ${periodId} not found`);
+	if (!period) throw new NotFoundError(`period ${periodId} not found`);
 	const all = db.select({ id: periods.id, label: periods.label }).from(periods).orderBy(asc(periods.startDate)).all();
 	const periodsPerMonth = opts.cadence === 'semi_monthly' ? 2 : 1;
 	const start = budgetStart(db);

@@ -15,6 +15,18 @@ export function addDays(iso: string, n: number): string {
 	return isoDate(d);
 }
 
+const MS_PER_DAY = 86_400_000;
+
+/** Whole days from `a` to `b` (negative when `b` is earlier). */
+export function daysBetween(a: string, b: string): number {
+	return Math.round((parseIso(b).getTime() - parseIso(a).getTime()) / MS_PER_DAY);
+}
+
+/** Whole days between two dates regardless of order. */
+export function dayDistance(a: string, b: string): number {
+	return Math.abs(daysBetween(a, b));
+}
+
 export function endOfMonth(iso: string): string {
 	const d = parseIso(iso);
 	return isoDate(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)));

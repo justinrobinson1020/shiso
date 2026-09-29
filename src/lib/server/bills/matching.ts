@@ -3,10 +3,10 @@ import { alias } from 'drizzle-orm/sqlite-core';
 import type { DbOrTx } from '../db';
 import { bills, billOccurrences, billOccurrenceTransactions, incomeSources, incomeOccurrences, transactions } from '../db/schema';
 import { getTransaction, setSplits } from '../ledger/transactions';
-import { addDays, nowIso, parseIso } from '$lib/dates';
+import { addDays, dayDistance, nowIso } from '$lib/dates';
+import { NotFoundError } from '../ledger/errors';
 
 const touch = () => ({ updatedAt: nowIso() });
-const dayDiff = (a: string, b: string) => Math.abs((parseIso(a).getTime() - parseIso(b).getTime()) / 86_400_000);
 
 export function patternMatches(pattern: string | null, payee: string, payeeRaw: string): boolean {
 	if (!pattern) return true;
@@ -70,7 +70,7 @@ export function matchBillOccurrences(db: DbOrTx, todayIso: string): { matched: n
 		const tol = tolerance(o.expectedAmount, b.toleranceAbs, b.tolerancePct);
 		const cands = rows
 			.filter((r) => Math.abs(-r.t.amount - o.expectedAmount) <= tol && patternMatches(b.matchPattern, r.t.payee, r.t.payeeRaw))
-			.map((r) => ({ id: r.t.id, amount: -r.t.amount, dAmt: Math.abs(-r.t.amount - o.expectedAmount), dDate: dayDiff(r.t.postedDate, o.dueDate) }))
+			.map((r) => ({ id: r.t.id, amount: -r.t.amount, dAmt: Math.abs(-r.t.amount - o.expectedAmount), dDate: dayDistance(r.t.postedDate, o.dueDate) }))
 			.sort((x, y) => x.dAmt - y.dAmt || x.dDate - y.dDate || x.id - y.id);
 		if (cands.length === 0) continue;
 		if (cands.length > 1 && cands[0].dAmt === cands[1].dAmt && cands[0].dDate === cands[1].dDate) {
@@ -103,7 +103,7 @@ export function matchIncomeOccurrences(db: DbOrTx, todayIso: string): { matched:
 				gte(transactions.postedDate, o.windowStart), lte(transactions.postedDate, o.windowEnd)))
 			.all()
 			.filter((t) => !used.has(t.id) && Math.abs(t.amount - o.expectedAmount) <= tol && patternMatches(s.matchPattern, t.payee, t.payeeRaw))
-			.sort((x, y) => Math.abs(x.amount - o.expectedAmount) - Math.abs(y.amount - o.expectedAmount) || dayDiff(x.postedDate, o.dueDate) - dayDiff(y.postedDate, o.dueDate) || x.id - y.id);
+			.sort((x, y) => Math.abs(x.amount - o.expectedAmount) - Math.abs(y.amount - o.expectedAmount) || dayDistance(x.postedDate, o.dueDate) - dayDistance(y.postedDate, o.dueDate) || x.id - y.id);
 		if (cands.length === 0) continue;
 		const best = cands[0];
 		used.add(best.id);
@@ -127,7 +127,7 @@ export function markOverdue(db: DbOrTx, todayIso: string, graceDays: number): nu
 
 export function markOccurrencePaid(db: DbOrTx, occurrenceId: number, opts: { transactionId?: number | null; amount?: number | null } = {}): void {
 	const o = db.select().from(billOccurrences).where(eq(billOccurrences.id, occurrenceId)).get();
-	if (!o) throw new Error(`occurrence ${occurrenceId} not found`);
+	if (!o) throw new NotFoundError(`occurrence ${occurrenceId} not found`);
 	db.transaction((tx) => {
 		let paid = opts.amount ?? o.expectedAmount;
 		if (opts.transactionId != null) {
@@ -156,7 +156,7 @@ export function skipOccurrence(db: DbOrTx, occurrenceId: number): void {
 
 export function markIncomeReceived(db: DbOrTx, occurrenceId: number, opts: { transactionId?: number | null; amount?: number | null } = {}): void {
 	const o = db.select().from(incomeOccurrences).where(eq(incomeOccurrences.id, occurrenceId)).get();
-	if (!o) throw new Error(`income occurrence ${occurrenceId} not found`);
+	if (!o) throw new NotFoundError(`income occurrence ${occurrenceId} not found`);
 	const received = opts.amount ?? (opts.transactionId != null ? getTransaction(db, opts.transactionId).amount : o.expectedAmount);
 	db.update(incomeOccurrences).set({ status: 'paid', receivedAmount: received, transactionId: opts.transactionId ?? null, markedBy: 'manual', ...touch() }).where(eq(incomeOccurrences.id, occurrenceId)).run();
 }

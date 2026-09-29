@@ -24,6 +24,17 @@ function required(env: Record<string, string | undefined>, key: string): string 
 	return v;
 }
 
+const CADENCES = ['semi_monthly', 'monthly'] as const satisfies readonly Cadence[];
+const PLAID_ENVS = ['sandbox', 'production'] as const;
+
+function oneOf<T extends string>(env: Record<string, string | undefined>, key: string, allowed: readonly T[], fallback: T): T {
+	const raw = env[key];
+	if (raw === undefined || raw === '') return fallback;
+	const match = allowed.find((a) => a === raw);
+	if (!match) throw new Error(`${key} must be one of ${allowed.join(', ')}, got ${JSON.stringify(raw)}`);
+	return match;
+}
+
 function hour(env: Record<string, string | undefined>, key: string, fallback: number): number {
 	const raw = env[key];
 	if (raw === undefined || raw === '') return fallback;
@@ -45,9 +56,9 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
 	const backupDir = required(env, 'SHISO_BACKUP_DIR');
 	const appKey = required(env, 'SHISO_APP_KEY');
 	if (appKey.length < 32) throw new Error('SHISO_APP_KEY must be at least 32 characters');
-	const cadence = (env.SHISO_CADENCE ?? 'semi_monthly') as Cadence;
-	if (cadence !== 'semi_monthly' && cadence !== 'monthly') throw new Error(`SHISO_CADENCE must be semi_monthly or monthly`);
-	const plaidEnv = (env.PLAID_ENV ?? 'sandbox') as 'sandbox' | 'production';
+	const cadence = oneOf(env, 'SHISO_CADENCE', CADENCES, 'semi_monthly');
+	// An unknown PLAID_ENV would otherwise reach the SDK as an undefined base path, which it resolves to production.
+	const plaidEnv = oneOf(env, 'PLAID_ENV', PLAID_ENVS, 'sandbox');
 	const timeZone = env.SHISO_TZ ?? 'America/New_York';
 	try {
 		new Intl.DateTimeFormat('en-CA', { timeZone });

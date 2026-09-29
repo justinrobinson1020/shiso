@@ -1,4 +1,4 @@
-import { cents, isoDate, ValidationError } from '$lib/server/http';
+import { cents, isoDate, str, ValidationError, int } from '$lib/server/http';
 import { getDb } from '$lib/server/db/instance';
 import { getConfig } from '$lib/server/config';
 import { generateOccurrences } from '$lib/server/bills/schedule';
@@ -9,6 +9,8 @@ import { BILL_CADENCES, type BillCadence } from '$lib/server/db/schema';
 export type ScheduleFields = { cadence: BillCadence; dueDay: number | null; dueDay2: number | null; interval: number | null; anchorDate: string | null };
 
 /** Validate the cadence fields of a bill or income body. `partial` allows omitting cadence (patch); when cadence is present its companions are checked. */
+export function scheduleFields(b: Record<string, unknown>, partial: false): ScheduleFields;
+export function scheduleFields(b: Record<string, unknown>, partial: true): Partial<ScheduleFields>;
 export function scheduleFields(b: Record<string, unknown>, partial: boolean): Partial<ScheduleFields> {
 	const out: Partial<ScheduleFields> = {};
 	if (b.cadence === undefined) {
@@ -18,7 +20,7 @@ export function scheduleFields(b: Record<string, unknown>, partial: boolean): Pa
 	if (!(BILL_CADENCES as readonly string[]).includes(String(b.cadence))) throw new ValidationError('cadence is invalid');
 	const cadence = b.cadence as BillCadence;
 	const day = (k: string) => {
-		const v = cents(b[k], k);
+		const v = int(b[k], k);
 		if (v < 1 || v > 31) throw new ValidationError(`${k} must be 1-31`);
 		return v;
 	};
@@ -26,7 +28,7 @@ export function scheduleFields(b: Record<string, unknown>, partial: boolean): Pa
 	if (cadence === 'monthly') out.dueDay = day('dueDay');
 	if (cadence === 'semi_monthly') { out.dueDay = day('dueDay'); out.dueDay2 = day('dueDay2'); }
 	if (cadence === 'every_n_weeks') {
-		out.interval = cents(b.interval, 'interval');
+		out.interval = int(b.interval, 'interval');
 		if (out.interval < 1) throw new ValidationError('interval must be >= 1');
 		out.anchorDate = isoDate(b.anchorDate, 'anchorDate');
 	}
@@ -38,21 +40,23 @@ export function scheduleFields(b: Record<string, unknown>, partial: boolean): Pa
 export function settleField(b: Record<string, unknown>, partial: boolean): { settleBusinessDays?: number | null } {
 	if (b.settleBusinessDays === undefined) return partial ? {} : { settleBusinessDays: null };
 	if (b.settleBusinessDays === null || b.settleBusinessDays === '') return { settleBusinessDays: null };
-	const v = cents(b.settleBusinessDays, 'settleBusinessDays');
+	const v = int(b.settleBusinessDays, 'settleBusinessDays');
 	if (v < 0 || v > 10) throw new ValidationError('settleBusinessDays must be 0-10');
 	return { settleBusinessDays: v === 0 ? null : v };
 }
 
-export function commonFields(b: Record<string, unknown>, partial: boolean) {
-	const out: Record<string, unknown> = {};
-	if (b.name !== undefined || !partial) {
-		if (typeof b.name !== 'string' || !b.name.trim()) throw new ValidationError('name is required');
-		out.name = b.name.trim();
-	}
-	if (b.categoryId !== undefined || !partial) out.categoryId = cents(b.categoryId, 'categoryId');
+export type CommonFields = { name: string; categoryId: number; expectedAmount: number; toleranceAbs?: number; tolerancePct?: number; matchPattern?: string | null };
+
+/** Validate the fields a bill and an income source share. `partial` (patch) skips the required ones. */
+export function commonFields(b: Record<string, unknown>, partial: false): CommonFields;
+export function commonFields(b: Record<string, unknown>, partial: true): Partial<CommonFields>;
+export function commonFields(b: Record<string, unknown>, partial: boolean): Partial<CommonFields> {
+	const out: Partial<CommonFields> = {};
+	if (b.name !== undefined || !partial) out.name = str(b.name, 'name');
+	if (b.categoryId !== undefined || !partial) out.categoryId = int(b.categoryId, 'categoryId');
 	if (b.expectedAmount !== undefined || !partial) out.expectedAmount = cents(b.expectedAmount, 'expectedAmount');
 	if (b.toleranceAbs !== undefined) out.toleranceAbs = cents(b.toleranceAbs, 'toleranceAbs');
-	if (b.tolerancePct !== undefined) out.tolerancePct = cents(b.tolerancePct, 'tolerancePct');
+	if (b.tolerancePct !== undefined) out.tolerancePct = int(b.tolerancePct, 'tolerancePct');
 	if (b.matchPattern !== undefined) out.matchPattern = b.matchPattern === null ? null : String(b.matchPattern);
 	return out;
 }

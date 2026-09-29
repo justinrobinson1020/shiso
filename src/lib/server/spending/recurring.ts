@@ -1,4 +1,4 @@
-import { addDays } from '$lib/dates';
+import { addDays, daysBetween } from '$lib/dates';
 import { median } from './stats';
 
 /** P3 §3.3. Charges are positive spending in cents. */
@@ -13,7 +13,6 @@ export const CADENCES: { key: CadenceKey; days: number; band: [number, number]; 
 ];
 export type Recurring = { payee: string; cadence: CadenceKey; count: number; typical: number; last: string; next: string; overdue: boolean; covered: boolean; monthlyCost: number; matched: number; intervals: number };
 
-const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 
 export function detectRecurring(charges: Charge[], opts: { todayIso: string; isCovered: (payee: string) => boolean; graceDays?: number }): Recurring[] {
 	const grace = opts.graceDays ?? 5;

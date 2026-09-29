@@ -4,7 +4,7 @@ import type { DbOrTx } from '../db';
 import { transactions, transactionSplits, type TransactionSource } from '../db/schema';
 import { periodIdForDate } from '../budget/periods';
 import { systemCategoryId, uncategorizedId } from './categories';
-import { InvariantError } from './errors';
+import { InvariantError, NotFoundError } from './errors';
 import { nowIso } from '$lib/dates';
 
 export type SplitInput = { categoryId: number; amount: number; memo?: string | null };
@@ -27,6 +27,21 @@ export type NewTransaction = {
 };
 
 const touch = () => ({ updatedAt: nowIso() });
+
+/**
+ * The synthetic plug that makes an account's ledger start at its real balance: one Reconciliation split,
+ * already processed so transfer detection and payee rules never touch it. Throws `DUPLICATE_EXTERNAL_ID`
+ * when a (possibly soft-deleted) opening row already owns the account's `opening` external id.
+ */
+export function createOpeningRow(db: DbOrTx, input: { accountId: number; postedDate: string; amount: number }): number {
+	const id = createTransaction(db, {
+		accountId: input.accountId, externalId: 'opening', postedDate: input.postedDate, amount: input.amount,
+		payeeRaw: 'Opening balance', payee: 'Opening balance', source: 'opening',
+		splits: [{ categoryId: systemCategoryId(db, 'reconciliation'), amount: input.amount }]
+	});
+	markProcessed(db, [id]);
+	return id;
+}
 
 function assertSplitsSum(amount: number, splits: SplitInput[]): void {
 	if (splits.length === 0) throw new InvariantError('SPLITS_DO_NOT_SUM', 'a transaction needs at least one split');
@@ -82,14 +97,14 @@ export function createTransaction(db: DbOrTx, input: NewTransaction): number {
 
 export function getTransaction(db: DbOrTx, id: number) {
 	const row = db.select().from(transactions).where(eq(transactions.id, id)).get();
-	if (!row) throw new Error(`transaction ${id} not found`);
+	if (!row) throw new NotFoundError(`transaction ${id} not found`);
 	const splits = db.select().from(transactionSplits).where(eq(transactionSplits.transactionId, id)).all();
 	return { ...row, splits };
 }
 
 export function setSplits(db: DbOrTx, transactionId: number, splits: SplitInput[]): void {
 	const row = db.select({ amount: transactions.amount }).from(transactions).where(eq(transactions.id, transactionId)).get();
-	if (!row) throw new Error(`transaction ${transactionId} not found`);
+	if (!row) throw new NotFoundError(`transaction ${transactionId} not found`);
 	assertSplitsSum(row.amount, splits);
 	db.transaction((tx) => {
 		tx.delete(transactionSplits).where(eq(transactionSplits.transactionId, transactionId)).run();
@@ -113,7 +128,7 @@ export function setMemo(db: DbOrTx, transactionId: number, memo: string | null):
 export function linkTransfer(db: DbOrTx, aId: number, bId: number): void {
 	const a = db.select().from(transactions).where(eq(transactions.id, aId)).get();
 	const b = db.select().from(transactions).where(eq(transactions.id, bId)).get();
-	if (!a || !b) throw new Error('transfer: transaction not found');
+	if (!a || !b) throw new NotFoundError('transfer: transaction not found');
 	if (a.transferPeerId != null || b.transferPeerId != null) throw new InvariantError('TRANSFER_ALREADY_LINKED');
 	if (a.accountId === b.accountId || a.amount !== -b.amount) throw new InvariantError('TRANSFER_NOT_OPPOSITE');
 	const transferCat = systemCategoryId(db, 'transfer');
@@ -175,7 +190,7 @@ export function flagForReview(db: DbOrTx, id: number, reason: string): void {
 
 export function clearReview(db: DbOrTx, id: number): void {
 	const row = db.select({ id: transactions.id }).from(transactions).where(eq(transactions.id, id)).get();
-	if (!row) throw new Error(`transaction ${id} not found`);
+	if (!row) throw new NotFoundError(`transaction ${id} not found`);
 	db.update(transactions).set({ needsReview: false, reviewReason: null, ...touch() }).where(eq(transactions.id, id)).run();
 }
 
@@ -192,7 +207,7 @@ export type TransactionPatch = {
 /** Spec §5.6: provider modifications touch amount, dates, pending, raw payee, provider category. */
 export function updateTransaction(db: DbOrTx, id: number, patch: TransactionPatch): { amountChanged: boolean; flagged: boolean } {
 	const row = db.select().from(transactions).where(eq(transactions.id, id)).get();
-	if (!row) throw new Error(`transaction ${id} not found`);
+	if (!row) throw new NotFoundError(`transaction ${id} not found`);
 	const amountChanged = patch.amount !== undefined && patch.amount !== row.amount;
 	return db.transaction((tx) => {
 		const set: Partial<typeof transactions.$inferInsert> = { ...touch() };
@@ -232,7 +247,7 @@ export function createManualTransaction(db: DbOrTx, input: {
 /** Only rows the user created (manual entry or CSV import) can be deleted by the user; synced rows are the provider's. */
 export function deleteUserTransaction(db: DbOrTx, id: number): void {
 	const row = db.select({ source: transactions.source }).from(transactions).where(eq(transactions.id, id)).get();
-	if (!row) throw new Error(`transaction ${id} not found`);
+	if (!row) throw new NotFoundError(`transaction ${id} not found`);
 	if (row.source !== 'manual' && row.source !== 'import') throw new InvariantError('NOT_USER_ROW');
 	softDelete(db, id, 'user_deleted');
 }

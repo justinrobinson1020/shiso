@@ -26,6 +26,7 @@ export type PlaidClientLike = {
 	accountsBalanceGet(req: { access_token: string }): Promise<{ data: { accounts: PlaidAccount[] } }>;
 	linkTokenCreate(req: LinkTokenCreateRequest): Promise<{ data: { link_token: string } }>;
 	itemPublicTokenExchange(req: { public_token: string }): Promise<{ data: { access_token: string; item_id: string } }>;
+	itemRemove(req: { access_token: string }): Promise<unknown>;
 };
 
 export const RELINK_CODES = ['ITEM_LOGIN_REQUIRED', 'INVALID_CREDENTIALS', 'ITEM_NOT_FOUND', 'ACCESS_NOT_GRANTED', 'INVALID_ACCESS_TOKEN'];
@@ -57,11 +58,14 @@ const bps = (pct: number | null | undefined): number | null => (pct == null ? nu
 function mapAccount(a: PlaidAccount): BatchAccount {
 	return { externalId: a.account_id, name: a.name, officialName: a.official_name ?? null, mask: a.mask ?? null, type: mapPlaidAccountType(a.type, a.subtype) };
 }
-function mapBalance(a: PlaidAccount, asOf: string): BatchBalance {
+/** Null when Plaid reports no current balance: a zero here would be stored as a real balance and skew the opening plug. */
+function mapBalance(a: PlaidAccount, asOf: string): BatchBalance | null {
+	const reported = cents(a.balances.current);
+	if (reported == null) return null;
 	const owed = a.type === 'credit' || a.type === 'loan';
-	const current = cents(a.balances.current) ?? 0;
-	return { accountExternalId: a.account_id, asOf, current: owed ? -current : current, available: cents(a.balances.available), creditLimit: cents(a.balances.limit) };
+	return { accountExternalId: a.account_id, asOf, current: owed ? -reported : reported, available: cents(a.balances.available), creditLimit: cents(a.balances.limit) };
 }
+const mapBalances = (accounts: PlaidAccount[], asOf: string): BatchBalance[] => accounts.flatMap((a) => mapBalance(a, asOf) ?? []);
 function mapTransaction(t: PlaidTransaction): BatchTransaction {
 	return {
 		accountExternalId: t.account_id, externalId: t.transaction_id, pendingExternalId: t.pending_transaction_id ?? null,
@@ -114,7 +118,7 @@ export class PlaidProvider implements SyncProvider {
 		if (input.mode === 'balances') {
 			let accounts: PlaidAccount[];
 			try { accounts = (await this.client.accountsBalanceGet({ access_token })).data.accounts; } catch (err) { throw toProviderError(err); }
-			return { accounts: accounts.map(mapAccount), balances: accounts.map((a) => mapBalance(a, input.todayIso)), terms: [], added: [], modified: [], removed: [], nextCursor: input.cursor, sendsRemovals: true, coversFrom: null };
+			return { accounts: accounts.map(mapAccount), balances: mapBalances(accounts, input.todayIso), terms: [], added: [], modified: [], removed: [], nextCursor: input.cursor, sendsRemovals: true, coversFrom: null };
 		}
 
 		// Fetch every page before applying anything (§5.2); restart from the run-start cursor on mutation.
@@ -149,7 +153,7 @@ export class PlaidProvider implements SyncProvider {
 		const accounts = [...accountsById.values()];
 		return {
 			accounts: accounts.map(mapAccount),
-			balances: accounts.map((a) => mapBalance(a, input.todayIso)),
+			balances: mapBalances(accounts, input.todayIso),
 			terms,
 			added: pages.flatMap((p) => p.added.map(mapTransaction)),
 			modified: pages.flatMap((p) => p.modified.map(mapTransaction)),
@@ -192,4 +196,10 @@ export async function exchangePublicToken(client: PlaidClientLike, publicToken: 
 		const { data } = await client.itemPublicTokenExchange({ public_token: publicToken });
 		return { accessToken: data.access_token, itemId: data.item_id };
 	} catch (err) { throw toProviderError(err); }
+}
+
+/** Best-effort revoke of an Item whose access token we could not persist. Never throws: the caller is already handling a failure. */
+export async function removeItem(client: PlaidClientLike, accessToken: string): Promise<void> {
+	try { await client.itemRemove({ access_token: accessToken }); }
+	catch (err) { console.error(`[shiso] plaid item revoke failed; remove the orphaned item in the Plaid dashboard: ${toProviderError(err).message}`); }
 }

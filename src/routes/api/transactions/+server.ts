@@ -1,4 +1,4 @@
-import { handle, readJson, cents, isoDate, ValidationError } from '$lib/server/http';
+import { handle, readJson, cents, isoDate, ValidationError, int } from '$lib/server/http';
 import { getDb } from '$lib/server/db/instance';
 import { createManualTransaction } from '$lib/server/ledger/transactions';
 
@@ -8,12 +8,12 @@ export const POST = handle(async ({ request }) => {
 	try {
 		return {
 			id: createManualTransaction(getDb(), {
-				accountId: cents(b.accountId, 'accountId'),
+				accountId: int(b.accountId, 'accountId'),
 				postedDate: isoDate(b.postedDate, 'postedDate'),
 				amount: cents(b.amount, 'amount'),
 				payee: b.payee.trim(),
 				memo: b.memo ?? null,
-				categoryId: b.categoryId == null ? null : cents(b.categoryId, 'categoryId')
+				categoryId: b.categoryId == null ? null : int(b.categoryId, 'categoryId')
 			})
 		};
 	} catch (err) {

@@ -5,7 +5,7 @@ import {
 	CASH_TYPES, type AccountType, type ConnectionStatus, type Provider
 } from '../db/schema';
 import { encryptSecret, decryptSecret } from './crypto';
-import { InvariantError } from '../ledger/errors';
+import { InvariantError, NotFoundError } from '../ledger/errors';
 import { nowIso } from '$lib/dates';
 
 const touch = () => ({ updatedAt: nowIso() });
@@ -27,7 +27,7 @@ export function setCredential(db: DbOrTx, connectionId: number, credential: stri
 
 export function getCredential(db: DbOrTx, connectionId: number, appKey: string): string | null {
 	const row = db.select({ enc: connections.credentialEnc }).from(connections).where(eq(connections.id, connectionId)).get();
-	if (!row) throw new Error(`connection ${connectionId} not found`);
+	if (!row) throw new NotFoundError(`connection ${connectionId} not found`);
 	return row.enc ? decryptSecret(appKey, row.enc) : null;
 }
 
@@ -44,7 +44,7 @@ export function recordConnectionSuccess(db: DbOrTx, connectionId: number, cursor
 
 export function getConnection(db: DbOrTx, connectionId: number) {
 	const row = db.select().from(connections).where(eq(connections.id, connectionId)).get();
-	if (!row) throw new Error(`connection ${connectionId} not found`);
+	if (!row) throw new NotFoundError(`connection ${connectionId} not found`);
 	return row;
 }
 
@@ -91,7 +91,7 @@ const DEBT_TYPES: readonly string[] = ['credit', 'loan'];
 
 export function updateAccount(db: DbOrTx, id: number, patch: { name?: string; type?: AccountType; onBudget?: boolean; closedAt?: string | null; openedOn?: string | null }): void {
 	const row = db.select().from(accounts).where(eq(accounts.id, id)).get();
-	if (!row) throw new Error(`account ${id} not found`);
+	if (!row) throw new NotFoundError(`account ${id} not found`);
 	const set: Partial<typeof accounts.$inferInsert> = { ...touch() };
 	if (patch.name !== undefined) set.name = patch.name;
 	if (patch.onBudget !== undefined) set.onBudget = patch.onBudget;

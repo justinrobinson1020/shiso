@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { openMemoryDatabase, type Db } from '../db';
+import { type Db } from '../db';
+import { openMemoryDatabase } from '../test/memory-db';
 import { eq } from 'drizzle-orm';
 import { accounts, billOccurrences, bills, connections, incomeOccurrences, periods } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId } from '../ledger/categories';

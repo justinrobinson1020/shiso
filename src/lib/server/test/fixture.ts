@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { openMemoryDatabase, type Db } from '../db';
+import { type Db } from '../db';
+import { openMemoryDatabase } from './memory-db';
 import { categoryGroups } from '../db/schema';
 import { seedDefaultCategories, createCategory, systemCategoryId, uncategorizedId } from '../ledger/categories';
 import { ensurePeriods } from '../budget/periods';

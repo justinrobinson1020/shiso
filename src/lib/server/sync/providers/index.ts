@@ -29,12 +29,9 @@ export function buildSyncDeps(config: Config): SyncDeps {
 	return { providers: buildProviders(config), appKey: config.appKey, cadence: config.cadence, timeZone: config.timeZone };
 }
 
-let override: SyncDeps | null = null;
 let cached: SyncDeps | null = null;
-export function setSyncDepsForTests(deps: SyncDeps | null): void { override = deps; cached = null; }
-/** The process-wide sync dependencies: the test override if set, otherwise built once from `getConfig()`. */
+/** The process-wide sync dependencies, built once from `getConfig()`. */
 export function syncDeps(): SyncDeps {
-	if (override) return override;
 	if (!cached) cached = buildSyncDeps(getConfig());
 	return cached;
 }

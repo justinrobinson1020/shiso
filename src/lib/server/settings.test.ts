@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { openMemoryDatabase } from './db';
+import { openMemoryDatabase } from './test/memory-db';
 import { getSetting, setSetting } from './settings';
 
 describe('settings', () => {
@@ -8,7 +8,7 @@ describe('settings', () => {
 		expect(getSetting(db, 'grace_days', 3)).toBe(3);
 		setSetting(db, 'grace_days', 5);
 		expect(getSetting(db, 'grace_days', 3)).toBe(5);
-		setSetting(db, 'map', { a: 1 });
-		expect(getSetting<Record<string, number>>(db, 'map', {})).toEqual({ a: 1 });
+		setSetting(db, 'provider_category_map', { a: 1 });
+		expect(getSetting(db, 'provider_category_map', {})).toEqual({ a: 1 });
 	});
 });

@@ -1,7 +1,7 @@
 import { asc, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { categories, categoryTargets, periods, type TargetKind } from '../db/schema';
-import { InvariantError } from '../ledger/errors';
+import { InvariantError, NotFoundError } from '../ledger/errors';
 import { assign, assignmentsForPeriod, assertBudgetPeriod } from '../ledger/assignments';
 import { budgetForPeriod } from './load';
 import { NO_ENVELOPE_KINDS } from './envelope';
@@ -34,7 +34,7 @@ export function targetStatus(t: Target, cell: { assigned: number; available: num
 /** Periods from `periodId` through the one containing `date`, inclusive; 1 when the date is in or before the period. Walks the cadence, not the table, which only extends one period ahead. */
 export function periodsThrough(db: DbOrTx, periodId: number, date: string, cadence: Cadence): number {
 	const p = db.select().from(periods).where(eq(periods.id, periodId)).get();
-	if (!p) throw new Error(`period ${periodId} not found`);
+	if (!p) throw new NotFoundError(`period ${periodId} not found`);
 	let n = 1, cur = periodBoundsFor(cadence, p.startDate);
 	while (date > cur.endDate) { cur = periodBoundsFor(cadence, nextPeriodStart(cadence, cur.endDate)); n++; }
 	return n;
@@ -50,7 +50,7 @@ const touch = () => ({ updatedAt: nowIso() });
 
 export function setTarget(db: DbOrTx, categoryId: number, t: Target): void {
 	const c = db.select({ kind: categories.kind }).from(categories).where(eq(categories.id, categoryId)).get();
-	if (!c) throw new Error(`category ${categoryId} not found`);
+	if (!c) throw new NotFoundError(`category ${categoryId} not found`);
 	if (NO_ENVELOPE_KINDS.has(c.kind)) throw new InvariantError('TARGET_NO_ENVELOPE');
 	if (!Number.isInteger(t.amount) || t.amount <= 0) throw new InvariantError('TARGET_AMOUNT_NOT_POSITIVE');
 	if (t.kind === 'by_date' ? t.targetDate == null : t.targetDate != null) throw new InvariantError('TARGET_DATE_MISMATCH');

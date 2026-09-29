@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { openMemoryDatabase, type Db } from '../db';
+import { type Db } from '../db';
+import { openMemoryDatabase } from '../test/memory-db';
 import { accounts, connections, transactions, transactionSplits } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, uncategorizedId, systemCategoryId } from './categories';
 import { ensurePeriods, periodIdForDate } from '../budget/periods';

@@ -66,11 +66,3 @@ export function openDatabase(opts: {
 		throw err;
 	}
 }
-
-export function openMemoryDatabase(migrationsFolder = DEFAULT_MIGRATIONS) {
-	const sqlite = new Database(':memory:');
-	sqlite.pragma('foreign_keys = ON');
-	const db = drizzle({ client: sqlite, schema });
-	migrate(db, { migrationsFolder });
-	return { db, sqlite };
-}

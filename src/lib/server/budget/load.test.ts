@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { openMemoryDatabase } from '../db';
+import { openMemoryDatabase } from '../test/memory-db';
 import { accounts, accountBalances, connections } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId } from '../ledger/categories';
 import { createTransaction, linkTransfer, softDelete } from '../ledger/transactions';

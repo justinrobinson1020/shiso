@@ -1,7 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { accounts, categories, categoryGroups, type CategoryKind } from '../db/schema';
-import { InvariantError } from './errors';
+import { InvariantError, NotFoundError } from './errors';
 import { nowIso } from '$lib/dates';
 
 export function createGroup(db: DbOrTx, name: string, sort = 0): number {
@@ -46,7 +46,7 @@ export function updateCategory(db: DbOrTx, id: number, patch: {
 	name?: string; kind?: CategoryKind; accountId?: number | null; hidden?: boolean; groupId?: number; sort?: number;
 }): void {
 	const row = db.select().from(categories).where(eq(categories.id, id)).get();
-	if (!row) throw new Error(`category ${id} not found`);
+	if (!row) throw new NotFoundError(`category ${id} not found`);
 	const set: Partial<typeof categories.$inferInsert> = { ...touch() };
 	if (patch.name !== undefined) set.name = patch.name;
 	if (patch.hidden !== undefined) set.hidden = patch.hidden;

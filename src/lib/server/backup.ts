@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type Database from 'better-sqlite3';
 const DATED = /^shiso-(\d{4}-\d{2}-\d{2})\.db$/;
@@ -6,8 +6,16 @@ const DATED = /^shiso-(\d{4}-\d{2}-\d{2})\.db$/;
 export function backupDatabase(sqlite: Database.Database, dir: string, todayIso: string): string {
 	mkdirSync(dir, { recursive: true });
 	const path = join(dir, `shiso-${todayIso}.db`);
-	if (existsSync(path)) rmSync(path);
-	sqlite.exec(`VACUUM INTO '${path.replace(/'/g, "''")}'`);
+	// Snapshot beside the target and rename over it, so a failed VACUUM never costs the day's existing backup.
+	const partial = `${path}.partial`;
+	rmSync(partial, { force: true });
+	try {
+		sqlite.exec(`VACUUM INTO '${partial.replace(/'/g, "''")}'`);
+		renameSync(partial, path);
+	} catch (err) {
+		rmSync(partial, { force: true });
+		throw err;
+	}
 	return path;
 }
 export function pruneBackups(dir: string, keep: number): string[] {

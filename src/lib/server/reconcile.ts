@@ -2,23 +2,24 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { DbOrTx } from './db';
 import { accounts, transactions, CASH_TYPES } from './db/schema';
 import { latestBalance } from './sync/connections';
-import { getSetting } from './settings';
+import { getSetting, type SettingKey } from './settings';
 import { createTransaction, markProcessed } from './ledger/transactions';
 import { systemCategoryId } from './ledger/categories';
 import { nowIso } from '$lib/dates';
+import { NotFoundError } from './ledger/errors';
 
 export type PendingConvention = 'exclude_pending' | 'include_pending';
-export const PENDING_CONVENTION_KEY = 'pending_convention';
+export const PENDING_CONVENTION_KEY = 'pending_convention' satisfies SettingKey;
 export type Drift = { accountId: number; providerBalance: number | null; ledgerBalance: number; drift: number | null; convention: PendingConvention };
 
 export function conventionFor(db: DbOrTx, account: { id: number; type: string }): PendingConvention {
-	const overrides = getSetting<Record<string, PendingConvention>>(db, PENDING_CONVENTION_KEY, {});
+	const overrides = getSetting(db, PENDING_CONVENTION_KEY, {});
 	return overrides[String(account.id)] ?? ((CASH_TYPES as readonly string[]).includes(account.type) ? 'exclude_pending' : 'include_pending');
 }
 
 export function driftForAccount(db: DbOrTx, accountId: number): Drift {
 	const account = db.select().from(accounts).where(eq(accounts.id, accountId)).get();
-	if (!account) throw new Error(`account ${accountId} not found`);
+	if (!account) throw new NotFoundError(`account ${accountId} not found`);
 	const convention = conventionFor(db, account);
 	const where = convention === 'exclude_pending'
 		? and(eq(transactions.accountId, accountId), isNull(transactions.deletedAt), eq(transactions.pending, false))

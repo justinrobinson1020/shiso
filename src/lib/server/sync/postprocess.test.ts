@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { openMemoryDatabase, type Db } from '../db';
+import { type Db } from '../db';
+import { openMemoryDatabase } from '../test/memory-db';
 import { accounts, connections } from '../db/schema';
 import { seedDefaultCategories, createGroup, createCategory, uncategorizedId, systemCategoryId } from '../ledger/categories';
 import { ensurePeriods } from '../budget/periods';
@@ -26,6 +27,19 @@ beforeEach(() => {
 	groceries = createCategory(db, { groupId: g, name: 'Groceries', kind: 'spending' });
 	dining = createCategory(db, { groupId: g, name: 'Dining', kind: 'spending' });
 	rentCat = createCategory(db, { groupId: createGroup(db, 'Bills'), name: 'Rent', kind: 'bill' });
+});
+
+describe('processUnprocessed atomicity', () => {
+	it('rolls every step back when a later step throws, leaving all rows unprocessed', () => {
+		createPayeeRule(db, { pattern: 'grocer', payee: 'Grocer', categoryId: groceries });
+		setProviderCategoryMap(db, { BROKEN: 999_999 });   // a category that does not exist: the mapping step violates a foreign key
+		const a = mk(card, 'a', -4200, '2026-09-03', 'THE GROCER');
+		mk(card, 'b', -1800, '2026-09-03', 'TACO SPOT', 'BROKEN');
+		expect(() => processUnprocessed(db, { todayIso: TODAY, graceDays: 3, transferWindowDays: 4 })).toThrow();
+		const after = getTransaction(db, a);
+		expect(after.payee).toBe('THE GROCER');
+		expect(after.processedAt).toBeNull();
+	});
 });
 
 describe('processUnprocessed', () => {

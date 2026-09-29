@@ -3,14 +3,13 @@ import type { Db, DbOrTx } from '../db';
 import { accounts, billOccurrenceTransactions, transactions, CASH_TYPES, incomeOccurrences } from '../db/schema';
 import { ensurePeriods, periodBoundsFor, nextPeriodStart, type Cadence } from '../budget/periods';
 import {
-	createTransaction, updateTransaction, softDelete, setReplacedBy, restoreTransaction, setSplits, linkTransfer, unlinkTransfer,
+	createTransaction, createOpeningRow, updateTransaction, softDelete, setReplacedBy, restoreTransaction, setSplits, linkTransfer, unlinkTransfer,
 	clearReview, flagForReview, markProcessed, getTransaction
 } from '../ledger/transactions';
-import { systemCategoryId } from '../ledger/categories';
 import { InvariantError } from '../ledger/errors';
 import { upsertAccount, appendBalance, appendTermsIfChanged, recordConnectionSuccess } from './connections';
 import type { BatchTransaction, FetchMode, SyncBatch } from './types';
-import { compareIso, nowIso, parseIso } from '$lib/dates';
+import { compareIso, dayDistance, nowIso } from '$lib/dates';
 
 export const PENDING_HEURISTIC_DAYS = 3;
 
@@ -21,10 +20,6 @@ export type ApplyResult = {
 };
 
 type AcctInfo = { id: number; type: string; hadTransactions: boolean };
-
-function dayDiff(a: string, b: string): number {
-	return Math.abs((parseIso(a).getTime() - parseIso(b).getTime()) / 86_400_000);
-}
 
 function liveByExternal(tx: DbOrTx, accountId: number, externalId: string) {
 	return tx.select().from(transactions)
@@ -128,7 +123,7 @@ export function applyBatch(db: Db, connectionId: number, batch: SyncBatch, opts:
 					.from(transactions)
 					.where(and(eq(transactions.accountId, a.id), eq(transactions.pending, true), eq(transactions.amount, t.amount), isNull(transactions.deletedAt)))
 					.all()
-					.filter((c) => !batchIds.has(c.externalId) && dayDiff(c.postedDate, t.postedDate) <= PENDING_HEURISTIC_DAYS);
+					.filter((c) => !batchIds.has(c.externalId) && dayDistance(c.postedDate, t.postedDate) <= PENDING_HEURISTIC_DAYS);
 				if (cands.length === 1) inheritFrom = cands[0].id;
 				else if (cands.length > 1) ambiguous = true;
 			}
@@ -147,7 +142,6 @@ export function applyBatch(db: Db, connectionId: number, batch: SyncBatch, opts:
 
 		// 7. Opening balances on an account's first full sync (§5.6 step 1).
 		if (opts.mode === 'full') {
-			const recon = systemCategoryId(tx, 'reconciliation');
 			for (const b of batch.balances) {
 				const a = acct(b.accountExternalId);
 				if (a.hadTransactions) continue;
@@ -155,11 +149,7 @@ export function applyBatch(db: Db, connectionId: number, batch: SyncBatch, opts:
 				const amount = b.current - agg.sum;
 				if (amount === 0) continue;
 				const postedDate = compareIso(agg.earliest, b.asOf) < 0 ? agg.earliest : b.asOf;
-				const id = createTransaction(tx, {
-					accountId: a.id, externalId: 'opening', postedDate, amount, payeeRaw: 'Opening balance', payee: 'Opening balance',
-					source: 'opening', splits: [{ categoryId: recon, amount }]
-				});
-				markProcessed(tx, [id]);
+				createOpeningRow(tx, { accountId: a.id, postedDate, amount });
 				result.openingCreated++;
 				a.hadTransactions = true;
 			}

@@ -17,6 +17,17 @@ describe('backupDatabase', () => {
 		const copy = new Database(p2, { readonly: true }); expect(copy.prepare('select count(*) as n from t').get()).toEqual({ n: 2 }); copy.close(); db.close();
 	});
 });
+describe('backupDatabase failure', () => {
+	it('leaves no partial file and keeps the same-day backup when the snapshot fails', () => {
+		const db = new Database(join(dir, 'live.db')); db.exec('create table t (x); insert into t values (1)');
+		const out = join(dir, 'bk');
+		const good = backupDatabase(db, out, '2026-09-08');
+		const failing = { exec: () => { throw new Error('disk full'); } } as unknown as Database.Database;
+		expect(() => backupDatabase(failing, out, '2026-09-08')).toThrow('disk full');
+		expect(readdirSync(out)).toEqual(['shiso-2026-09-08.db']);
+		const copy = new Database(good, { readonly: true }); expect(copy.prepare('select count(*) as n from t').get()).toEqual({ n: 1 }); copy.close(); db.close();
+	});
+});
 describe('pruneBackups', () => {
 	it('keeps the newest N dated backups and never touches migration snapshots', () => {
 		for (const d of ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04']) writeFileSync(join(dir, `shiso-${d}.db`), '');

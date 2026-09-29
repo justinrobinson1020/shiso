@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { openMemoryDatabase, type Db } from '../db';
+import { type Db } from '../db';
+import { openMemoryDatabase } from '../test/memory-db';
 import { accountBalances, accountTerms, accounts, connections } from '../db/schema';
 import {
 	createConnection, getCredential, setConnectionStatus, recordConnectionSuccess, listActiveConnections,

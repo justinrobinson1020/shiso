@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { openMemoryDatabase, type Db } from '../db';
+import { type Db } from '../db';
+import { openMemoryDatabase } from '../test/memory-db';
 import { seedDefaultCategories, createGroup, createCategory, systemCategoryId } from './categories';
 import { ensurePeriods, periodIdForDate } from '../budget/periods';
 import { assign, moveMoney, assignmentsForPeriod } from './assignments';

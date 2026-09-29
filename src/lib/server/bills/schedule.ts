@@ -4,7 +4,7 @@ import { bills, billOccurrences, billOccurrenceTransactions, incomeSources, inco
 import { ensurePeriods, periodIdForDate, periodBoundsFor, nextPeriodStart, type Cadence } from '../budget/periods';
 import { latestTerms } from '../sync/connections';
 import { lastPaidAmount } from './bills';
-import { addDays, compareIso, endOfMonth, isoDate, parseIso } from '$lib/dates';
+import { addDays, compareIso, dayDistance, endOfMonth, isoDate, parseIso } from '$lib/dates';
 import { landOnBusinessDays } from '$lib/business-days';
 
 export const DEBT_WINDOW_BEFORE = 25;
@@ -80,7 +80,7 @@ export function generateOccurrences(db: DbOrTx, opts: { todayIso: string; cadenc
 		const live = db.select({ d: billOccurrences.dueDate }).from(billOccurrences)
 			.where(and(eq(billOccurrences.billId, b.id), ne(billOccurrences.status, 'skipped'))).all().map((r) => r.d);
 		const half = Math.floor(cycleDays(b) / 2);
-		const cycleTaken = (due: string) => live.some((d) => Math.abs((parseIso(d).getTime() - parseIso(due).getTime()) / 86_400_000) < half);
+		const cycleTaken = (due: string) => live.some((d) => dayDistance(d, due) < half);
 		const terms = b.linkedDebtAccountId != null ? latestTerms(db, b.linkedDebtAccountId) : null;
 		const isDebt = b.linkedDebtAccountId != null;
 		let plan: { due: string; expected: number; statement: number | null; windowStart: string }[];

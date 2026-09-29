@@ -21,15 +21,21 @@ export function startScheduler(opts: {
 	const exprs = cronExpressions(opts.config);
 	const common = { timezone: opts.config.timeZone, noOverlap: true };
 	const full = cron.schedule(exprs.full, async () => {
-		log(`nightly sync: ${summary(await runAllSyncs(opts.db, 'cron', 'full', opts.deps))}`);
+		try { log(`nightly sync: ${summary(await runAllSyncs(opts.db, 'cron', 'full', opts.deps))}`); }
+		catch (err) { log(`nightly sync FAILED: ${err instanceof Error ? err.message : String(err)}`); }
 	}, { ...common, name: 'shiso-full-sync' });
 	const balances = cron.schedule(exprs.balances, async () => {
-		log(`balance refresh: ${summary(await runAllSyncs(opts.db, 'cron', 'balances', opts.deps))}`);
+		try { log(`balance refresh: ${summary(await runAllSyncs(opts.db, 'cron', 'balances', opts.deps))}`); }
+		catch (err) { log(`balance refresh FAILED: ${err instanceof Error ? err.message : String(err)}`); }
 	}, { ...common, name: 'shiso-balance-refresh' });
 	const backup = cron.schedule(exprs.backup, () => {
-		const path = backupDatabase(opts.sqlite, opts.config.backupDir, todayIso(opts.config.timeZone));
-		const pruned = pruneBackups(opts.config.backupDir, opts.config.backupKeep);
-		log(`backup written: ${path}${pruned.length ? `; pruned ${pruned.length}` : ''}`);
+		try {
+			const path = backupDatabase(opts.sqlite, opts.config.backupDir, todayIso(opts.config.timeZone));
+			const pruned = pruneBackups(opts.config.backupDir, opts.config.backupKeep);
+			log(`backup written: ${path}${pruned.length ? `; pruned ${pruned.length}` : ''}`);
+		} catch (err) {
+			log(`backup FAILED: ${err instanceof Error ? err.message : String(err)}`);
+		}
 	}, { ...common, name: 'shiso-backup' });
 	return { stop() { full.destroy(); balances.destroy(); backup.destroy(); } };
 }

@@ -1,4 +1,4 @@
-import { handle, readJson, intParam, cents, ValidationError } from '$lib/server/http';
+import { handle, readJson, intParam, ValidationError, int } from '$lib/server/http';
 import { getDb } from '$lib/server/db/instance';
 import { updateCategory } from '$lib/server/ledger/categories';
 import { CATEGORY_KINDS, type CategoryKind } from '$lib/server/db/schema';
@@ -15,13 +15,13 @@ export const POST = handle(async ({ request, params }) => {
 		if (!(CATEGORY_KINDS as readonly string[]).includes(String(b.kind))) throw new ValidationError('kind is invalid');
 		patch.kind = b.kind as CategoryKind;
 	}
-	if (b.accountId !== undefined) patch.accountId = b.accountId == null ? null : cents(b.accountId, 'accountId');
+	if (b.accountId !== undefined) patch.accountId = b.accountId == null ? null : int(b.accountId, 'accountId');
 	if (b.hidden !== undefined) {
 		if (typeof b.hidden !== 'boolean') throw new ValidationError('hidden must be boolean');
 		patch.hidden = b.hidden;
 	}
-	if (b.groupId !== undefined) patch.groupId = cents(b.groupId, 'groupId');
-	if (b.sort !== undefined) patch.sort = cents(b.sort, 'sort');
+	if (b.groupId !== undefined) patch.groupId = int(b.groupId, 'groupId');
+	if (b.sort !== undefined) patch.sort = int(b.sort, 'sort');
 	updateCategory(getDb(), id, patch);
 	return { ok: true };
 });

@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { budgetAssignments, categories, periods } from '../db/schema';
-import { InvariantError } from './errors';
+import { InvariantError, NotFoundError } from './errors';
 import { nowIso } from '$lib/dates';
 import { NO_ENVELOPE_KINDS } from '../budget/envelope';
 import { budgetStart } from '../settings';
@@ -16,7 +16,7 @@ export function assertBudgetPeriod(db: DbOrTx, periodId: number): void {
 
 function assertHasEnvelope(db: DbOrTx, categoryId: number): void {
 	const c = db.select({ kind: categories.kind }).from(categories).where(eq(categories.id, categoryId)).get();
-	if (!c) throw new Error(`category ${categoryId} not found`);
+	if (!c) throw new NotFoundError(`category ${categoryId} not found`);
 	if (NO_ENVELOPE_KINDS.has(c.kind)) throw new InvariantError('ASSIGN_NO_ENVELOPE');
 }
 

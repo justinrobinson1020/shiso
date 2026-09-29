@@ -2,7 +2,7 @@ import { and, asc, eq, gte, isNull, lte, notInArray, sql, type SQL } from 'drizz
 import type { DbOrTx } from '../db';
 import { accounts, categories, categoryGroups, transactions, transactionSplits, type CategoryKind } from '../db/schema';
 import { periodBoundsFor, nextPeriodStart, type Cadence } from '../budget/periods';
-import { addDays, endOfMonth, startOfMonth, compareIso } from '$lib/dates';
+import { addDays, endOfMonth, startOfMonth, compareIso, daysBetween } from '$lib/dates';
 import { trendTable, type Trends } from '../spending/trends';
 import { findOutliers, type Outlier } from '../spending/outliers';
 
@@ -33,7 +33,6 @@ export type SpendingView = {
 };
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 
 /** First of the month `n` months from `iso`'s month (may be negative). */
 function addMonths(iso: string, n: number): string {

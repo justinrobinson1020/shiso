@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { PlaidProvider, mapPlaidAccountType, plaidErrorCode, createLinkToken, exchangePublicToken, type LiabilitiesData, type PlaidClientLike } from './plaid';
+import { describe, it, expect, vi } from 'vitest';
+import { PlaidProvider, mapPlaidAccountType, plaidErrorCode, createLinkToken, exchangePublicToken, removeItem, type LiabilitiesData, type PlaidClientLike } from './plaid';
 import { ProviderError } from '../types';
 
 type Page = { added?: unknown[]; modified?: unknown[]; removed?: unknown[]; next_cursor: string; has_more: boolean; accounts?: unknown[] };
@@ -23,7 +23,8 @@ function fakeClient(pages: (Page | Error)[], liabilities: LiabilitiesData['liabi
 		async liabilitiesGet() { return { data: { accounts: [], liabilities } }; },
 		async accountsBalanceGet() { return { data: { accounts: [account('a1', 'depository', 'checking', 123.45)] } as never }; },
 		async linkTokenCreate(req) { syncCalls.push({ link: req }); return { data: { link_token: 'link-1' } as never }; },
-		async itemPublicTokenExchange(req) { syncCalls.push({ exchange: req }); return { data: { access_token: 'access-9', item_id: 'item-9' } as never }; }
+		async itemPublicTokenExchange(req) { syncCalls.push({ exchange: req }); return { data: { access_token: 'access-9', item_id: 'item-9' } as never }; },
+		async itemRemove(req) { syncCalls.push({ remove: req }); return {}; }
 	};
 }
 
@@ -131,6 +132,30 @@ describe('PlaidProvider.fetch', () => {
 		expect(b.balances).toEqual([{ accountExternalId: 'a1', asOf: '2026-09-08', current: 12345, available: null, creditLimit: null }]);
 		expect(b.added).toEqual([]);
 		expect(b.nextCursor).toBe('keep');
+	});
+});
+
+describe('null balances', () => {
+	it('omits a balance Plaid reports as null instead of storing zero', async () => {
+		const client = fakeClient([
+			{ accounts: [account('a1', 'depository', 'checking', 10), account('a2', 'depository', 'savings', null as never)], next_cursor: 'c1', has_more: false }
+		]);
+		const b = await new PlaidProvider(client).fetch({ credential: 'access', cursor: null, mode: 'full', todayIso: '2026-09-08' });
+		expect(b.accounts.map((a) => a.externalId)).toEqual(['a1', 'a2']);
+		expect(b.balances.map((x) => x.accountExternalId)).toEqual(['a1']);
+	});
+});
+
+describe('removeItem', () => {
+	it('revokes the item, and swallows a revoke failure', async () => {
+		const client = fakeClient([]);
+		await removeItem(client, 'access-9');
+		expect(client.syncCalls[0]).toEqual({ remove: { access_token: 'access-9' } });
+		const failing = { ...client, itemRemove: async () => { throw plaidErr('ITEM_NOT_FOUND'); } };
+		const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+		await expect(removeItem(failing, 'x')).resolves.toBeUndefined();
+		expect(log).toHaveBeenCalled();
+		log.mockRestore();
 	});
 });
 

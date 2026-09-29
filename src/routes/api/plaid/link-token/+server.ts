@@ -1,4 +1,4 @@
-import { handle, ValidationError } from '$lib/server/http';
+import { handle, int, readOptionalJson, ValidationError } from '$lib/server/http';
 import { getDb } from '$lib/server/db/instance';
 import { getConfig } from '$lib/server/config';
 import { plaidClient, syncDeps } from '$lib/server/sync/providers';
@@ -9,11 +9,11 @@ export const POST = handle(async ({ request }) => {
 	const config = getConfig();
 	const client = syncDeps().providers.plaid ? plaidClient(config) : null;
 	if (!client) throw new ValidationError('plaid not configured');
-	const body = await request.json().catch(() => ({}));
+	const body = await readOptionalJson(request);
 	// A connectionId requests an update-mode token for relinking that item.
 	let accessToken: string | null = null;
-	if (body?.connectionId) {
-		const connectionId = Number(body.connectionId);
+	if (body.connectionId != null) {
+		const connectionId = int(body.connectionId, 'connectionId');
 		getConnection(getDb(), connectionId);
 		accessToken = getCredential(getDb(), connectionId, config.appKey);
 	}

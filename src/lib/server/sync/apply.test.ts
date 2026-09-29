@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
-import { openMemoryDatabase, type Db } from '../db';
+import { type Db } from '../db';
+import { openMemoryDatabase } from '../test/memory-db';
 import { accounts, accountBalances, accountTerms, bills, billOccurrences, billOccurrenceTransactions, connections, incomeOccurrences, periods, transactions } from '../db/schema';
 import { createIncomeSource } from '../bills/bills';
 import { generateOccurrences } from '../bills/schedule';

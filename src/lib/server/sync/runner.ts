@@ -18,8 +18,6 @@ export type SyncDeps = {
 	timeZone: string;
 	now?: () => string;
 	today?: () => string;
-	/** Test-only: invoked right after `applyBatch` succeeds, before the post-apply steps. Lets tests inject a post-apply failure. */
-	afterApply?: () => void;
 };
 export type RunOutcome = {
 	runId: number | null; connectionId: number; status: 'ok' | 'error' | 'skipped';
@@ -58,9 +56,16 @@ export async function runSync(db: Db, connectionId: number, trigger: 'cron' | 'm
 		// Fetch: async, no database transaction open (§5.1).
 		const provider = deps.providers[conn.provider];
 		if (!provider) return fail(`no provider registered for ${conn.provider}`);
+		let credential: string | null;
+		try {
+			credential = getCredential(db, connectionId, deps.appKey);
+		} catch {
+			// The only failure past the row lookup above is decryption: SHISO_APP_KEY changed or the stored value is damaged. A relink re-encrypts it.
+			return fail('stored credential cannot be decrypted (was SHISO_APP_KEY changed?); relink the connection', true);
+		}
 		let batch: SyncBatch;
 		try {
-			batch = await provider.fetch({ credential: getCredential(db, connectionId, deps.appKey), cursor: conn.cursor, mode, todayIso: today() });
+			batch = await provider.fetch({ credential, cursor: conn.cursor, mode, todayIso: today() });
 		} catch (err) {
 			const e = err as Error;
 			return fail(e.message, err instanceof ProviderError && err.needsRelink);
@@ -78,7 +83,6 @@ export async function runSync(db: Db, connectionId: number, trigger: 'cron' | 'm
 		// (recorded success and advanced the cursor), so a failure here is not a connection failure —
 		// leave the connection's status alone and record the run as an error with the apply counts.
 		try {
-			deps.afterApply?.();
 			unwindRemovedTransactions(db, apply.removedTransactionIds);
 			const k = knobs(db);
 			generateOccurrences(db, { todayIso: today(), cadence: deps.cadence, graceDays: k.graceDays });

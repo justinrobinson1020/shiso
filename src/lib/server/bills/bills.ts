@@ -2,7 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { and, desc, gt, gte, isNull, notInArray } from 'drizzle-orm';
 import { bills, billOccurrences, billOccurrenceTransactions, incomeSources, incomeOccurrences, type BillCadence } from '../db/schema';
-import { InvariantError } from '../ledger/errors';
+import { InvariantError, NotFoundError } from '../ledger/errors';
 import { nowIso } from '$lib/dates';
 
 export type NewBill = {
@@ -48,7 +48,7 @@ export function lastPaidAmount(db: DbOrTx, billId: number): number | null {
 /** Correct one open occurrence's estimate. Only this occurrence changes; the bill and later months keep their own. */
 export function setOccurrenceExpected(db: DbOrTx, occurrenceId: number, amount: number): void {
 	const o = db.select().from(billOccurrences).where(eq(billOccurrences.id, occurrenceId)).get();
-	if (!o) throw new Error(`occurrence ${occurrenceId} not found`);
+	if (!o) throw new NotFoundError(`occurrence ${occurrenceId} not found`);
 	if (o.status === 'paid') throw new InvariantError('OCCURRENCE_ALREADY_PAID');
 	if (amount < 0) throw new InvariantError('OCCURRENCE_AMOUNT_NEGATIVE');
 	db.update(billOccurrences).set({ expectedAmount: amount, ...touch() }).where(eq(billOccurrences.id, occurrenceId)).run();

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { openMemoryDatabase } from '../db';
+import { openMemoryDatabase } from '../test/memory-db';
 import { periodBoundsFor, nextPeriodStart, ensurePeriods, periodIdForDate } from './periods';
 import { periods } from '../db/schema';
 import { asc } from 'drizzle-orm';

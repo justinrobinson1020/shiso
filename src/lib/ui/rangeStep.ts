@@ -1,4 +1,4 @@
-import { addDays } from '$lib/dates';
+import { addDays, daysBetween } from '$lib/dates';
 
 /** The subset of `Range` (see `$lib/server/read/spending`) that stepping needs. */
 export type SteppableRange = { kind: string; start: string; end: string; prevStart: string; prevEnd: string };
@@ -12,6 +12,6 @@ export function stepBack(range: SteppableRange): StepParams {
 
 /** Step to the next range: the anchor moves to the day after `end`. */
 export function stepForward(range: SteppableRange): StepParams {
-	const len = (Date.parse(range.end) - Date.parse(range.start)) / 86400000;
+	const len = daysBetween(range.start, range.end);
 	return { anchor: addDays(range.end, 1), end: range.kind === 'custom' ? addDays(range.end, 1 + len) : null };
 }

@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { handle, readJson, intParam, cents } from '$lib/server/http';
+import { handle, readJson, intParam, int } from '$lib/server/http';
 import { getDb } from '$lib/server/db/instance';
 import { bills } from '$lib/server/db/schema';
 import { updateBill, setBillActive, type NewBill } from '$lib/server/bills/bills';
@@ -7,18 +7,19 @@ import { scheduleFields, commonFields, regenerate } from '../bills-shared';
 import { clearPendingBillOccurrences } from '$lib/server/bills/bills';
 import { getConfig } from '$lib/server/config';
 import { todayIso } from '$lib/dates';
+import { NotFoundError } from '$lib/server/ledger/errors';
 
 export const POST = handle(async ({ request, params }) => {
 	const id = intParam(params.id, 'id');
 	const b = await readJson<Record<string, unknown>>(request);
 	const db = getDb();
 	const schedule = scheduleFields(b, true);
-	const patch = { ...commonFields(b, true), ...schedule } as Partial<NewBill>;
-	if (b.payFromAccountId !== undefined) patch.payFromAccountId = cents(b.payFromAccountId, 'payFromAccountId');
+	const patch: Partial<NewBill> = { ...commonFields(b, true), ...schedule };
+	if (b.payFromAccountId !== undefined) patch.payFromAccountId = int(b.payFromAccountId, 'payFromAccountId');
 	if (b.autopay !== undefined) patch.autopay = b.autopay === true;
 	if (b.variable !== undefined) patch.variable = b.variable === true;
-	if (b.linkedDebtAccountId !== undefined) patch.linkedDebtAccountId = b.linkedDebtAccountId == null ? null : cents(b.linkedDebtAccountId, 'linkedDebtAccountId');
-	if (!db.select({ id: bills.id }).from(bills).where(eq(bills.id, id)).get()) throw new Error(`bill ${id} not found`);
+	if (b.linkedDebtAccountId !== undefined) patch.linkedDebtAccountId = b.linkedDebtAccountId == null ? null : int(b.linkedDebtAccountId, 'linkedDebtAccountId');
+	if (!db.select({ id: bills.id }).from(bills).where(eq(bills.id, id)).get()) throw new NotFoundError(`bill ${id} not found`);
 	if (Object.keys(patch).length) updateBill(db, id, patch);
 	// A changed schedule leaves pending occurrences at the old dates; regenerate rebuilds them.
 	if (Object.keys(schedule).length) clearPendingBillOccurrences(db, id, todayIso(getConfig().timeZone));

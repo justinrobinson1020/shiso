@@ -1,11 +1,25 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { openMemoryDatabase, type Db } from '../db';
+import { type Db } from '../db';
+import { openMemoryDatabase } from '../test/memory-db';
 import { connections, syncRuns, transactions } from '../db/schema';
 import { seedDefaultCategories } from '../ledger/categories';
 import { createConnection } from './connections';
 import { emptyBatch, ProviderError, type FetchInput, type SyncBatch, type SyncProvider } from './types';
 import { runSync, runAllSyncs, runMaintenance, lastSuccessfulRuns, type SyncDeps } from './runner';
+
+// Lets one test make the post-apply phase fail without a production hook.
+const hooks = vi.hoisted(() => ({ failOccurrences: false }));
+vi.mock('../bills/schedule', async (importOriginal) => {
+	const real = await importOriginal<typeof import('../bills/schedule')>();
+	return {
+		...real,
+		generateOccurrences: (...args: Parameters<typeof real.generateOccurrences>) => {
+			if (hooks.failOccurrences) throw new Error('boom');
+			return real.generateOccurrences(...args);
+		}
+	};
+});
 
 const KEY = 'k'.repeat(44);
 let db: Db;
@@ -26,7 +40,7 @@ const deps = (provider: SyncProvider): SyncDeps => ({
 	now: () => '2026-09-08T03:00:00.000Z', today: () => '2026-09-08'
 });
 
-beforeEach(() => { db = openMemoryDatabase().db; seedDefaultCategories(db); });
+beforeEach(() => { hooks.failOccurrences = false; db = openMemoryDatabase().db; seedDefaultCategories(db); });
 
 describe('runSync', () => {
 	it('records a run, applies the batch, post-processes, and stores the cursor', async () => {
@@ -62,10 +76,8 @@ describe('runSync', () => {
 	});
 	it('records a post-apply failure without touching the connection status', async () => {
 		const conn = createConnection(db, { provider: 'plaid', institutionName: 'T', credential: 'x', appKey: KEY });
-		const out = await runSync(db, conn, 'manual', 'full', {
-			...deps(new FakeProvider(async () => fixedBatch())),
-			afterApply: () => { throw new Error('boom'); }
-		});
+		hooks.failOccurrences = true;
+		const out = await runSync(db, conn, 'manual', 'full', deps(new FakeProvider(async () => fixedBatch())));
 		expect(out.status).toBe('error');
 		expect(out.error).toBe('post-processing: boom');
 		expect(out.apply?.added).toBe(1);
@@ -73,6 +85,13 @@ describe('runSync', () => {
 		expect(run).toMatchObject({ status: 'error', error: 'post-processing: boom', added: 1, endCursor: 'cur-1' });
 		expect(db.select().from(connections).where(eq(connections.id, conn)).get()!).toMatchObject({ status: 'active', cursor: 'cur-1' });
 		expect(db.select().from(transactions).all().length).toBeGreaterThan(0);
+	});
+	it('marks a connection needs_relink when its credential cannot be decrypted', async () => {
+		const conn = createConnection(db, { provider: 'plaid', institutionName: 'T', credential: 'x', appKey: KEY });
+		const out = await runSync(db, conn, 'manual', 'full', { ...deps(new FakeProvider(async () => fixedBatch())), appKey: 'z'.repeat(44) });
+		expect(out).toMatchObject({ status: 'error', needsRelink: true });
+		expect(out.error).toMatch(/cannot be decrypted/);
+		expect(db.select().from(connections).where(eq(connections.id, conn)).get()!.status).toBe('needs_relink');
 	});
 	it('skips a disabled connection', async () => {
 		const conn = createConnection(db, { provider: 'plaid', institutionName: 'T', credential: 'x', appKey: KEY });

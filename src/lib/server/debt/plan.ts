@@ -5,7 +5,7 @@ import { latestTerms } from '../sync/connections';
 import { paymentCategoryForAccount } from '../ledger/categories';
 import { assign, assignmentsForPeriod, assertBudgetPeriod } from '../ledger/assignments';
 import { budgetForPeriod } from '../budget/load';
-import { InvariantError } from '../ledger/errors';
+import { InvariantError, NotFoundError } from '../ledger/errors';
 import { nowIso } from '$lib/dates';
 
 /** The only writer of `planned_extras` and `promo_balances` (P2 §3). */
@@ -13,7 +13,7 @@ const touch = () => ({ updatedAt: nowIso() });
 
 function assertDebtAccount(db: DbOrTx, accountId: number): void {
 	const a = db.select({ isDebt: accounts.isDebt }).from(accounts).where(eq(accounts.id, accountId)).get();
-	if (!a) throw new Error(`account ${accountId} not found`);
+	if (!a) throw new NotFoundError(`account ${accountId} not found`);
 	if (!a.isDebt) throw new InvariantError('NOT_DEBT_ACCOUNT');
 }
 
@@ -70,7 +70,7 @@ export function createPromo(db: DbOrTx, input: NewPromo): number {
 
 export function updatePromo(db: DbOrTx, id: number, patch: { description?: string; remainingAmount?: number; aprBps?: number; expiresOn?: string }): void {
 	const row = db.select().from(promoBalances).where(eq(promoBalances.id, id)).get();
-	if (!row) throw new Error(`promo ${id} not found`);
+	if (!row) throw new NotFoundError(`promo ${id} not found`);
 	const set: Partial<typeof promoBalances.$inferInsert> = { ...touch() };
 	if (patch.description !== undefined) set.description = patch.description;
 	if (patch.expiresOn !== undefined) set.expiresOn = patch.expiresOn;
@@ -85,7 +85,7 @@ export function updatePromo(db: DbOrTx, id: number, patch: { description?: strin
 
 export function closePromo(db: DbOrTx, id: number): void {
 	const row = db.select({ id: promoBalances.id }).from(promoBalances).where(eq(promoBalances.id, id)).get();
-	if (!row) throw new Error(`promo ${id} not found`);
+	if (!row) throw new NotFoundError(`promo ${id} not found`);
 	db.update(promoBalances).set({ closedAt: nowIso(), ...touch() }).where(eq(promoBalances.id, id)).run();
 }
 

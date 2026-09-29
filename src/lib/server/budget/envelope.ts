@@ -1,3 +1,4 @@
+import { compareIso } from '$lib/dates';
 import { CASH_TYPES, type AccountType, type CategoryKind, type TransactionSource } from '../db/schema';
 
 export type EnvAccount = { id: number; type: AccountType; onBudget: boolean };
@@ -62,7 +63,7 @@ function apportion(total: number, weights: Map<number, number>): Map<number, num
 
 export function computeBudget(input: BudgetInput, currentPeriodId: number): BudgetResult {
 	const start = input.budgetStart ?? null;
-	const periods = input.periods.filter((p) => start == null || p.startDate >= start).sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+	const periods = input.periods.filter((p) => start == null || p.startDate >= start).sort((a, b) => compareIso(a.startDate, b.startDate));
 	const kept = new Set(periods.map((p) => p.id));
 	const periodIndex = new Map(periods.map((p, i) => [p.id, i]));
 	if (!periodIndex.has(currentPeriodId)) throw new Error(`period ${currentPeriodId} not in input`);

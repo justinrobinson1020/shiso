@@ -3,13 +3,9 @@ import type { DbOrTx } from '../db';
 import { accounts, transactions, CASH_TYPES } from '../db/schema';
 import { flagForReview, getTransaction, linkTransfer, setSplits } from '../ledger/transactions';
 import { paymentCategoryForAccount, uncategorizedId } from '../ledger/categories';
-import { parseIso } from '$lib/dates';
+import { dayDistance } from '$lib/dates';
 
 export const PAYMENT_HINT = /payment|pymt|pmt|transfer|xfer|autopay|epay|online pay/i;
-
-function dayDiff(a: string, b: string): number {
-	return Math.abs((parseIso(a).getTime() - parseIso(b).getTime()) / 86_400_000);
-}
 
 /**
  * Spec §5.6 step 3. For each candidate: find the unique equal-and-opposite counterpart on another
@@ -21,6 +17,7 @@ function dayDiff(a: string, b: string): number {
 export function detectTransfers(db: DbOrTx, candidateIds: number[], opts: { windowDays: number }): { linked: number; flagged: number; categorized: number } {
 	const acctById = new Map(db.select().from(accounts).all().map((a) => [a.id, a]));
 	const isCash = (id: number) => { const a = acctById.get(id)!; return a.onBudget && (CASH_TYPES as readonly string[]).includes(a.type); };
+	const uncategorized = uncategorizedId(db);
 	let linked = 0, flagged = 0, categorized = 0;
 
 	for (const id of candidateIds) {
@@ -32,7 +29,7 @@ export function detectTransfers(db: DbOrTx, candidateIds: number[], opts: { wind
 				isNull(transactions.transferPeerId), isNull(transactions.deletedAt)
 			))
 			.all()
-			.filter((c) => dayDiff(c.postedDate, t.postedDate) <= opts.windowDays)
+			.filter((c) => dayDistance(c.postedDate, t.postedDate) <= opts.windowDays)
 			.filter((c) => isCash(t.accountId) || isCash(c.accountId));
 		if (cands.length === 0) continue;
 
@@ -58,7 +55,7 @@ export function detectTransfers(db: DbOrTx, candidateIds: number[], opts: { wind
 			const full = getTransaction(db, near.id);
 			const prior = priorSplits.get(near.id)!;
 			if (payCat != null) { setSplits(db, near.id, [{ categoryId: payCat, amount: full.amount }]); categorized++; }
-			else if (prior.some((s) => s.categoryId !== uncategorizedId(db))) {
+			else if (prior.some((s) => s.categoryId !== uncategorized)) {
 				setSplits(db, near.id, prior.map((s) => ({ categoryId: s.categoryId, amount: s.amount, memo: s.memo })));
 				categorized++;
 			}

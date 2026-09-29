@@ -1,16 +1,24 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startup, resetForTests } from '$lib/server/startup';
 import { setConfig } from '$lib/server/config';
-import { setSyncDepsForTests } from '$lib/server/sync/providers';
+import type { SyncDeps } from '$lib/server/sync/runner';
 import { createConnection } from '$lib/server/sync/connections';
 import { getDb } from '$lib/server/db/instance';
 import { emptyBatch, type SyncProvider } from '$lib/server/sync/types';
 import { POST as syncAll } from './+server';
 import { POST as syncOne } from './[connectionId]/+server';
 import { POST as linkToken } from '../plaid/link-token/+server';
+
+// Route handlers read the process-wide deps through syncDeps(); the tests swap them here.
+const state = vi.hoisted(() => ({ deps: null as SyncDeps | null }));
+vi.mock('$lib/server/sync/providers', async (importOriginal) => {
+	const real = await importOriginal<typeof import('$lib/server/sync/providers')>();
+	return { ...real, syncDeps: () => state.deps ?? real.syncDeps() };
+});
+const setSyncDepsForTests = (deps: SyncDeps | null): void => { state.deps = deps; };
 
 let dir: string;
 const cfg = (d: string) => ({

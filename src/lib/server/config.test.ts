@@ -30,6 +30,12 @@ describe('loadConfig', () => {
 	it('rejects an unknown time zone', () => {
 		expect(() => loadConfig({ ...good, SHISO_TZ: 'Mars/Olympus' })).toThrowError(/SHISO_TZ/);
 	});
+	it('rejects an unknown PLAID_ENV or SHISO_CADENCE instead of falling through to a default', () => {
+		expect(() => loadConfig({ ...good, PLAID_ENV: 'prod' })).toThrowError(/PLAID_ENV/);
+		expect(() => loadConfig({ ...good, PLAID_ENV: 'development' })).toThrowError(/PLAID_ENV/);
+		expect(() => loadConfig({ ...good, SHISO_CADENCE: 'weekly' })).toThrowError(/SHISO_CADENCE/);
+		expect(loadConfig({ ...good, PLAID_ENV: 'production' }).plaid.env).toBe('production');
+	});
 	it('rejects a malformed sync hour by name', () => {
 		expect(() => loadConfig({ ...good, SHISO_SYNC_HOUR: 'noon' })).toThrowError(/SHISO_SYNC_HOUR/);
 		expect(() => loadConfig({ ...good, SHISO_BALANCE_HOUR: '24' })).toThrowError(/SHISO_BALANCE_HOUR/);

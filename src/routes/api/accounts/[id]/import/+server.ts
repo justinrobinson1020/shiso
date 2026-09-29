@@ -11,12 +11,13 @@ const MAX_BYTES = 20 * 1024 * 1024;
 export const POST = handle(async ({ request, params }) => {
 	const id = intParam(params.id, 'id');
 	const form = await request.formData().catch(() => null);
-	const file = form?.get('file');
+	if (!form) throw new ValidationError('body must be multipart form data');
+	const file = form.get('file');
 	if (!(file instanceof File)) throw new ValidationError('file is required');
 	if (file.size > MAX_BYTES) throw new ValidationError('file is larger than 20 MB');
-	const dryRun = form!.get('dryRun') === '1';
+	const dryRun = form.get('dryRun') === '1';
 	// Repeatable field: extra last-fours to accept for this account (a reissued card changes the printed number).
-	const acceptMasks = form!.getAll('acceptMask').map(String).filter((m) => /^\d{4}$/.test(m));
+	const acceptMasks = form.getAll('acceptMask').map(String).filter((m) => /^\d{4}$/.test(m));
 	const config = getConfig(); const db = getDb(); const today = todayIso(config.timeZone);
 	let parsed;
 	try {

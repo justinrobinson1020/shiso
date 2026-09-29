@@ -6,6 +6,7 @@ import { NO_ENVELOPE_KINDS } from '../budget/envelope';
 import { currentPeriodId, type Cadence } from '../budget/periods';
 import { targetStatuses, type TargetStatus } from '../budget/targets';
 import { budgetStart } from '../settings';
+import { NotFoundError } from '../ledger/errors';
 
 export type BudgetView = {
 	period: { id: number; label: string; startDate: string; endDate: string; isCurrent: boolean };
@@ -42,7 +43,7 @@ export function budgetView(db: DbOrTx, opts: { periodId: number | null; todayIso
 	const currentId = currentPeriodId(db, opts.cadence, opts.todayIso);
 	const periodId = opts.periodId ?? currentId;
 	const period = db.select().from(periods).where(eq(periods.id, periodId)).get();
-	if (!period) throw new Error(`period ${periodId} not found`);
+	if (!period) throw new NotFoundError(`period ${periodId} not found`);
 	const all = db.select({ id: periods.id, label: periods.label }).from(periods).orderBy(asc(periods.startDate)).all();
 	const start = budgetStart(db);
 	const historyOnly = start != null && period.startDate < start;
