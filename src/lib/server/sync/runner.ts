@@ -8,6 +8,7 @@ import { applyBatch, type ApplyResult } from './apply';
 import { processUnprocessed } from './postprocess';
 import { generateOccurrences } from '../bills/schedule';
 import { matchAll, unwindRemovedTransactions } from '../bills/matching';
+import { observeDrift } from '../reconcile';
 import { ProviderError, type FetchMode, type SyncBatch, type SyncProvider } from './types';
 import { nowIso, todayIso } from '$lib/dates';
 
@@ -89,6 +90,7 @@ export async function runSync(db: Db, connectionId: number, trigger: 'cron' | 'm
 			const post = processUnprocessed(db, { todayIso: today(), ...k });
 			// processUnprocessed returns early with no new rows; newly generated occurrences still need matching (§6.2).
 			if (post.processed === 0) matchAll(db, { todayIso: today(), graceDays: k.graceDays });
+			if (mode === 'full') observeDrift(db, connectionId, now());
 			db.update(syncRuns).set({
 				status: 'ok', finishedAt: now(), endCursor: batch.nextCursor,
 				added: apply.added, modified: apply.modified, removed: apply.removed,

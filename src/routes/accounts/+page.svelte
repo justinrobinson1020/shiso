@@ -91,7 +91,8 @@
 					<td class="num">{#if a.balance}<Money cents={a.balance.current} neutral={a.isDebt} /><div class="small muted nowrap">{shortDate(a.balance.asOf)} · {a.balance.source}</div>{:else}<span class="muted">—</span>{/if}</td>
 					<td class="num hide-sm"><Money cents={a.drift.ledgerBalance} neutral={a.isDebt} /></td>
 					<td class="num">{#if a.drift.drift != null && a.drift.drift !== 0}<Money cents={a.drift.drift} signed />
-							<button class="small" disabled={busy != null} onclick={() => run(`adj-${a.id}`, () => post(`/api/accounts/${a.id}/adjust`, { amount: a.drift.drift, date: data.today }))}>adjust</button>
+							{#if a.drift.settled}<button class="small" disabled={busy != null} onclick={() => run(`adj-${a.id}`, () => post(`/api/accounts/${a.id}/adjust`, { amount: a.drift.drift, date: data.today }))}>adjust</button>
+							{:else}<span class="small muted" title="The balance can arrive before the transactions that explain it. Adjust appears once two full syncs have seen this same drift.">settling</span>{/if}
 							<div class="small muted">{a.drift.convention === 'exclude_pending' ? 'excluding pending' : 'including pending'} · <button class="small" disabled={busy != null} onclick={() => run('conv', () => post(`/api/accounts/${a.id}/convention`, { convention: a.drift.convention === 'exclude_pending' ? 'include_pending' : 'exclude_pending' }))}>switch</button></div>
 						{:else if a.drift.drift === 0}<span class="status paid">reconciled</span>{:else}<span class="muted">no balance</span>{/if}</td>
 					<td class="hide-sm terms">{#if a.isDebt}{#if a.terms}<span class="small">APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ? shortDate(a.terms.nextDueDate) : '—'} <span class="muted">({a.terms.source})</span></span>{:else}<span class="muted small">no terms</span>{/if}

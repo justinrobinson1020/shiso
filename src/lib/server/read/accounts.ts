@@ -2,7 +2,7 @@ import { asc, desc, eq, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../db';
 import { accounts, connections, syncRuns, ACCOUNT_TYPES } from '../db/schema';
 import { latestBalance, latestTerms } from '../sync/connections';
-import { driftForAccount } from '../reconcile';
+import { driftForAccount, driftSettled } from '../reconcile';
 
 export type AccountsView = {
 	plaidConfigured: boolean;
@@ -33,7 +33,7 @@ export type AccountsView = {
 			closedAt: string | null;
 			mask: string | null;
 			balance: { current: number; available: number | null; creditLimit: number | null; asOf: string; source: string } | null;
-			drift: { providerBalance: number | null; ledgerBalance: number; drift: number | null; convention: string };
+			drift: { providerBalance: number | null; ledgerBalance: number; drift: number | null; convention: string; settled: boolean };
 			terms: {
 				asOf: string;
 				source: string;
@@ -91,7 +91,7 @@ export function accountsView(db: DbOrTx, opts: { plaidConfigured: boolean }): Ac
 							closedAt: a.closedAt,
 							mask: a.mask,
 							balance: b && { current: b.current, available: b.available, creditLimit: b.creditLimit, asOf: b.asOf, source: b.source },
-							drift: { providerBalance: d.providerBalance, ledgerBalance: d.ledgerBalance, drift: d.drift, convention: d.convention },
+							drift: { providerBalance: d.providerBalance, ledgerBalance: d.ledgerBalance, drift: d.drift, convention: d.convention, settled: driftSettled(db, a.id) },
 							terms: t && {
 								asOf: t.asOf,
 								source: t.source,

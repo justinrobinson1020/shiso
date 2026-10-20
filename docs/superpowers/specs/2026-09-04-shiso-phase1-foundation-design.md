@@ -391,6 +391,16 @@ account in settings. Non-zero drift after a sync creates a review-queue item
 offering a one-click adjustment transaction (`source = adjustment`,
 reconciliation kind).
 
+A provider's balance can land a sync or more before the transactions that
+explain it; an adjustment made in that window is counted twice when they
+arrive. So on a synced (Plaid or SimpleFIN) account the adjustment is only
+offered, and only accepted by the API (`DRIFT_UNSETTLED`, 409), once two
+consecutive full syncs have seen exactly the same drift (`drift_watch`).
+Balance-only refreshes do not count, since they cannot bring the missing
+rows. A manual account's drift is a balance the user typed, so it is
+adjustable at once. An adjustment can be deleted from the ledger like a
+manual row; that is its undo.
+
 ## 6. Bills and income
 
 ### 6.1 Occurrence generation

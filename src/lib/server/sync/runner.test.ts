@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { type Db } from '../db';
 import { openMemoryDatabase } from '../test/memory-db';
-import { connections, syncRuns, transactions } from '../db/schema';
+import { accounts, connections, syncRuns, transactions } from '../db/schema';
+import { driftForAccount, driftSettled } from '../reconcile';
 import { seedDefaultCategories } from '../ledger/categories';
 import { createConnection } from './connections';
 import { emptyBatch, ProviderError, type FetchInput, type SyncBatch, type SyncProvider } from './types';
@@ -57,6 +58,19 @@ describe('runSync', () => {
 		expect(db.select().from(connections).where(eq(connections.id, conn)).get()!.cursor).toBe('cur-1');
 		expect(db.select().from(transactions).all().every((t) => t.processedAt != null)).toBe(true);
 		expect(lastSuccessfulRuns(db)).toEqual([{ connectionId: conn, finishedAt: '2026-09-08T03:00:00.000Z' }]);
+	});
+	it('counts only full syncs toward settling a drift; balance refreshes cannot bring the missing rows', async () => {
+		const conn = createConnection(db, { provider: 'plaid', institutionName: 'T', credential: 'access-1', appKey: KEY });
+		await runSync(db, conn, 'cron', 'full', deps(new FakeProvider(async () => fixedBatch())));
+		const acct = db.select().from(accounts).get()!.id;
+		// The bank's balance moves 100.00 ahead of its feed: no transaction explains it yet.
+		const ahead = new FakeProvider(async () => ({ ...emptyBatch('cur-2'), accounts: fixedBatch().accounts, balances: [{ accountExternalId: 'chk', asOf: '2026-09-09', current: 60000 }] }));
+		await runSync(db, conn, 'manual', 'full', deps(ahead));
+		expect(driftForAccount(db, acct).drift).toBe(10000);
+		await runSync(db, conn, 'cron', 'balances', deps(ahead));
+		expect(driftSettled(db, acct)).toBe(false);
+		await runSync(db, conn, 'cron', 'full', deps(ahead));
+		expect(driftSettled(db, acct)).toBe(true);
 	});
 	it('marks the connection needs_relink on an auth error and records the failure', async () => {
 		const conn = createConnection(db, { provider: 'plaid', institutionName: 'T', credential: 'x', appKey: KEY });

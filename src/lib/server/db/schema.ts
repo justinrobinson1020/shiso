@@ -76,6 +76,18 @@ export const accountBalances = sqliteTable('account_balances', {
 	createdAt: text('created_at').notNull().default(NOW)
 }, (t) => [index('account_balances_account_asof').on(t.accountId, t.asOf)]);
 
+/**
+ * The drift each synced account showed at the end of its recent full syncs: one row per account with non-zero drift.
+ * `fullSyncs` counts consecutive full syncs that saw exactly `drift`; adjustment waits until it reaches SETTLE_FULL_SYNCS.
+ */
+export const driftWatch = sqliteTable('drift_watch', {
+	accountId: integer('account_id').primaryKey().references(() => accounts.id),
+	drift: integer('drift').notNull(),
+	fullSyncs: integer('full_syncs').notNull(),
+	firstSeenAt: text('first_seen_at').notNull(),
+	lastSeenAt: text('last_seen_at').notNull()
+});
+
 export const accountTerms = sqliteTable('account_terms', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	accountId: integer('account_id').notNull().references(() => accounts.id),

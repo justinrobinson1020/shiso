@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { fixture } from '../test/fixture';
 import { appendBalance, appendTermsIfChanged } from '../sync/connections';
 import { createTransaction } from '../ledger/transactions';
-import { syncRuns } from '../db/schema';
+import { accounts, connections, syncRuns } from '../db/schema';
+import { observeDrift } from '../reconcile';
 import { accountsView } from './accounts';
 
 describe('accountsView', () => {
@@ -22,5 +23,18 @@ describe('accountsView', () => {
 		expect(card.terms).toMatchObject({ aprBps: 2749, minPayment: 3500, nextDueDate: '2026-09-25', source: 'manual' });
 		expect(c.accounts.find((a) => a.id === f.checking)!.balance).toBeNull();
 		expect(v.types).toContain('credit');
+	});
+	it('marks drift settled on a manual account, and on a synced one only after two full syncs saw it', () => {
+		const f = fixture();
+		appendBalance(f.db, f.card, { asOf: '2026-09-08', current: -8000, source: 'manual' });
+		const plaid = f.db.insert(connections).values({ provider: 'plaid', institutionName: 'Synced' }).returning({ id: connections.id }).get().id;
+		const chk = f.db.insert(accounts).values({ connectionId: plaid, externalId: 's', name: 'Synced Chk', type: 'checking', onBudget: true, isDebt: false }).returning({ id: accounts.id }).get().id;
+		appendBalance(f.db, chk, { asOf: '2026-09-08', current: 12345, source: 'sync' });
+		const settled = (id: number) => accountsView(f.db, { plaidConfigured: true }).connections.flatMap((c) => c.accounts).find((a) => a.id === id)!.drift.settled;
+		expect(settled(f.card)).toBe(true);
+		observeDrift(f.db, plaid, '2026-09-08T03:00:00.000Z');
+		expect(settled(chk)).toBe(false);
+		observeDrift(f.db, plaid, '2026-09-09T03:00:00.000Z');
+		expect(settled(chk)).toBe(true);
 	});
 });

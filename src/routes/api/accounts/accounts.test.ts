@@ -70,6 +70,16 @@ describe('account and connection routes', () => {
 		expect((await convention({ request: req({ convention: 'sometimes' }), params: { id: String(id) } } as never)).status).toBe(400);
 		expect((await importRoute({ request: multipart('x.csv', 'Date,Amount\n1,2\n'), params: { id: String(id) } } as never)).status).toBe(400);
 	});
+	it("refuses to adjust a synced account's drift until two full syncs have seen it (409 DRIFT_UNSETTLED)", async () => {
+		const db = getDb();
+		const conn = db.insert(connections).values({ provider: 'plaid', institutionName: 'NASA' }).returning({ id: connections.id }).get().id;
+		const id = db.insert(accounts).values({ connectionId: conn, externalId: 'chk', name: 'Chk', type: 'checking', onBudget: true, isDebt: false }).returning({ id: accounts.id }).get().id;
+		db.insert(accountBalances).values({ accountId: id, asOf: '2026-09-08', current: 350471, source: 'sync' }).run();
+		const res = await adjust({ request: req({ amount: 350471, date: '2026-09-08' }), params: { id: String(id) } } as never);
+		expect(res.status).toBe(409);
+		expect(await res.json()).toMatchObject({ code: 'DRIFT_UNSETTLED' });
+		expect(db.select().from(transactions).all()).toHaveLength(0);
+	});
 	it('rejects reassigning a debt account off debt while a payment category points at it (409), and an unknown type (400)', async () => {
 		const db = getDb();
 		const { accountIds } = await (await createConn({ request: req({ institutionName: 'C', accounts: [{ name: 'Card', type: 'credit' }] }) } as never)).json();
