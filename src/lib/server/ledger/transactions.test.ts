@@ -200,4 +200,12 @@ describe('manual transactions', () => {
 		const synced = createTransaction(f.db, { accountId: f.checking, externalId: 's1', postedDate: '2026-09-03', amount: -1, payeeRaw: 'X', source: 'sync' });
 		expect(() => deleteUserTransaction(f.db, synced)).toThrow(InvariantError);
 	});
+	it('deletes an adjustment the user made (the undo for an adjust click) but never an opening row', () => {
+		const f = fixture();
+		const adj = createTransaction(f.db, { accountId: f.checking, externalId: 'adjustment:2026-10-19:x', postedDate: '2026-10-19', amount: 350471, payeeRaw: 'Reconciliation adjustment', source: 'adjustment' });
+		deleteUserTransaction(f.db, adj);
+		expect(getTransaction(f.db, adj).deletedAt).not.toBeNull();
+		const opening = createTransaction(f.db, { accountId: f.checking, externalId: 'opening:x', postedDate: '2026-09-01', amount: 1000, payeeRaw: 'Opening balance', source: 'opening' });
+		expect(() => deleteUserTransaction(f.db, opening)).toThrow(InvariantError);
+	});
 });

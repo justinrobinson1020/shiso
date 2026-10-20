@@ -75,7 +75,7 @@
 			<td class="num hide-sm"><Money cents={row.amount} signed neutral /></td>
 			<td class="hide-sm"><select value={row.periodId} onchange={(e) => patch(row.id, { periodId: Number(e.currentTarget.value) })}>{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}</select></td>
 			<td>{#if row.needsReview}<span class="status overdue" title={row.reviewReason ?? ''}>{row.reviewReason}</span> <button class="small" onclick={() => run(() => post(`/api/transactions/${row.id}/review`))}>clear</button>{/if}
-				{#if row.source === 'manual' || row.source === 'import'}<button class="small danger" onclick={() => run(() => post(`/api/transactions/${row.id}/delete`))}>delete</button>{/if}</td>
+				{#if row.source === 'manual' || row.source === 'import' || row.source === 'adjustment'}<button class="small danger" onclick={() => run(() => post(`/api/transactions/${row.id}/delete`))}>delete</button>{/if}</td>
 		</tr>
 	{:else}<tr><td colspan="8" class="muted">No transactions match these filters. Clear a filter, or sync an account from Accounts.</td></tr>{/each}
 	</tbody>

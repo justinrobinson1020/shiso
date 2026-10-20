@@ -244,11 +244,15 @@ export function createManualTransaction(db: DbOrTx, input: {
 	});
 }
 
-/** Only rows the user created (manual entry or CSV import) can be deleted by the user; synced rows are the provider's. */
+/**
+ * Only rows the user created (manual entry, CSV import, or an adjust click) can be deleted by the user; synced rows are
+ * the provider's, and the opening row anchors the ledger. Deleting an adjustment is its undo: when the transactions it
+ * stood in for arrive late, the account would otherwise count them twice.
+ */
 export function deleteUserTransaction(db: DbOrTx, id: number): void {
 	const row = db.select({ source: transactions.source }).from(transactions).where(eq(transactions.id, id)).get();
 	if (!row) throw new NotFoundError(`transaction ${id} not found`);
-	if (row.source !== 'manual' && row.source !== 'import') throw new InvariantError('NOT_USER_ROW');
+	if (row.source !== 'manual' && row.source !== 'import' && row.source !== 'adjustment') throw new InvariantError('NOT_USER_ROW');
 	softDelete(db, id, 'user_deleted');
 }
 
