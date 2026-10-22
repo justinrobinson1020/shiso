@@ -70,6 +70,10 @@ describe('PlaidProvider.fetch', () => {
 		await expect(new PlaidProvider(fakeClient([plaidErr('RATE_LIMIT_EXCEEDED')])).fetch({ credential: 'access', cursor: null, mode: 'full', todayIso: '2026-09-08' }))
 			.rejects.toBeInstanceOf(ProviderError);
 	});
+	it('maps NO_ACCOUNTS to relink: an Item whose only account closed needs update mode with account selection', async () => {
+		await expect(new PlaidProvider(fakeClient([plaidErr('NO_ACCOUNTS')])).fetch({ credential: 'access', cursor: null, mode: 'full', todayIso: '2026-10-22' }))
+			.rejects.toMatchObject({ code: 'NO_ACCOUNTS', needsRelink: true });
+	});
 	it('maps liabilities into terms', async () => {
 		const client = fakeClient(
 			[{ accounts: [account('c1', 'credit', 'credit card', 100)], next_cursor: 'c', has_more: false }],

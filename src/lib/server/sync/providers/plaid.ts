@@ -29,7 +29,9 @@ export type PlaidClientLike = {
 	itemRemove(req: { access_token: string }): Promise<unknown>;
 };
 
-export const RELINK_CODES = ['ITEM_LOGIN_REQUIRED', 'INVALID_CREDENTIALS', 'ITEM_NOT_FOUND', 'ACCESS_NOT_GRANTED', 'INVALID_ACCESS_TOKEN'];
+// NO_ACCOUNTS: every account on the Item closed (a refinanced loan replaced by a new account); Plaid's fix
+// is update mode with account selection, which the relink token requests.
+export const RELINK_CODES = ['ITEM_LOGIN_REQUIRED', 'INVALID_CREDENTIALS', 'ITEM_NOT_FOUND', 'ACCESS_NOT_GRANTED', 'INVALID_ACCESS_TOKEN', 'NO_ACCOUNTS'];
 export const MUTATION_CODE = 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION';
 const SKIP_LIABILITY_CODES = ['PRODUCT_NOT_READY', 'NO_LIABILITY_ACCOUNTS', 'PRODUCTS_NOT_SUPPORTED', 'ADDITIONAL_CONSENT_REQUIRED'];
 
