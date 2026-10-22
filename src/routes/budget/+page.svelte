@@ -63,9 +63,9 @@
 		{#each sortRows(g.categories.filter((c) => showHidden || !c.hidden), sortBudget, budgetCols) as c (c.id)}
 			<tr>
 				<td class="env">
-					<div class="env-head"><span>{c.name}{#if c.hidden} <span class="muted small">hidden</span>{/if}{#if c.creditOverspend > 0} <span class="status overdue" title="credit overspend">{formatCents(c.creditOverspend)} on card</span>{/if}</span><span class="only-sm env-avail"><Money cents={c.available} signed /></span></div>
-					<div class="only-sm env-sub"><label class="small muted">assign <input class="num" value={dollars(c.assigned)} onchange={(e) => assignTo(c.id, e.currentTarget.value)} /></label><span class="small muted">activity <Money cents={c.activity} neutral /></span></div>
-					{#if c.target}<div class="small muted only-sm">{rule(c.target)}{#if c.target.needed > 0} · needs {formatCents(c.target.needed)}{/if}</div>{/if}</td>
+					<div class="env-head"><span>{c.name}{#if c.hidden}{' '}<span class="muted small">hidden</span>{/if}{#if c.creditOverspend > 0}{' '}<span class="status overdue" title="credit overspend">{formatCents(c.creditOverspend)} on card</span>{/if}</span><span class="only-sm env-avail"><Money cents={c.available} signed /></span></div>
+					<div class="only-sm env-sub"><label class="small muted">assign <input class="num" value={dollars(c.assigned)} onchange={(e) => assignTo(c.id, e.currentTarget.value)} /></label><span class="small muted">activity <Money cents={c.activity} neutral /></span>{#if c.carried !== 0}<span class="small muted">carried <Money cents={c.carried} /></span>{/if}</div>
+					{#if c.target}<div class="small muted only-sm">{rule(c.target)}{#if c.target.needed > 0} · needs {formatCents(c.target.needed)}{:else} · on target{/if}</div><div class="bar only-sm"><i style="width:{Math.round(c.target.progress * 100)}%"></i></div>{/if}</td>
 				<td class="hide-sm target">{#if c.target}<div class="small">{rule(c.target)}</div><div class="bar"><i style="width:{Math.round(c.target.progress * 100)}%"></i></div>{#if c.target.needed > 0}<div class="small muted">needs <Money cents={c.target.needed} /></div>{:else}<div class="small muted">on target</div>{/if}{:else}<span class="muted">—</span>{/if}</td>
 				<td class="num hide-sm"><Money cents={c.carried} /></td>
 				<td class="num hide-sm"><input class="num" value={dollars(c.assigned)} onchange={(e) => assignTo(c.id, e.currentTarget.value)} /></td>

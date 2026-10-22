@@ -33,13 +33,13 @@
 </dl>
 
 <table class="block">
-	<thead><tr><SortTh key="payee" label="Payee" kind="text" bind:sort={sortRec} /><SortTh key="cadence" label="Cadence" kind="text" class="hide-sm" bind:sort={sortRec} /><SortTh key="typical" label="Typical" kind="number" class="num" bind:sort={sortRec} /><SortTh key="monthlyCost" label="Per month" kind="number" class="num" bind:sort={sortRec} /><SortTh key="last" label="Last" kind="date" class="hide-sm" bind:sort={sortRec} /><SortTh key="next" label="Next" kind="date" bind:sort={sortRec} /><SortTh key="status" label="Status" kind="text" bind:sort={sortRec} /></tr></thead>
+	<thead><tr><SortTh key="payee" label="Payee" kind="text" bind:sort={sortRec} /><SortTh key="cadence" label="Cadence" kind="text" class="hide-sm" bind:sort={sortRec} /><SortTh key="typical" label="Typical" kind="number" class="num hide-sm" bind:sort={sortRec} /><SortTh key="monthlyCost" label="Per month" kind="number" class="num" bind:sort={sortRec} /><SortTh key="last" label="Last" kind="date" class="hide-sm" bind:sort={sortRec} /><SortTh key="next" label="Next" kind="date" bind:sort={sortRec} /><SortTh key="status" label="Status" kind="text" bind:sort={sortRec} /></tr></thead>
 	<tbody>
 	{#each sortRows(rows, sortRec, recCols) as r (r.payee)}
 		<tr>
-			<td><a href={ledgerLink(r.payee)}>{r.payee}</a><div class="small muted only-sm">{r.cadence} · last {shortDate(r.last)} · {r.count} charges</div><div class="small muted hide-sm">{r.count} charges, {r.matched} of {r.intervals} intervals on cadence</div></td>
+			<td><a href={ledgerLink(r.payee)}>{r.payee}</a><div class="small muted only-sm">{r.cadence}, typically <Money cents={r.typical} /> · last {shortDate(r.last)} · {r.count} charges</div><div class="small muted hide-sm">{r.count} charges, {r.matched} of {r.intervals} intervals on cadence</div></td>
 			<td class="hide-sm">{r.cadence}</td>
-			<td class="num"><Money cents={r.typical} /></td>
+			<td class="num hide-sm"><Money cents={r.typical} /></td>
 			<td class="num"><Money cents={r.monthlyCost} /></td>
 			<td class="hide-sm date">{shortDate(r.last)}</td>
 			<td class="date">{shortDate(r.next)}</td>

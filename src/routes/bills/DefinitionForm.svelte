@@ -6,6 +6,7 @@
 	import { untrack } from 'svelte';
 	import Dialog from '$lib/ui/Dialog.svelte';
 	import { decimalToCents } from '$lib/money';
+	import { label } from '$lib/ui/labels';
 	import type { CategoryTree } from '$lib/server/read/categories';
 	let { kind, def, tree, accounts, cadences, onsave, onclose }: { kind: 'bill' | 'income'; def: Def; tree: CategoryTree; accounts: { id: number; name: string; type: string; isDebt: boolean }[]; cadences: readonly string[]; onsave: (body: Record<string, unknown>) => Promise<void>; onclose: () => void } = $props();
 	// Seeded once: the parent mounts this editor fresh (`{#key}`) for every open, so later prop changes never apply.
@@ -31,10 +32,10 @@
 		<label for="d-cat">Category</label><select id="d-cat" bind:value={f.categoryId} required><option value={null}>choose…</option>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select>
 		<label for="d-acct">{kind === 'bill' ? 'Paid from' : 'Deposited to'}</label><select id="d-acct" bind:value={f.accountId} required><option value={null}>choose…</option>{#each cashAccounts as a}<option value={a.id}>{a.name}</option>{/each}</select>
 		<label for="d-amt">Expected amount</label><input id="d-amt" class="num" bind:value={f.expectedAmount} required />
-		<label for="d-cad">Cadence</label><select id="d-cad" bind:value={f.cadence}>{#each cadences as c}<option value={c}>{c}</option>{/each}</select>
+		<label for="d-cad">Cadence</label><select id="d-cad" bind:value={f.cadence}>{#each cadences as c}<option value={c}>{label(c)}</option>{/each}</select>
 		{#if f.cadence === 'monthly' || f.cadence === 'semi_monthly'}<label for="d-day">Due day</label><input id="d-day" type="number" min="1" max="31" bind:value={f.dueDay} required />{/if}
 		{#if f.cadence === 'semi_monthly'}<label for="d-day2">Second due day</label><input id="d-day2" type="number" min="1" max="31" bind:value={f.dueDay2} required />{/if}
-		{#if f.cadence === 'every_n_weeks'}<label for="d-int">Every N weeks</label><input id="d-int" type="number" min="1" bind:value={f.interval} required />{/if}
+		{#if f.cadence === 'every_n_weeks'}<label for="d-int">Weeks between</label><input id="d-int" type="number" min="1" bind:value={f.interval} required />{/if}
 		{#if f.cadence === 'every_n_weeks' || f.cadence === 'yearly'}<label for="d-anchor">Anchor date</label><input id="d-anchor" type="date" bind:value={f.anchorDate} required />{/if}
 		{#if kind === 'income'}<label for="d-settle">Lands N business days after</label><span><input id="d-settle" type="number" min="0" max="10" class="w4" bind:value={f.settleBusinessDays} placeholder="0" /> <span class="muted small">weekend dates roll to Monday first; US federal holidays are skipped</span></span>{/if}
 		<label for="d-tol">Tolerance ($ / %)</label><span><input class="num w5" bind:value={f.toleranceAbs} placeholder="0.00" /> <input type="number" min="0" max="100" class="w4" bind:value={f.tolerancePct} /></span>

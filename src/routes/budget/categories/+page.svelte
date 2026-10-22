@@ -1,9 +1,11 @@
 <script lang="ts">
 	import SortTh from '$lib/ui/SortTh.svelte';
+	import LazySelect from '$lib/ui/LazySelect.svelte';
 	import { sortRows, type SortColumns, type SortState } from '$lib/ui/sort';
 	import { post } from '$lib/ui/api';
 	import { attempt } from '$lib/ui/run';
 	import { decimalToCents } from '$lib/money';
+	import { label } from '$lib/ui/labels';
 	let { data } = $props();
 	const t = $derived(data.tree);
 	let sortCats = $state<Record<number, SortState>>({}); let sortPcm = $state<SortState>(null);
@@ -52,11 +54,13 @@
 	}
 </script>
 
+{#snippet groupOptions()}{#each t.groups as og}<option value={og.id}>{og.name}</option>{/each}{/snippet}
+
 <h1>Categories</h1>
 <p class="small"><a href="/budget">← Budget</a></p>
 {#if error}<p class="error">{error}</p>{/if}
 <form class="toolbar" onsubmit={(e) => { e.preventDefault(); run(() => post('/api/category-groups', { name: newGroup })).then(() => (newGroup = '')); }}>
-	<input placeholder="New group name" bind:value={newGroup} /><button class="primary" type="submit">Add group</button>
+	<input placeholder="New group name" bind:value={newGroup} /><button type="submit">Add group</button>
 </form>
 {#each t.groups as g}
 	<h2>{g.name} <button class="small" onclick={() => startNew(g.id)}>+ category</button></h2>
@@ -66,11 +70,11 @@
 		{#each sortRows(g.categories, sortCats[g.id] ?? null, catCols) as c (c.id)}
 			<tr>
 				<td><input class="inline" value={c.name} onchange={(e) => patch(c.id, { name: e.currentTarget.value })} /></td>
-				<td>{#if c.isSystem}<span class="muted">{c.kind}</span>{:else}
-					<select value={c.kind} onchange={(e) => patch(c.id, { kind: e.currentTarget.value, accountId: c.accountId })}>{#each t.kinds as k}<option value={k}>{k}</option>{/each}</select>{/if}</td>
+				<td>{#if c.isSystem}<span class="muted">{label(c.kind)}</span>{:else}
+					<select value={c.kind} onchange={(e) => patch(c.id, { kind: e.currentTarget.value, accountId: c.accountId })}>{#each t.kinds as k}<option value={k}>{label(k)}</option>{/each}</select>{/if}</td>
 				<td>{#if c.kind === 'debt_payment'}
 					<select value={c.accountId} onchange={(e) => patch(c.id, { accountId: Number(e.currentTarget.value) })}>{#each t.debtAccounts as a}<option value={a.id}>{a.name}</option>{/each}</select>{:else}<span class="muted hide-sm">—</span>{/if}</td>
-				<td><select value={c.groupId ?? g.id} onchange={(e) => patch(c.id, { groupId: Number(e.currentTarget.value) })}>{#each t.groups as og}<option value={og.id}>{og.name}</option>{/each}</select></td>
+				<td><LazySelect value={c.groupId ?? g.id} label={t.groups.find((og) => og.id === (c.groupId ?? g.id))?.name ?? g.name} aria-label="Group for {c.name}" onchange={(val) => patch(c.id, { groupId: Number(val) })} options={groupOptions} /></td>
 				<td><label class="small only-sm"><input type="checkbox" checked={c.hidden} onchange={(e) => patch(c.id, { hidden: e.currentTarget.checked })} /> hidden</label><input class="hide-sm" type="checkbox" checked={c.hidden} onchange={(e) => patch(c.id, { hidden: e.currentTarget.checked })} /></td>
 				<td class="target-editor">{#if !['income', 'transfer', 'reconciliation'].includes(c.kind)}
 					{@const d = targetDraft(c)}
@@ -84,7 +88,7 @@
 		{#if draft[g.id]}
 			<tr>
 				<td><input placeholder="Name" bind:value={draft[g.id].name} /></td>
-				<td><select bind:value={draft[g.id].kind}>{#each t.kinds as k}<option value={k}>{k}</option>{/each}</select></td>
+				<td><select bind:value={draft[g.id].kind}>{#each t.kinds as k}<option value={k}>{label(k)}</option>{/each}</select></td>
 				<td>{#if draft[g.id].kind === 'debt_payment'}<select bind:value={draft[g.id].accountId}><option value={null}>choose…</option>{#each t.debtAccounts as a}<option value={a.id}>{a.name}</option>{/each}</select>{/if}</td>
 				<td colspan="2"><button class="primary" onclick={() => create(g.id)}>Create</button> <button onclick={() => delete draft[g.id]}>Cancel</button></td>
 			</tr>
@@ -102,19 +106,21 @@
 		<tbody>
 		{#each sortRows(data.pcm.providerCategories, sortPcm, pcmCols) as p (p.key)}
 			<tr>
-				<td>{p.key}</td>
+				<td class="key">{p.key}</td>
 				<td class="num">{p.count}</td>
 				<td>
-					<select value={pcmValue(p.key)} onchange={(e) => (pcmDraft[p.key] = Number(e.currentTarget.value))}>
-						<option value={0}>Unmapped</option>
-						{#each t.groups as g}
-							<optgroup label={g.name}>
-								{#each g.categories.filter((c) => !c.hidden || c.id === pcmValue(p.key)) as c}
-									<option value={c.id}>{c.name}</option>
-								{/each}
-							</optgroup>
-						{/each}
-					</select>
+					<LazySelect value={pcmValue(p.key)} label={catName.get(pcmValue(p.key)) ?? 'Unmapped'} aria-label="Category for {p.key}" onchange={(val) => (pcmDraft[p.key] = Number(val))}>
+						{#snippet options()}
+							<option value={0}>Unmapped</option>
+							{#each t.groups as g}
+								<optgroup label={g.name}>
+									{#each g.categories.filter((c) => !c.hidden || c.id === pcmValue(p.key)) as c}
+										<option value={c.id}>{c.name}</option>
+									{/each}
+								</optgroup>
+							{/each}
+						{/snippet}
+					</LazySelect>
 				</td>
 			</tr>
 		{/each}

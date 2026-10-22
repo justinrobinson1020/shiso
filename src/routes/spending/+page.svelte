@@ -38,7 +38,7 @@
 
 <h2>Where it went</h2>
 <Donut rows={v.byCategory.map((c) => ({ id: c.categoryId, name: c.name, amount: c.amount }))} total={v.total} label={v.range.label} />
-<h2>Over time <span class="muted small">total per {v.overTime.buckets.length && v.overTime.buckets[0].label.length > 8 ? 'period' : 'month'}</span></h2>
+<h2>Over time <span class="muted small">total per {v.overTime.grain}</span></h2>
 <LineChart points={v.overTime.buckets.filter((b) => !b.future).map((b) => ({ label: b.label, value: b.total }))} height={120} />
 
 <h2>By category</h2>
@@ -71,10 +71,10 @@
 
 <h2>Unusual charges</h2>
 <table class="block">
-	<thead><tr><SortTh key="date" label="Date" kind="date" bind:sort={sortOut} /><SortTh key="payee" label="Payee" kind="text" bind:sort={sortOut} /><SortTh key="categoryName" label="Category" kind="text" class="hide-sm" bind:sort={sortOut} /><SortTh key="amount" label="Amount" kind="number" class="num" bind:sort={sortOut} /><SortTh key="usual" label="Usual" kind="number" class="num hide-sm" bind:sort={sortOut} /><SortTh key="multiple" label="Multiple" kind="number" class="num" bind:sort={sortOut} /></tr></thead>
+	<thead><tr><SortTh key="date" label="Date" kind="date" class="hide-sm" bind:sort={sortOut} /><SortTh key="payee" label="Payee" kind="text" bind:sort={sortOut} /><SortTh key="categoryName" label="Category" kind="text" class="hide-sm" bind:sort={sortOut} /><SortTh key="amount" label="Amount" kind="number" class="num" bind:sort={sortOut} /><SortTh key="usual" label="Usual" kind="number" class="num hide-sm" bind:sort={sortOut} /><SortTh key="multiple" label="Multiple" kind="number" class="num" bind:sort={sortOut} /></tr></thead>
 	<tbody>
 	{#each sortRows(v.outliers, sortOut) as o (o.id)}
-		<tr><td class="date">{shortDate(o.date)}</td><td><a href="/ledger?q={encodeURIComponent(o.payee)}&from={o.date}&to={o.date}">{o.payee}</a><div class="small muted only-sm">{o.categoryName} · usual <Money cents={o.usual} /></div></td><td class="hide-sm">{o.categoryName}</td><td class="num"><Money cents={o.amount} /></td><td class="num hide-sm"><Money cents={o.usual} /></td><td class="num">{o.multiple}× <span class="muted small">{o.reason === 'category' ? 'for the category' : 'for this payee'}</span></td></tr>
+		<tr><td class="date hide-sm">{shortDate(o.date)}</td><td><a href="/ledger?q={encodeURIComponent(o.payee)}&from={o.date}&to={o.date}">{o.payee}</a><div class="small muted only-sm">{shortDate(o.date)} · {o.categoryName} · usual <Money cents={o.usual} /></div></td><td class="hide-sm">{o.categoryName}</td><td class="num"><Money cents={o.amount} /></td><td class="num hide-sm"><Money cents={o.usual} /></td><td class="num">{o.multiple}×<div class="muted small wrap">{o.reason === 'category' ? 'for the category' : 'for this payee'}</div></td></tr>
 	{:else}<tr><td colspan="6" class="muted">Nothing in this range stands out against the twelve months before it.</td></tr>{/each}
 	</tbody>
 </table>

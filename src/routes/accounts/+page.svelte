@@ -14,9 +14,13 @@
 	import { attempt } from '$lib/ui/run';
 	import { decimalToCents, formatCents } from '$lib/money';
 	import { shortDate } from '$lib/dates';
+	import { label } from '$lib/ui/labels';
 	let { data } = $props();
 	const v = $derived(data.view);
 	let error = $state(''); let busy = $state<string | null>(null);
+	// Outcomes that are not failures (the import report, including a preview) live apart from `error`: `attempt`
+	// resolves '' on success, which would wipe anything written into `error` during the action.
+	let notice = $state('');
 	let preview = $state(false);
 	let termsFor = $state<{ id: number; name: string; terms: Terms } | null>(null);
 	let balanceFor = $state<{ id: number; current: string; asOf: string } | null>(null);
@@ -24,7 +28,7 @@
 	let addManual = $state<{ institutionName: string; accounts: { name: string; type: string }[] } | null>(null);
 	let simplefin = $state<{ setupToken: string; institutionName: string } | null>(null);
 	let plaidName = $state('');
-	const run = async (key: string, fn: () => Promise<unknown>) => { error = ''; busy = key; error = await attempt(fn); busy = null; };
+	const run = async (key: string, fn: () => Promise<unknown>) => { error = ''; notice = ''; busy = key; error = await attempt(fn); busy = null; };
 	const fmtTime = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'never');
 	const pct = (bps: number | null) => (bps == null ? '—' : `${(bps / 100).toFixed(2)}%`);
 
@@ -51,7 +55,7 @@
 	async function importFile(accountId: number, input: HTMLInputElement) {
 		const file = input.files?.[0]; if (!file) return;
 		const fd = new FormData(); fd.set('file', file); if (preview) fd.set('dryRun', '1');
-		await run(`import-${accountId}`, async () => { error = reportLine(await upload<Report>(`/api/accounts/${accountId}/import`, fd)); });
+		await run(`import-${accountId}`, async () => { notice = reportLine(await upload<Report>(`/api/accounts/${accountId}/import`, fd)); });
 		input.value = '';
 	}
 </script>
@@ -68,11 +72,12 @@
 	<label class="small"><input type="checkbox" bind:checked={preview} /> preview imports</label>
 </div>
 {#if error}<p class="error">{error}</p>{/if}
+{#if notice}<p class="notice">{notice}</p>{/if}
 
 {#each v.connections as c (c.id)}
-	<div class="card connection">
+	<section class="connection">
 		<div class="toolbar">
-			<strong>{c.institutionName}</strong><span class="muted small">{c.provider}</span><span class="status {c.status}">{c.status}</span>
+			<strong>{c.institutionName}</strong><span class="muted small">{label(c.provider)}</span><span class="status {c.status}">{label(c.status)}</span>
 			<span class="small muted">last success {fmtTime(c.lastSuccessAt)}</span>
 			{#if c.lastRun}<span class="small muted">last run {c.lastRun.status} · {c.lastRun.added} added · {c.lastRun.modified} changed · {c.lastRun.removed} removed{#if c.lastRun.error} · {c.lastRun.error}{/if}</span>{/if}
 			{#if c.provider !== 'manual'}<button disabled={busy != null} onclick={() => run(`sync-${c.id}`, () => post(`/api/sync/${c.id}`, {}))}>Sync</button>{/if}
@@ -85,17 +90,17 @@
 			<tbody>
 			{#each sortRows(c.accounts, sortAcct[c.id] ?? null, acctCols) as a (a.id)}
 				<tr id="account-{a.id}">
-					<td>{a.name}{#if a.mask} <span class="muted small">····{a.mask}</span>{/if}{#if a.closedAt} <span class="status">closed {shortDate(a.closedAt)}</span>{/if}{#if !a.onBudget} <span class="status">off-budget</span>{/if}
+					<td>{a.name}{#if a.mask}{' '}<span class="muted small">····{a.mask}</span>{/if}{#if a.closedAt}{' '}<span class="status">closed {shortDate(a.closedAt)}</span>{/if}{#if !a.onBudget}{' '}<span class="status">off-budget</span>{/if}
 						<div class="small muted only-sm">{a.type} · ledger <Money cents={a.drift.ledgerBalance} neutral={a.isDebt} />{#if a.isDebt && a.terms} · APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ? shortDate(a.terms.nextDueDate) : '—'}{/if}</div></td>
 					<td class="hide-sm">{a.type}</td>
-					<td class="num">{#if a.balance}<Money cents={a.balance.current} neutral={a.isDebt} /><div class="small muted nowrap">{shortDate(a.balance.asOf)} · {a.balance.source}</div>{:else}<span class="muted">—</span>{/if}</td>
+					<td class="num">{#if a.balance}<Money cents={a.balance.current} neutral={a.isDebt} /><div class="small muted nowrap">{shortDate(a.balance.asOf)} · {label(a.balance.source)}</div>{:else}<span class="muted">—</span>{/if}</td>
 					<td class="num hide-sm"><Money cents={a.drift.ledgerBalance} neutral={a.isDebt} /></td>
 					<td class="num">{#if a.drift.drift != null && a.drift.drift !== 0}<Money cents={a.drift.drift} signed />
 							{#if a.drift.settled}<button class="small" disabled={busy != null} onclick={() => run(`adj-${a.id}`, () => post(`/api/accounts/${a.id}/adjust`, { amount: a.drift.drift, date: data.today }))}>adjust</button>
 							{:else}<span class="small muted" title="The balance can arrive before the transactions that explain it. Adjust appears once two full syncs have seen this same drift.">settling</span>{/if}
 							<div class="small muted">{a.drift.convention === 'exclude_pending' ? 'excluding pending' : 'including pending'} · <button class="small" disabled={busy != null} onclick={() => run('conv', () => post(`/api/accounts/${a.id}/convention`, { convention: a.drift.convention === 'exclude_pending' ? 'include_pending' : 'exclude_pending' }))}>switch</button></div>
 						{:else if a.drift.drift === 0}<span class="status paid">reconciled</span>{:else}<span class="muted">no balance</span>{/if}</td>
-					<td class="hide-sm terms">{#if a.isDebt}{#if a.terms}<span class="small">APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ? shortDate(a.terms.nextDueDate) : '—'} <span class="muted">({a.terms.source})</span></span>{:else}<span class="muted small">no terms</span>{/if}
+					<td class="hide-sm terms">{#if a.isDebt}{#if a.terms}<span class="small">APR {pct(a.terms.aprBps)} · min <Money cents={a.terms.minPayment ?? 0} /> · due {a.terms.nextDueDate ? shortDate(a.terms.nextDueDate) : '—'} <span class="muted">({label(a.terms.source)})</span></span>{:else}<span class="muted small">no terms</span>{/if}
 							<button class="small" onclick={() => (termsFor = { id: a.id, name: a.name, terms: a.terms })}>edit</button>{/if}</td>
 					<td class="row-actions">
 						{#if a.isDebt}<button class="small only-sm" onclick={() => (termsFor = { id: a.id, name: a.name, terms: a.terms })}>terms</button>{/if}
@@ -107,7 +112,7 @@
 			{/each}
 			</tbody>
 		</table>
-	</div>
+	</section>
 {:else}<p class="muted">No connections yet. Connect a bank with Plaid, paste a SimpleFIN token, or add a manual account and enter balances by hand.</p>{/each}
 
 {#if termsFor}{@const acct = termsFor}{#key acct.id}<TermsEditor account={acct} terms={acct.terms} today={data.today} onclose={() => (termsFor = null)} onsave={async (body) => { termsFor = null; await run('terms', () => post(`/api/accounts/${acct.id}/terms`, body)); }} />{/key}{/if}

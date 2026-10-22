@@ -1,25 +1,28 @@
 :root {
 	--bg: #fafaf7; --fg: #1d1d1b; --muted: #6b6b66; --line: #e2e2dc; --card: #fffffc;
-	--accent: #2f6f4e; --on-accent: #fffffc; --neg: #b3261e; --pos: #1e6b3a; --warn: #8a5a00; --badge: #b3261e; --on-badge: #fffffc;
+	--accent: #2f6f4e; --on-accent: #fffffc; --neg: #b3261e; --pos: #1e6b3a; --warn: #8a5a00; --badge: #b3261e; --on-badge: #fffffc; --on-neg: #fffffc; --scrim: oklch(22% .005 100 / .35);
 	--chart-1: #2f6f4e; --chart-2: #c2781f; --chart-3: #3f6ab0; --chart-4: #b5484a; --chart-5: #7a5ab5; --chart-6: #2f8f8c; --chart-7: #8a8a24; --chart-8: #8a6d4b; --chart-9: #8f8f88;
-	--text-caption: .75rem; --text-secondary: .875rem; --text-body: 1rem; --text-subheading: 1.2rem; --text-heading: 1.5rem; --text-display: 2.25rem; --text-table: .9375rem;
+	--cell-pad: .45rem .6rem; --text-caption: .75rem; --text-secondary: .875rem; --text-body: 1rem; --text-subheading: 1.2rem; --text-heading: 1.5rem; --text-display: 2.25rem; --text-table: .9375rem;
 	font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; line-height: 1.45; font-kerning: normal; color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
 	:root {
 		--bg: #141412; --fg: #ecece6; --muted: #a2a29a; --line: #2c2c28; --card: #1c1c19;
-		--accent: #79c29a; --on-accent: #141412; --neg: #ff6b62; --pos: #7fd39a; --warn: #f0b64a; --badge: #d9453a; --on-badge: #fffffc;
+		--accent: #79c29a; --on-accent: #141412; --neg: #ff6b62; --pos: #7fd39a; --warn: #f0b64a; --badge: #d9453a; --on-badge: #fffffc; --on-neg: #141412; --scrim: oklch(8% .005 100 / .6);
 		--chart-1: #79c29a; --chart-2: #e8a34e; --chart-3: #7f9fe0; --chart-4: #e3807f; --chart-5: #b39ae0; --chart-6: #6fc4c1; --chart-7: #c4c45a; --chart-8: #c3a07c; --chart-9: #a2a29a;
 	}
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); }
-a { color: var(--accent); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: text-decoration-color 120ms ease-out; }
-a:hover { text-decoration-thickness: 2px; }
+/* Links read as text with a quiet underline: the accent is kept for the primary action and the active state, and
+   green body text would read as a positive amount. */
+a { color: inherit; text-underline-offset: 2px; text-decoration-thickness: 1px; text-decoration-color: color-mix(in oklch, var(--fg), transparent 62%); transition: text-decoration-color 120ms ease-out; }
+a:hover { text-decoration-color: currentColor; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent), transparent 78%); }
 input, select, textarea { transition: border-color 120ms ease-out, box-shadow 120ms ease-out; }
 .nowrap, td.date { white-space: nowrap; }
+td.key { overflow-wrap: anywhere; }
 main { max-width: 1200px; margin: 0 auto; padding: 1rem 1.25rem 3rem; }
 .topnav { display: flex; gap: 1rem; align-items: center; padding: .6rem 1.25rem; border-bottom: 1px solid var(--line); background: var(--card); }
 .topnav .brand { font-weight: 700; margin-right: .5rem; }
@@ -27,15 +30,15 @@ main { max-width: 1200px; margin: 0 auto; padding: 1rem 1.25rem 3rem; }
 .topnav a.active { background: var(--accent); color: var(--on-accent); }
 .badge { display: inline-block; min-width: 1.2em; padding: 0 .35em; margin-left: .35em; border-radius: 1em; background: var(--badge); color: var(--on-badge); font-size: var(--text-caption); font-variant-numeric: tabular-nums; text-align: center; }
 h1, h2 { line-height: 1.2; letter-spacing: -.01em; }
+h1 .muted, h2 .muted { font-weight: 400; letter-spacing: 0; }
 h1 { font-size: var(--text-heading); font-weight: 600; margin: .5rem 0 1rem; } h2 { font-size: var(--text-subheading); font-weight: 600; margin: 2rem 0 .5rem; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: .6rem; padding: .75rem 1rem; }
-.sheet { display: grid; grid-template-columns: 1fr 1fr; gap: 0 3rem; align-items: start; }
+.sheet { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 3rem; align-items: start; }
 .sheet .col > h2:first-child { margin-top: 1rem; }
 table.block tfoot td { font-weight: 600; border-bottom: none; border-top: 1px solid var(--muted); }
 table.block tfoot tr.grand td { font-size: var(--text-subheading); padding-top: .6rem; }
 table.balances td:first-child .small { margin-left: .35rem; }
 table.trends td.spark { width: 140px; padding-top: .2rem; padding-bottom: .2rem; } table.trends td.spark svg { height: 28px; display: block; }
-td.target { min-width: 9rem; } .bar { height: 4px; background: var(--line); border-radius: 2px; margin: .25rem 0; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--accent); }
+td.target { min-width: 9rem; } .bar { height: 4px; background: var(--line); border-radius: 2px; margin: .25rem 0; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--chart-1); }
 td.target-editor { white-space: nowrap; } td.target-editor > * { margin-right: .3rem; }
 table.strategies tr { cursor: pointer; } table.strategies tr.active td { background: var(--card); }
 table.block + .chart, h2 + .chart { margin-top: .5rem; }
@@ -49,7 +52,7 @@ table.block + .chart, h2 + .chart { margin-top: .5rem; }
 .facts dd { margin: 0; font-size: var(--text-subheading); font-weight: 600; font-variant-numeric: tabular-nums; }
 .facts dd .small { font-weight: 400; }
 table { width: 100%; border-collapse: collapse; }
-th, td { padding: .45rem .6rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; font-size: var(--text-table); }
+th, td { padding: var(--cell-pad); border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; font-size: var(--text-table); }
 th { color: var(--muted); font-weight: 500; font-size: var(--text-caption); text-transform: uppercase; letter-spacing: .06em; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody tr:hover > td { background: color-mix(in oklch, var(--fg), transparent 96%); }
@@ -66,9 +69,9 @@ td.row-actions { white-space: nowrap; }
 .status { font-size: var(--text-caption); padding: .1rem .45rem; border-radius: 1em; border: 1px solid var(--line); }
 .status.paid { color: var(--pos); }
 /* Dashboard rows: due-now comes out of cash on hand before the next paycheck; paid flips green. */
-tr.due-now > td { background: color-mix(in srgb, var(--warn) 10%, transparent); }
+tr.due-now > td { background: color-mix(in oklch, var(--warn) 10%, transparent); }
 tr.due-now > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
-tr.paid > td { background: color-mix(in srgb, var(--pos) 10%, transparent); }
+tr.paid > td { background: color-mix(in oklch, var(--pos) 10%, transparent); }
 tr.paid > td:first-child { box-shadow: inset 3px 0 0 var(--pos); }
 td.status-cell { white-space: nowrap; }
 input.estimate { width: 5.5em; text-align: right; padding: .1rem .35rem; font: inherit; font-size: var(--text-table); border: 1px dashed var(--muted); border-radius: .3em; background: transparent; color: inherit; }
@@ -85,9 +88,10 @@ button:active:not(:disabled) { background: var(--bg); }
 button.primary:hover:not(:disabled) { background: color-mix(in oklch, var(--accent), var(--fg) 12%); border-color: transparent; }
 button.primary:active:not(:disabled) { background: color-mix(in oklch, var(--accent), var(--bg) 12%); }
 button:disabled { opacity: .5; cursor: default; }
-.error { color: var(--neg); } .muted { color: var(--muted); } .small { font-size: var(--text-secondary); }
+.error { color: var(--neg); } .notice { font-size: var(--text-secondary); padding: .4rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+button.danger.armed, button.danger.armed:hover:not(:disabled) { background: var(--neg); color: var(--on-neg); border-color: transparent; } .muted { color: var(--muted); } .small { font-size: var(--text-secondary); }
 dialog { border: 1px solid var(--line); border-radius: .6rem; background: var(--card); color: var(--fg); padding: 1rem 1.25rem; min-width: 320px; max-width: 90vw; }
-dialog::backdrop { background: rgba(0,0,0,.35); }
+dialog::backdrop { background: var(--scrim); }
 dialog[open] { animation: dialog-in 140ms ease-out; }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { button, a, input, select, textarea { transition: none; } dialog[open] { animation: none; } }
@@ -95,53 +99,71 @@ dialog .grid { display: grid; grid-template-columns: max-content 1fr; gap: .5rem
 dialog .grid > .actions, dialog .grid > .error { grid-column: 1 / -1; }
 dialog h2 { margin-top: 0; }
 .toolbar > h1, .toolbar > h2 { margin: 0; }
-.connection { margin-bottom: 1rem; }
+/* Blocks are separated by rules and space, not boxes: hierarchy comes from the ledger lines. */
+.connection { padding-top: .75rem; border-top: 1px solid var(--line); margin-bottom: 2rem; }
+.add-form { padding: .5rem 0 .25rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 1rem; }
 .connection > .toolbar { margin: 0 0 .5rem; }
 dialog table { margin: .5rem 0; }
 input.w5 { width: 5em; } input.w4 { width: 4em; }
 .actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .75rem; }
-.strip { display: flex; gap: .75rem; flex-wrap: wrap; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--card); margin-bottom: 1rem; }
+.strip { display: flex; gap: .5rem 1.25rem; flex-wrap: wrap; align-items: center; padding: .5rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 1rem; }
+.strip + .strip { margin-top: -1rem; border-top: 0; }
 .chart { width: 100%; height: auto; }
 .legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; font-size: var(--text-secondary); margin-top: .5rem; } .legend i { display: inline-block; width: .8em; height: .8em; border-radius: .2em; margin-right: .3em; }
 
 .only-sm { display: none; }
+.chart-caption { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.chart-caption h2 { margin-bottom: 0.25rem; }
+/* Charts draw at the frame's pixel width (see LineChart), so caption-size labels stay caption-size on every screen. */
+.chart-frame { width: 100%; }
+.sub-status { margin-top: .2rem; }
+.filters-toggle { display: none; }
+.chart text { font-size: var(--text-caption); fill: var(--muted); font-variant-numeric: tabular-nums; }
 
 @media (max-width: 720px) {
-	main { padding: .75rem .75rem 2rem; }
 	:root { --text-display: 1.875rem; }
+	main { padding: .75rem .75rem 2rem; }
 
-	.topnav { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
-	.topnav .brand, .topnav a { flex-shrink: 0; }
+	/* Every page and the review badge stay in view: brand plus seven links fill two rows of four. */
+	.topnav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .25rem; padding: .4rem .75rem; }
+	.topnav .brand { display: flex; align-items: center; margin: 0; }
+	.topnav a { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 .25rem; }
 
 	.toolbar { flex-direction: column; align-items: stretch; }
 	.toolbar > * { width: 100%; }
 	.toolbar > input, .toolbar > select, .toolbar > button { min-height: 44px; }
 	.toolbar > span, .toolbar > a, .toolbar > label { width: auto; align-self: flex-start; }
 	.toolbar > label { display: flex; align-items: center; gap: .4rem; }
+	.toolbar.range-toolbar, .toolbar.month-nav, .connection > .toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
+	.toolbar.range-toolbar > *, .toolbar.month-nav > *, .connection > .toolbar > * { width: auto; }
+	.toolbar.month-nav { flex-wrap: nowrap; }
+	.toolbar.month-nav h1 { flex: 1; text-align: center; }
 
-	table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-	th, td { white-space: nowrap; padding: .35rem .45rem; }
+	/* Tables stay real tables at full width: text cells wrap, figures never do. Columns that do not fit are
+	   hidden with .hide-sm and come back as sublines or inputs (.only-sm) in the first cell. */
+	:root { --cell-pad: .35rem .45rem; }
+	td.num, td.status-cell { white-space: nowrap; }
+	.wrap { white-space: normal; }
+	tbody tr:hover > td { background: transparent; }
+	table.block tfoot tr.grand td { font-size: var(--text-table); }
 
 	input, select, button, textarea { min-height: 40px; font-size: 16px; }
 	input[type=checkbox], input[type=radio] { min-height: 0; width: 1.1rem; height: 1.1rem; }
-
-	dialog { width: calc(100vw - 2rem); max-width: none; max-height: 90vh; overflow: auto; }
-	dialog .grid { grid-template-columns: 1fr; }
-
-	.hide-sm { display: none; }
-	.only-sm { display: block; }
-}
-
-@media (max-width: 720px) {
 	button.small { min-height: 44px; padding: 0 .75rem; }
-	td.row-actions { white-space: normal; }
+	/* Text-link actions grow their hit area with padding and give it back with margin, so rows keep one height. */
+	button.link { min-height: 0; padding: .6rem .4rem; margin: -.6rem -.4rem -.6rem .05rem; }
 	input.inline.only-sm { min-height: 32px; }
-	.connection > .toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
-	.connection > .toolbar > * { width: auto; }
+	td.row-actions { white-space: normal; }
 	td.row-actions button, td.row-actions label { display: block; width: 100%; margin: 0 0 .35rem; text-align: center; }
 	td.row-actions label { padding: .6rem 0; }
 
+	dialog { width: calc(100vw - 2rem); max-width: none; max-height: 90vh; overflow: auto; }
+	dialog .grid { grid-template-columns: 1fr; }
 	dialog .grid input, dialog .grid select, dialog .grid textarea { width: 100%; }
+
+	.hide-sm { display: none; }
+	.only-sm { display: block; }
+	.only-sm-inline { display: inline; }
 
 	table.stack-sm, table.stack-sm thead, table.stack-sm tbody, table.stack-sm tr, table.stack-sm th, table.stack-sm td { display: block; width: 100%; white-space: normal; }
 	table.stack-sm thead { display: none; }
@@ -151,25 +173,22 @@ input.w5 { width: 5em; } input.w4 { width: 4em; }
 	table.stack-sm td.num { text-align: left; }
 	table.stack-sm td.hide-sm { display: none; }
 	table.stack-sm td:empty { display: none; }
-
-	.toolbar.range-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
-	.toolbar.range-toolbar > * { width: auto; }
-
-	.sheet { grid-template-columns: 1fr; }
-	table.block tfoot tr.grand td { font-size: var(--text-table); }
-	.sheet table.block td:first-child, table.plan td:first-child { white-space: normal; }
-	table.plan input.num, table.budget input.num { width: 5.5em; }
-	.only-sm-inline { display: inline; }
-	td.env { white-space: normal; }
-	.env-avail { font-weight: 600; font-variant-numeric: tabular-nums; }
-	.env-sub { display: flex; align-items: center; gap: .75rem; margin-top: .3rem; } .env-sub label { display: flex; align-items: center; gap: .35rem; } .env-sub input.num { min-height: 36px; }
 	table.stack-sm input[type=checkbox] { width: auto; } table.stack-sm td.target-editor { white-space: normal; }
-	table.budget td.row-actions { white-space: nowrap; } table.budget td.row-actions button { display: inline-block; width: auto; margin: 0 .25rem 0 0; }
-	tbody tr:hover > td { background: transparent; }
-	.toolbar.month-nav { flex-direction: row; flex-wrap: nowrap; align-items: center; }
-	.toolbar.month-nav > * { width: auto; }
-	.toolbar.month-nav h1 { flex: 1; text-align: center; }
-}
 
-.chart-caption { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
-.chart-caption h2 { margin-bottom: 0.25rem; }
+	.toolbar.ledger-filters { flex-direction: row; flex-wrap: wrap; align-items: center; }
+	.toolbar.ledger-filters > * { width: auto; align-self: center; }
+	.toolbar.ledger-filters > .search { order: -1; flex: 1 0 100%; }
+	.toolbar.ledger-filters > .filter { display: none; flex: 1 0 100%; }
+	.toolbar.ledger-filters.open > .filter { display: block; }
+	.toolbar.ledger-filters > .filters-toggle { display: block; }
+	.toolbar.ledger-filters > .count { margin-left: auto; align-self: center; }
+
+	.row-actions-sm { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin-top: .35rem; }
+	td select { max-width: 100%; }
+
+	.sheet { grid-template-columns: minmax(0, 1fr); }
+	table.plan input.num, table.budget input.num { width: 5.5em; }
+	.env-avail { font-weight: 600; font-variant-numeric: tabular-nums; }
+	.env-sub { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; margin-top: .3rem; } .env-sub label { display: flex; align-items: center; gap: .35rem; } .env-sub input.num { min-height: 36px; }
+	table.budget td.row-actions { text-align: right; } table.budget td.row-actions button { display: inline-block; width: auto; margin: 0 0 .25rem .25rem; }
+}

@@ -41,31 +41,31 @@
 	<table class="history"><thead><tr><SortTh key="dueDate" label="Due" kind="date" bind:sort={sortHist} /><SortTh key="periodLabel" label="Period" kind="text" bind:sort={sortHist} /><SortTh key="expected" label="Expected" kind="number" class="num" bind:sort={sortHist} /><SortTh key="paid" label={kind === 'bill' ? 'Paid' : 'Received'} kind="number" class="num" bind:sort={sortHist} />{#if kind === 'bill'}<SortTh key="extra" label="Extra" kind="number" class="num" bind:sort={sortHist} />{/if}<SortTh key="status" label="Status" kind="text" bind:sort={sortHist} /><th></th></tr></thead><tbody>
 	{#each sortRows(rows, sortHist) as o (o.id)}
 		<tr><td class="date">{shortDate(o.dueDate)}</td><td class="muted">{o.periodLabel}</td><td class="num"><Money cents={o.expected} /></td><td class="num"><Money cents={o.paid} /></td>{#if kind === 'bill'}<td class="num"><Money cents={o.extra} /></td>{/if}
-			<td><span class="status {o.status}">{o.status}</span>{#if o.markedBy === 'manual'} <span class="muted small">manual</span>{/if}{#if o.needsReview} <span class="status overdue">tie</span>{/if}
+			<td><span class="status {o.status}">{o.status}</span>{#if o.markedBy === 'manual'}{' '}<span class="muted small">manual</span>{/if}{#if o.needsReview}{' '}<span class="status overdue">tie</span>{/if}
 				{#if o.transactionIds.length}<span class="small muted" title="linked transactions: {o.transactionIds.join(', ')}"> {o.transactionIds.length} linked</span>{/if}</td>
 			<td>{#if o.status === 'paid'}<button class="small" onclick={() => occAction(kind, o.id, 'unmark')}>unmark</button>{:else if o.status !== 'skipped'}<button class="small" onclick={() => occAction(kind, o.id, kind === 'bill' ? 'paid' : 'received')}>mark {kind === 'bill' ? 'paid' : 'received'}</button> <button class="small" onclick={() => occAction(kind, o.id, 'skip')}>skip</button>{:else}<button class="small" onclick={() => occAction(kind, o.id, 'unmark')}>unskip</button>{/if}</td></tr>
 	{/each}
 	</tbody></table>
 {/snippet}
 
-<div class="toolbar"><h2>Bills</h2><button class="primary" onclick={() => (editing = blank('bill'))}>+ Bill</button></div>
-<table><thead><tr><SortTh key="name" label="Bill" kind="text" bind:sort={sortBillDefs} /><SortTh key="cadence" label="Schedule" kind="text" class="hide-sm" bind:sort={sortBillDefs} /><SortTh key="payFromAccountName" label="From" kind="text" bind:sort={sortBillDefs} /><SortTh key="expectedAmount" label="Expected" kind="number" class="num" bind:sort={sortBillDefs} /><SortTh key="next" label="Next" kind="date" bind:sort={sortBillDefs} /><th></th></tr></thead><tbody>
+<div class="toolbar"><h2>Bills</h2><button onclick={() => (editing = blank('bill'))}>+ Bill</button></div>
+<table><thead><tr><SortTh key="name" label="Bill" kind="text" bind:sort={sortBillDefs} /><SortTh key="cadence" label="Schedule" kind="text" class="hide-sm" bind:sort={sortBillDefs} /><SortTh key="payFromAccountName" label="From" kind="text" class="hide-sm" bind:sort={sortBillDefs} /><SortTh key="expectedAmount" label="Expected" kind="number" class="num" bind:sort={sortBillDefs} /><SortTh key="next" label="Next" kind="date" bind:sort={sortBillDefs} /><th></th></tr></thead><tbody>
 {#each sortRows(v.bills, sortBillDefs, billCols) as b (b.id)}
-	<tr class:muted={!b.active}><td>{b.name}{#if b.linkedDebtAccountId} <span class="muted small">card</span>{/if}{#if b.autopay} <span class="muted small">autopay</span>{/if}{#if !b.active} <span class="status">inactive</span>{/if}
-		<div class="small muted only-sm">{schedule(b)}</div></td>
-		<td class="small hide-sm">{schedule(b)}</td><td>{b.payFromAccountName}</td><td class="num"><Money cents={b.expectedAmount} /></td>
-		<td class="date">{#if b.next}{shortDate(b.next.dueDate)} <span class="status {b.next.status}">{b.next.status}</span>{:else}<span class="muted">—</span>{/if}</td>
-		<td><button class="small" onclick={() => (editing = fromBill(b))}>edit</button> <button class="small" onclick={() => (open[`b${b.id}`] = !open[`b${b.id}`])}>{open[`b${b.id}`] ? 'hide' : 'history'}</button></td></tr>
+	<tr class:muted={!b.active}><td>{b.name}{#if b.linkedDebtAccountId}{' '}<span class="muted small">card</span>{/if}{#if b.autopay}{' '}<span class="muted small">autopay</span>{/if}{#if !b.active}{' '}<span class="status">inactive</span>{/if}
+		<div class="small muted only-sm">{schedule(b)} · from {b.payFromAccountName}</div></td>
+		<td class="small hide-sm">{schedule(b)}</td><td class="hide-sm">{b.payFromAccountName}</td><td class="num"><Money cents={b.expectedAmount} /></td>
+		<td>{#if b.next}<span class="nowrap">{shortDate(b.next.dueDate)}</span> <span class="status {b.next.status} nowrap">{b.next.status}</span>{:else}<span class="muted">—</span>{/if}</td>
+		<td class="row-actions"><button class="small" onclick={() => (editing = fromBill(b))}>edit</button> <button class="small" onclick={() => (open[`b${b.id}`] = !open[`b${b.id}`])}>{open[`b${b.id}`] ? 'hide' : 'history'}</button></td></tr>
 	{#if open[`b${b.id}`]}<tr><td colspan="6" class="expanded">{@render history('bill', b.history)}</td></tr>{/if}
 {:else}<tr><td colspan="6" class="muted">No bills yet. Add one with + Bill; a card payment linked to its debt account is marked paid by the transfer that pays it.</td></tr>{/each}
 </tbody></table>
 
-<div class="toolbar"><h2>Income</h2><button class="primary" onclick={() => (editing = blank('income'))}>+ Income</button></div>
-<table><thead><tr><SortTh key="name" label="Source" kind="text" bind:sort={sortIncDefs} /><SortTh key="cadence" label="Schedule" kind="text" class="hide-sm" bind:sort={sortIncDefs} /><SortTh key="depositAccountName" label="To" kind="text" bind:sort={sortIncDefs} /><SortTh key="expectedAmount" label="Expected" kind="number" class="num" bind:sort={sortIncDefs} /><SortTh key="next" label="Next" kind="date" bind:sort={sortIncDefs} /><th></th></tr></thead><tbody>
+<div class="toolbar"><h2>Income</h2><button onclick={() => (editing = blank('income'))}>+ Income</button></div>
+<table><thead><tr><SortTh key="name" label="Source" kind="text" bind:sort={sortIncDefs} /><SortTh key="cadence" label="Schedule" kind="text" class="hide-sm" bind:sort={sortIncDefs} /><SortTh key="depositAccountName" label="To" kind="text" class="hide-sm" bind:sort={sortIncDefs} /><SortTh key="expectedAmount" label="Expected" kind="number" class="num" bind:sort={sortIncDefs} /><SortTh key="next" label="Next" kind="date" bind:sort={sortIncDefs} /><th></th></tr></thead><tbody>
 {#each sortRows(v.income, sortIncDefs, incomeCols) as s (s.id)}
-	<tr class:muted={!s.active}><td>{s.name}<div class="small muted only-sm">{schedule(s)}</div></td><td class="small hide-sm">{schedule(s)}</td><td>{s.depositAccountName}</td><td class="num"><Money cents={s.expectedAmount} /></td>
-		<td class="date">{#if s.next}{shortDate(s.next.dueDate)} <span class="status {s.next.status}">{s.next.status}</span>{:else}<span class="muted">—</span>{/if}</td>
-		<td><button class="small" onclick={() => (editing = fromIncome(s))}>edit</button> <button class="small" onclick={() => (open[`i${s.id}`] = !open[`i${s.id}`])}>{open[`i${s.id}`] ? 'hide' : 'history'}</button></td></tr>
+	<tr class:muted={!s.active}><td>{s.name}<div class="small muted only-sm">{schedule(s)} · to {s.depositAccountName}</div></td><td class="small hide-sm">{schedule(s)}</td><td class="hide-sm">{s.depositAccountName}</td><td class="num"><Money cents={s.expectedAmount} /></td>
+		<td>{#if s.next}<span class="nowrap">{shortDate(s.next.dueDate)}</span> <span class="status {s.next.status} nowrap">{s.next.status}</span>{:else}<span class="muted">—</span>{/if}</td>
+		<td class="row-actions"><button class="small" onclick={() => (editing = fromIncome(s))}>edit</button> <button class="small" onclick={() => (open[`i${s.id}`] = !open[`i${s.id}`])}>{open[`i${s.id}`] ? 'hide' : 'history'}</button></td></tr>
 	{#if open[`i${s.id}`]}<tr><td colspan="6" class="expanded">{@render history('income', s.history)}</td></tr>{/if}
 {:else}<tr><td colspan="6" class="muted">No income sources yet. Add your paycheck with + Income so the Month page can count cash still coming in.</td></tr>{/each}
 </tbody></table>

@@ -5,16 +5,22 @@
 	import { page } from '$app/state';
 	import Money from '$lib/ui/Money.svelte';
 	import Dialog from '$lib/ui/Dialog.svelte';
+	import LazySelect from '$lib/ui/LazySelect.svelte';
+	import ConfirmButton from '$lib/ui/ConfirmButton.svelte';
 	import SplitEditor from './SplitEditor.svelte';
 	import { post } from '$lib/ui/api';
 	import { attempt } from '$lib/ui/run';
 	import { decimalToCents } from '$lib/money';
 	import { shortDate } from '$lib/dates';
+	import { label, REVIEW_HELP } from '$lib/ui/labels';
 	let { data } = $props();
 	const sort = $derived<SortState>(data.sort ?? { key: 'date', dir: 'desc' });
 	const sortHref = (next: { key: string; dir: string }) => { const u = new URL(page.url); u.searchParams.set('sort', next.key); u.searchParams.set('dir', next.dir); u.searchParams.delete('page'); return u.pathname + u.search; };
 	const v = $derived(data.view); const tree = $derived(data.tree);
 	let error = $state('');
+	// Phones keep search and the review queue in view; the three selects and manual-add sit behind one toggle.
+	let showFilters = $state(false);
+	const activeFilters = $derived([data.filter.accountId, data.filter.periodId, data.filter.categoryId].filter((x) => x != null).length);
 	let splitting = $state<(typeof v.rows)[number] | null>(null);
 	let ruleFor = $state<{ id: number; payeeRaw: string; payee: string; pattern: string; categoryId: number | null } | null>(null);
 	let adding = $state(false); let add = $state({ accountId: null as number | null, postedDate: '', amount: '', payee: '', memo: '', categoryId: null as number | null });
@@ -32,21 +38,28 @@
 	const periodLabel = (id: number) => v.periods.find((p) => p.id === id)?.label ?? '';
 </script>
 
+{#snippet categoryOptions(current: number)}{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories.filter((c) => !c.hidden || c.id === current) as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}{/snippet}
+{#snippet periodOptions()}{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}{/snippet}
+{#snippet rowActions(row: (typeof v.rows)[number])}{#if row.needsReview}<span class="status overdue" title={REVIEW_HELP[row.reviewReason ?? ''] ?? ''}>{label(row.reviewReason)}</span> <button class="small" onclick={() => run(() => post(`/api/transactions/${row.id}/review`))}>clear</button>{/if}
+	{#if row.source === 'manual' || row.source === 'import' || row.source === 'adjustment'}<ConfirmButton class="small" label="delete" onconfirm={() => run(() => post(`/api/transactions/${row.id}/delete`))} />{/if}{/snippet}
+{#snippet periodPicker(row: (typeof v.rows)[number], quiet = false)}<LazySelect {quiet} value={row.periodId} label={periodLabel(row.periodId)} aria-label="Period for {row.payee}" onchange={(val) => patch(row.id, { periodId: Number(val) })} options={periodOptions} />{/snippet}
+
 <h1>Ledger</h1>
-<div class="toolbar">
-	<select value={data.filter.accountId ?? ''} onchange={(e) => setParam('account', e.currentTarget.value || null)}><option value="">All accounts</option>{#each v.accounts as a}<option value={a.id}>{a.name}{a.closed ? ' (closed)' : ''}</option>{/each}</select>
-	<select value={data.filter.periodId ?? ''} onchange={(e) => setParam('period', e.currentTarget.value || null)}><option value="">All periods</option>{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}</select>
-	<select value={data.filter.categoryId ?? ''} onchange={(e) => setParam('category', e.currentTarget.value || null)}><option value="">All categories</option>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select>
-	<input placeholder="Search payee or memo" value={data.filter.q ?? ''} onchange={(e) => setParam('q', e.currentTarget.value || null)} />
+<div class="toolbar ledger-filters" class:open={showFilters}>
+	<select class="filter" value={data.filter.accountId ?? ''} onchange={(e) => setParam('account', e.currentTarget.value || null)}><option value="">All accounts</option>{#each v.accounts as a}<option value={a.id}>{a.name}{a.closed ? ' (closed)' : ''}</option>{/each}</select>
+	<select class="filter" value={data.filter.periodId ?? ''} onchange={(e) => setParam('period', e.currentTarget.value || null)}><option value="">All periods</option>{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}</select>
+	<select class="filter" value={data.filter.categoryId ?? ''} onchange={(e) => setParam('category', e.currentTarget.value || null)}><option value="">All categories</option>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select>
+	<input class="search" type="search" placeholder="Search payee or memo" value={data.filter.q ?? ''} onchange={(e) => setParam('q', e.currentTarget.value || null)} />
 	<label class="small"><input type="checkbox" checked={data.filter.review} onchange={(e) => setParam('review', e.currentTarget.checked ? '1' : null)} /> review queue</label>
-	<button onclick={() => (adding = !adding)}>+ Manual transaction</button>
-	<span class="muted small">{v.total} rows</span>
+	<button class="filters-toggle" aria-expanded={showFilters} onclick={() => (showFilters = !showFilters)}>Filters{#if activeFilters} · {activeFilters}{/if}</button>
+	<button class="filter" onclick={() => (adding = !adding)}>+ Manual transaction</button>
+	<span class="muted small count">{v.total} rows</span>
 </div>
 {#if error}<p class="error">{error}</p>{/if}
 {#if v.drift.length}<div class="strip">{#each v.drift as d}<span>Drift on {d.accountName}: <Money cents={d.drift} signed /> — <a href="/accounts#account-{d.accountId}">reconcile</a></span>{/each}</div>{/if}
 
 {#if adding}
-<form class="card" onsubmit={(e) => { e.preventDefault(); if (add.accountId == null) { error = 'Choose an account'; return; } run(() => post('/api/transactions', { accountId: add.accountId, postedDate: add.postedDate, amount: decimalToCents(add.amount), payee: add.payee, memo: add.memo || null, categoryId: add.categoryId })).then(() => { adding = false; }); }}>
+<form class="add-form" onsubmit={(e) => { e.preventDefault(); if (add.accountId == null) { error = 'Choose an account'; return; } run(() => post('/api/transactions', { accountId: add.accountId, postedDate: add.postedDate, amount: decimalToCents(add.amount), payee: add.payee, memo: add.memo || null, categoryId: add.categoryId })).then(() => { adding = false; }); }}>
 	<div class="toolbar">
 		<select bind:value={add.accountId} required><option value={null}>Account…</option>{#each manualAccounts as a}<option value={a.id}>{a.name}</option>{/each}</select>
 		<input type="date" bind:value={add.postedDate} required /><input class="num" placeholder="-12.34" bind:value={add.amount} required /><input placeholder="Payee" bind:value={add.payee} required />
@@ -58,24 +71,24 @@
 {/if}
 
 <table>
-	<thead><tr><SortTh key="date" label="Date" kind="date" sort={sort} href={sortHref} /><SortTh key="account" label="Account" kind="text" class="hide-sm" sort={sort} href={sortHref} /><SortTh key="payee" label="Payee" kind="text" sort={sort} href={sortHref} /><SortTh key="category" label="Category" kind="text" sort={sort} href={sortHref} /><SortTh key="memo" label="Memo" kind="text" class="hide-sm" sort={sort} href={sortHref} /><SortTh key="amount" label="Amount" kind="number" class="num hide-sm" sort={sort} href={sortHref} /><SortTh key="period" label="Period" kind="date" class="hide-sm" sort={sort} href={sortHref} /><th></th></tr></thead>
+	<thead><tr><SortTh key="date" label="Date" kind="date" class="hide-sm" sort={sort} href={sortHref} /><SortTh key="account" label="Account" kind="text" class="hide-sm" sort={sort} href={sortHref} /><SortTh key="payee" label="Payee" kind="text" sort={sort} href={sortHref} /><SortTh key="category" label="Category" kind="text" sort={sort} href={sortHref} /><SortTh key="memo" label="Memo" kind="text" class="hide-sm" sort={sort} href={sortHref} /><SortTh key="amount" label="Amount" kind="number" class="num hide-sm" sort={sort} href={sortHref} /><SortTh key="period" label="Period" kind="date" class="hide-sm" sort={sort} href={sortHref} /><th class="hide-sm"></th></tr></thead>
 	<tbody>
 	{#each v.rows as row (row.id)}
 		<tr>
-			<td class="date" title={row.postedDate}>{shortDate(row.postedDate)}{#if row.pending}<div class="muted small">pending</div>{/if}</td>
+			<td class="date hide-sm" title={row.postedDate}>{shortDate(row.postedDate)}{#if row.pending}<div class="muted small">pending</div>{/if}</td>
 			<td class="hide-sm">{row.accountName}</td>
 			<td><input class="inline" value={row.payee} title={row.payeeRaw} onchange={(e) => renamePayee(row, e.currentTarget.value)} />
 				<div class="only-sm"><Money cents={row.amount} signed neutral /></div>
-				<div class="small muted only-sm">{row.accountName} · {periodLabel(row.periodId)}</div>
+				<div class="small muted only-sm">{shortDate(row.postedDate)}{row.pending ? ' pending' : ''} · {row.accountName} · {@render periodPicker(row, true)}</div>
 				<input class="inline only-sm" placeholder="Memo" value={row.memo ?? ''} onchange={(e) => patch(row.id, { memo: e.currentTarget.value || null })} /></td>
 			<td>{#if row.transferPeerId != null}<span class="muted">Transfer · {row.transferPeerAccountName}</span> <button class="small" onclick={() => run(() => post(`/api/transactions/${row.id}/unlink`))}>unlink</button>
-				{:else if row.splits.length === 1}<select value={row.splits[0].categoryId} onchange={(e) => patch(row.id, { splits: [{ categoryId: Number(e.currentTarget.value), amount: row.amount }] })}>{#each tree.groups as g}<optgroup label={g.name}>{#each g.categories.filter((c) => !c.hidden || c.id === row.splits[0].categoryId) as c}<option value={c.id}>{c.name}</option>{/each}</optgroup>{/each}</select> <button class="small" onclick={() => (splitting = row)}>split</button>
-				{:else}<button class="small" onclick={() => (splitting = row)}>{row.splits.length} splits: {row.splits.map((s) => s.categoryName).join(', ')}</button>{/if}</td>
+				{:else if row.splits.length === 1}{@const split = row.splits[0]}<LazySelect value={split.categoryId} label={split.categoryName} aria-label="Category for {row.payee}" onchange={(val) => patch(row.id, { splits: [{ categoryId: Number(val), amount: row.amount }] })}>{#snippet options()}{@render categoryOptions(split.categoryId)}{/snippet}</LazySelect> <button class="small" onclick={() => (splitting = row)}>split</button>
+				{:else}<button class="small" onclick={() => (splitting = row)}>{row.splits.length} splits: {row.splits.map((s) => s.categoryName).join(', ')}</button>{/if}
+				{#if row.needsReview || row.source === 'manual' || row.source === 'import' || row.source === 'adjustment'}<div class="only-sm row-actions-sm">{@render rowActions(row)}</div>{/if}</td>
 			<td class="hide-sm"><input class="inline" value={row.memo ?? ''} onchange={(e) => patch(row.id, { memo: e.currentTarget.value || null })} /></td>
 			<td class="num hide-sm"><Money cents={row.amount} signed neutral /></td>
-			<td class="hide-sm"><select value={row.periodId} onchange={(e) => patch(row.id, { periodId: Number(e.currentTarget.value) })}>{#each v.periods as p}<option value={p.id}>{p.label}</option>{/each}</select></td>
-			<td>{#if row.needsReview}<span class="status overdue" title={row.reviewReason ?? ''}>{row.reviewReason}</span> <button class="small" onclick={() => run(() => post(`/api/transactions/${row.id}/review`))}>clear</button>{/if}
-				{#if row.source === 'manual' || row.source === 'import' || row.source === 'adjustment'}<button class="small danger" onclick={() => run(() => post(`/api/transactions/${row.id}/delete`))}>delete</button>{/if}</td>
+			<td class="hide-sm">{@render periodPicker(row)}</td>
+			<td class="hide-sm">{@render rowActions(row)}</td>
 		</tr>
 	{:else}<tr><td colspan="8" class="muted">No transactions match these filters. Clear a filter, or sync an account from Accounts.</td></tr>{/each}
 	</tbody>

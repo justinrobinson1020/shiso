@@ -21,6 +21,8 @@ export type SpendingView = {
 	byCategory: { categoryId: number; name: string; groupName: string; amount: number; share: number; prevAmount: number | null }[]; // amount desc
 	byMerchant: { payee: string; count: number; total: number; prevTotal: number | null }[]; // top 25 by total desc
 	overTime: {
+		/** What one bucket spans: a budget period for ranges up to PERIOD_BUCKET_MAX_DAYS, else a calendar month. */
+		grain: 'period' | 'month';
 		buckets: { key: string; label: string; start: string; end: string; total: number; prevTotal: number | null; byCategory: Record<string, number>; future: boolean }[];
 		categories: { id: number; name: string }[];
 	};
@@ -107,9 +109,12 @@ export function splitRows(db: DbOrTx, start: string, end: string, f: SpendingFil
 		.all();
 }
 
+const PERIOD_BUCKET_MAX_DAYS = 92;
+const bucketGrain = (range: { start: string; end: string }): 'period' | 'month' => (daysBetween(range.start, range.end) <= PERIOD_BUCKET_MAX_DAYS ? 'period' : 'month');
+
 function buckets(range: { start: string; end: string }, cadence: Cadence): { key: string; label: string; start: string; end: string }[] {
 	const out: { key: string; label: string; start: string; end: string }[] = [];
-	if (daysBetween(range.start, range.end) <= 92) {
+	if (bucketGrain(range) === 'period') {
 		let cur = periodBoundsFor(cadence, range.start);
 		while (compareIso(cur.startDate, range.end) <= 0) {
 			out.push({ key: cur.startDate, label: cur.label, start: cur.startDate, end: cur.endDate });
@@ -219,6 +224,7 @@ export function spendingView(db: DbOrTx, q: { range: Range; filter: SpendingFilt
 		byCategory,
 		byMerchant,
 		overTime: {
+			grain: bucketGrain(q.range),
 			buckets: overTime,
 			categories: [...top.map((id) => ({ id, name: catMeta.get(id)!.name })), ...(otherUsed ? [{ id: 0, name: 'Other' }] : [])]
 		},

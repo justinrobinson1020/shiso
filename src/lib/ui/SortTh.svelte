@@ -26,8 +26,10 @@
 
 <style>
 	th.sortable { padding: 0; }
-	th.sortable button, th.sortable a { all: unset; cursor: pointer; display: block; width: 100%; box-sizing: border-box; padding: var(--th-pad, 0.4rem 0.5rem); font: inherit; color: inherit; text-align: inherit; }
+	th.sortable button, th.sortable a { all: unset; cursor: pointer; display: block; width: 100%; box-sizing: border-box; padding: var(--cell-pad); font: inherit; color: inherit; text-align: inherit; }
 	th.sortable button:hover, th.sortable a:hover, th.sortable .active { text-decoration: underline; text-underline-offset: 0.2em; }
-	th.sortable button:focus-visible, th.sortable a:focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: -2px; }
+	th.sortable button:focus-visible, th.sortable a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 	.arrow { display: inline-block; width: 1em; margin-left: 0.15em; font-size: 0.7em; }
+	/* No reserved slot when unsorted: in a narrow right-aligned column the empty box wrapped to a second line. */
+	.arrow:empty { display: none; }
 </style>

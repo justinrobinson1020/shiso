@@ -1,17 +1,16 @@
 <script lang="ts">
 	import { formatCents } from '$lib/money';
 	import { donutSlices } from './donut';
-	/** Spending by category for one range: a ring of the top slices plus Other, with a legend of amount and share. */
+	/** Spending by category for one range: a ring of the top slices plus Other, with a legend of amount and share.
+	 *  The ring's centre stays empty: the page's lead figure already states the total. */
 	let { rows, total, label }: { rows: { id: number; name: string; amount: number }[]; total: number; label: string } = $props();
 	const slices = $derived(donutSlices(rows));
 </script>
 
 {#if slices.length}
 	<div class="donut">
-		<svg viewBox="0 0 220 220" role="img" aria-label="{label}: spending by category">
+		<svg viewBox="0 0 220 220" role="img" aria-label="{label}: {formatCents(total)} spent, by category">
 			{#each slices as s (s.name)}<path d={s.path} fill={s.color}><title>{s.name}: {formatCents(s.amount)} ({(s.share * 100).toFixed(1)}%)</title></path>{/each}
-			<text x="110" y="104" text-anchor="middle" font-size="11" fill="var(--muted)">{label}</text>
-			<text x="110" y="124" text-anchor="middle" font-size="16" font-weight="600" fill="currentColor">{formatCents(total)}</text>
 		</svg>
 		<ul class="legend">
 			{#each slices as s (s.name)}
