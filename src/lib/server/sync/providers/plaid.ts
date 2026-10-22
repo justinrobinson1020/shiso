@@ -174,8 +174,12 @@ export function createPlaidClient(cfg: { clientId: string; secret: string; env: 
 
 export async function createLinkToken(client: PlaidClientLike, opts: { clientName: string; userId: string; accessToken?: string | null }): Promise<string> {
 	const req: LinkTokenCreateRequest = { client_name: opts.clientName, user: { client_user_id: opts.userId }, country_codes: [CountryCode.Us], language: 'en' };
-	if (opts.accessToken) req.access_token = opts.accessToken;
-	else {
+	if (opts.accessToken) {
+		req.access_token = opts.accessToken;
+		// Without account selection, update mode only re-authenticates: an account the institution opened
+		// since the first link (a refinanced loan replacing a closed one) never joins the Item.
+		req.update = { account_selection_enabled: true };
+	} else {
 		// Liabilities as a required product makes Link refuse a login without a credit or loan account
 		// ("No liability accounts"). required_if_supported_products still requires it whenever the
 		// *institution* supports liabilities, so a savings-only login at a card issuer (Amex) fails the

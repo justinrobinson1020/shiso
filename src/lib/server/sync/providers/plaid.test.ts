@@ -180,4 +180,14 @@ describe('helpers', () => {
 		expect((client.syncCalls[1] as { link: Record<string, unknown> }).link.products).toBeUndefined();
 		expect((client.syncCalls[1] as { link: Record<string, unknown> }).link.transactions).toBeUndefined();
 	});
+	it('lets a relink pick up accounts the institution opened since the first link', async () => {
+		// A refinanced SoFi loan closed account …5453 and opened a new one on the same login. Without
+		// account selection, update mode only re-authenticates: the Item stays bound to the closed account
+		// and every sync fails with "no valid accounts were found for this item".
+		const client = fakeClient([]);
+		await createLinkToken(client, { clientName: 'shiso', userId: 'u1', accessToken: 'access-1' });
+		expect(client.syncCalls[0]).toMatchObject({ link: { access_token: 'access-1', update: { account_selection_enabled: true } } });
+		await createLinkToken(client, { clientName: 'shiso', userId: 'u1' });
+		expect((client.syncCalls[1] as { link: Record<string, unknown> }).link.update).toBeUndefined();
+	});
 });
